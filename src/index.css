@@ -1,0 +1,46 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply font-sans text-slate-900 antialiased;
+    background:
+      radial-gradient(1200px 600px at 20% -10%, #b6e4ff 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 10%, #def1ff 0%, transparent 55%),
+      linear-gradient(180deg, #eff9ff 0%, #ffffff 60%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply rounded-2xl border border-white/60 bg-white/70 backdrop-blur-md shadow-[0_10px_30px_-12px_rgba(2,100,160,0.25)];
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-wave-800 ring-1 ring-wave-200;
+  }
+  .pill-tab {
+    @apply flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium text-slate-500 transition;
+  }
+  .pill-tab[data-active="true"] {
+    @apply bg-white text-wave-700 shadow ring-1 ring-wave-200;
+  }
+}
+
+/* Leaflet tweaks */
+.leaflet-container {
+  font-family: inherit;
+  background: #def1ff;
+}
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+}
