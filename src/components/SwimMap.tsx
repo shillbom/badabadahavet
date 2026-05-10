@@ -3,7 +3,7 @@ import L, { type LatLngExpression } from "leaflet";
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
 // Fix default marker icon paths for bundlers (Leaflet's default icons are broken under Vite).
@@ -61,7 +61,9 @@ export default function SwimMap({
   }, [places]);
 
   return (
-    <div className={className} style={{ position: "relative" }}>
+    <div
+      className={cn("relative h-full w-full", className)}
+    >
       <MapContainer
         center={center ?? fallbackCenter}
         zoom={zoom}

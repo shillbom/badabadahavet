@@ -67,17 +67,17 @@ export default function Layout() {
       </header>
 
       <main className="relative flex-1 overflow-y-auto pb-32">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={location.pathname}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+        {/* Per-page entrance animations live in each page; we no longer
+            wrap the Outlet in AnimatePresence because under StrictMode
+            mid-flight exits could leave the next page at opacity 0. */}
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+        >
+          <Outlet />
+        </motion.div>
       </main>
 
       <AnimatePresence>
