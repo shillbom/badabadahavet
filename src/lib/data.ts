@@ -59,6 +59,14 @@ export async function updateUserDisplayName(uid: string, displayName: string) {
   await updateDoc(doc(usersCol, uid), { displayName });
 }
 
+export async function recordAchievements(uid: string, ids: string[]) {
+  if (ids.length === 0) return;
+  const updates: Record<string, number> = {};
+  const ts = Date.now();
+  for (const id of ids) updates[`achievements.${id}`] = ts;
+  await updateDoc(doc(usersCol, uid), updates);
+}
+
 function pickEmoji(seed: string): string {
   const pool = ["🐬", "🦭", "🐟", "🦦", "🐳", "🪼", "🐠", "🦑", "🐢", "🦞"];
   let h = 0;

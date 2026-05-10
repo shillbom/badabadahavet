@@ -1,0 +1,159 @@
+import { useMemo } from "react";
+import { motion } from "framer-motion";
+import { ArrowLeft, Lock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/auth/AuthContext";
+import { useStore } from "@/store/sessions";
+import {
+  ACHIEVEMENTS,
+  evaluateAchievements,
+  type Achievement,
+  type AchievementContext,
+} from "@/lib/achievements";
+import { cn } from "@/lib/utils";
+
+export default function AchievementsPage() {
+  const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const mySessions = useStore((s) => s.mySessions);
+  const allSessions = useStore((s) => s.allSessions);
+
+  const ctx = useMemo(
+    () => ({
+      uid: user?.uid ?? "",
+      mySessions,
+      allSessions,
+    }),
+    [user, mySessions, allSessions],
+  );
+
+  const unlocked = useMemo(() => evaluateAchievements(ctx), [ctx]);
+
+  const items = useMemo(() => {
+    const sorted = [...ACHIEVEMENTS].sort((a, b) => {
+      const ua = unlocked.has(a.id);
+      const ub = unlocked.has(b.id);
+      if (ua !== ub) return ua ? -1 : 1;
+      return a.tier - b.tier;
+    });
+    return sorted;
+  }, [unlocked]);
+
+  const totalBonus = useMemo(() => {
+    let pts = 0;
+    for (const a of ACHIEVEMENTS) if (unlocked.has(a.id)) pts += a.points;
+    return pts;
+  }, [unlocked]);
+
+  return (
+    <div className="px-4 pb-12 pt-2">
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          onClick={() => navigate(-1)}
+          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
+          aria-label="Back"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <div>
+          <h2 className="font-display text-2xl font-black text-wave-900">
+            Achievements
+          </h2>
+          <p className="text-xs text-slate-500">
+            {unlocked.size} of {ACHIEVEMENTS.length} unlocked · +{totalBonus}{" "}
+            bonus pts
+          </p>
+        </div>
+      </div>
+
+      <ul className="space-y-2">
+        {items.map((a, i) => (
+          <Row
+            key={a.id}
+            achievement={a}
+            unlocked={unlocked.has(a.id)}
+            unlockedAt={profile?.achievements?.[a.id]}
+            ctx={ctx}
+            index={i}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Row({
+  achievement,
+  unlocked,
+  unlockedAt,
+  ctx,
+  index,
+}: {
+  achievement: Achievement;
+  unlocked: boolean;
+  unlockedAt?: number;
+  ctx: AchievementContext;
+  index: number;
+}) {
+  const progress = achievement.progress?.(ctx) ?? (unlocked ? 1 : 0);
+  return (
+    <motion.li
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index, 12) * 0.025 }}
+      className={cn(
+        "glass flex items-center gap-3 p-3",
+        !unlocked && "opacity-70",
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-12 w-12 flex-none items-center justify-center rounded-full text-2xl ring-2",
+          unlocked
+            ? "bg-gradient-to-br from-amber-200 to-wave-200 ring-amber-300"
+            : "bg-slate-100 ring-slate-200 grayscale",
+        )}
+      >
+        {unlocked ? achievement.emoji : <Lock className="h-5 w-5 text-slate-400" />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "truncate font-display text-base font-bold",
+              unlocked ? "text-wave-900" : "text-slate-500",
+            )}
+          >
+            {achievement.name}
+          </span>
+          <span
+            className={cn(
+              "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
+              achievement.tier === 3
+                ? "bg-amber-100 text-amber-800"
+                : achievement.tier === 2
+                  ? "bg-wave-100 text-wave-800"
+                  : "bg-slate-100 text-slate-600",
+            )}
+          >
+            +{achievement.points}
+          </span>
+        </div>
+        <div className="text-[11px] text-slate-500">
+          {achievement.description}
+          {unlocked && unlockedAt
+            ? ` · earned ${new Date(unlockedAt).toLocaleDateString()}`
+            : null}
+        </div>
+        {!unlocked && progress > 0 ? (
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-wave-500"
+              style={{ width: `${Math.round(progress * 100)}%` }}
+            />
+          </div>
+        ) : null}
+      </div>
+    </motion.li>
+  );
+}

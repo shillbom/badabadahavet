@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Snowflake,
@@ -8,20 +8,25 @@ import {
   Users,
   Calendar,
   MapPin,
+  X,
 } from "lucide-react";
 import { getPlace, watchPlaceSessions } from "@/lib/data";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
+import { useStore } from "@/store/sessions";
 
 export default function SpotPage() {
   const { placeId } = useParams<{ placeId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const groups = useStore((s) => s.groups);
   const [place, setPlace] = useState<PlaceDoc | null>(null);
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scope, setScope] = useState<"all" | string>("all"); // "all" or group id
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (!placeId) return;
@@ -38,13 +43,29 @@ export default function SpotPage() {
     };
   }, [placeId]);
 
-  const stats = useMemo(() => buildStats(sessions, user?.uid), [sessions, user]);
+  const visibleSessions = useMemo(() => {
+    if (scope === "all") return sessions;
+    const g = groups.find((g) => g.id === scope);
+    if (!g) return sessions;
+    const memberSet = new Set(g.members);
+    return sessions.filter((s) => memberSet.has(s.uid));
+  }, [sessions, scope, groups]);
+
+  const stats = useMemo(
+    () => buildStats(visibleSessions, user?.uid),
+    [visibleSessions, user],
+  );
   const placesForMap = useMemo(() => (place ? [place] : []), [place]);
   const sessionsByPlace = useMemo(() => {
     const m = new Map<string, SessionDoc[]>();
-    if (place) m.set(place.id, sessions);
+    if (place) m.set(place.id, visibleSessions);
     return m;
-  }, [sessions, place]);
+  }, [visibleSessions, place]);
+
+  const photoSessions = useMemo(
+    () => visibleSessions.filter((s) => s.photoUrl),
+    [visibleSessions],
+  );
 
   if (loading) {
     return (
@@ -89,8 +110,48 @@ export default function SpotPage() {
           sessionsByPlace={sessionsByPlace}
           center={[place.lat, place.lng]}
           zoom={13}
+          linkToSpot={false}
         />
       </div>
+
+      {groups.length > 0 ? (
+        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
+          <ScopeChip
+            label="🌍 Everyone"
+            active={scope === "all"}
+            onClick={() => setScope("all")}
+          />
+          {groups.map((g) => (
+            <ScopeChip
+              key={g.id}
+              label={`👥 ${g.name}`}
+              active={scope === g.id}
+              onClick={() => setScope(g.id)}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {photoSessions.length > 0 ? (
+        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
+          {photoSessions.map((s, idx) => (
+            <button
+              key={s.id}
+              onClick={() => setLightboxIdx(idx)}
+              className="relative h-24 w-24 flex-none overflow-hidden rounded-xl ring-1 ring-white/60"
+            >
+              <img
+                src={s.photoUrl!}
+                alt=""
+                className="h-full w-full object-cover transition-transform hover:scale-110"
+              />
+              <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                {s.displayName}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       <div className="mt-3 grid grid-cols-3 gap-2">
         <Stat label="Swims" value={stats.total} />
@@ -122,10 +183,10 @@ export default function SpotPage() {
       ) : null}
 
       <h3 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Recent dips
+        {scope === "all" ? "Recent dips" : "Group dips"}
       </h3>
       <ul className="space-y-2">
-        {sessions.map((s, i) => (
+        {visibleSessions.map((s, i) => (
           <motion.li
             key={s.id}
             initial={{ opacity: 0, y: 4 }}
@@ -172,9 +233,11 @@ export default function SpotPage() {
             </div>
           </motion.li>
         ))}
-        {sessions.length === 0 ? (
+        {visibleSessions.length === 0 ? (
           <li className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
-            No swims here yet.
+            {scope === "all"
+              ? "No swims here yet."
+              : "Nobody in this group has swum here yet."}
           </li>
         ) : null}
       </ul>
@@ -187,7 +250,84 @@ export default function SpotPage() {
           Log a swim here
         </Link>
       </div>
+
+      <Lightbox
+        sessions={photoSessions}
+        index={lightboxIdx}
+        onClose={() => setLightboxIdx(null)}
+      />
     </div>
+  );
+}
+
+function ScopeChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      data-active={active}
+      className="chip whitespace-nowrap data-[active=true]:bg-wave-600 data-[active=true]:text-white data-[active=true]:ring-wave-700"
+    >
+      {label}
+    </button>
+  );
+}
+
+function Lightbox({
+  sessions,
+  index,
+  onClose,
+}: {
+  sessions: SessionDoc[];
+  index: number | null;
+  onClose: () => void;
+}) {
+  const s = index != null ? sessions[index] : null;
+  return (
+    <AnimatePresence>
+      {s ? (
+        <motion.div
+          key={s.id}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+          className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/85 p-4"
+        >
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-[max(env(safe-area-inset-top),1rem)] rounded-full bg-white/10 p-2 text-white"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <motion.div
+            initial={{ scale: 0.92, y: 8 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.92, y: 8 }}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[85dvh] max-w-full"
+          >
+            <img
+              src={s.photoUrl!}
+              alt=""
+              className="max-h-[80dvh] max-w-full rounded-xl"
+            />
+            <div className="mt-2 text-center text-xs text-white/80">
+              {s.displayName} · {formatDate(s.date)}
+              {s.note ? ` · ${s.note}` : ""}
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
 

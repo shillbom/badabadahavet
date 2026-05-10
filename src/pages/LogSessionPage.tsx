@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
 import { toast } from "@/components/ui/Toast";
+import { celebrate } from "@/components/Celebration";
 import { createSession, findOrCreatePlace } from "@/lib/data";
 import { isWinterMonth } from "@/lib/scoring";
 import { haversineMeters } from "@/lib/utils";
@@ -117,9 +118,7 @@ export default function LogSessionPage() {
         note,
         photoFile,
       });
-      toast.success(
-        `+${session.points} pts${session.isUniqueForUser ? " · new spot!" : ""}${session.isWinter ? " · winter" : ""}`,
-      );
+      celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
       navigate("/history");
     } catch (err) {
       toast.error((err as Error).message ?? "Couldn't save");

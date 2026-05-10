@@ -5,11 +5,13 @@ import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { GroupDoc, SessionDoc } from "@/lib/types";
 import { startOfYear, endOfYear } from "@/lib/scoring";
+import { bonusPointsForUid } from "@/lib/achievements";
 
 type Row = {
   uid: string;
   displayName: string;
   points: number;
+  bonusPoints: number;
   uniquePlaces: number;
   winters: number;
   sessions: number;
@@ -36,9 +38,11 @@ export default function LeaderboardPage() {
       scope === "global"
         ? null
         : new Set(groups.find((g) => g.id === scope)?.members ?? []);
-    const rows = aggregate(filtered, memberFilter);
+    // Bonus achievement points are computed against ALL sessions (not the
+    // year-only filter) since most achievements are lifetime.
+    const rows = aggregate(filtered, memberFilter, all);
     return rows.sort((a, b) => b.points - a.points);
-  }, [filtered, groups, scope]);
+  }, [filtered, groups, scope, all]);
 
   const activeGroup: GroupDoc | undefined = groups.find((g) => g.id === scope);
 
@@ -116,6 +120,11 @@ export default function LeaderboardPage() {
                     <Snowflake className="h-3 w-3" /> {r.winters} winter
                   </span>
                   <span>· {r.sessions} swims</span>
+                  {r.bonusPoints > 0 ? (
+                    <span className="text-amber-700">
+                      · +{r.bonusPoints} 🏅
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <div className="font-display text-2xl font-black text-wave-700">
@@ -157,6 +166,7 @@ function ScopeChip({
 function aggregate(
   sessions: SessionDoc[],
   memberFilter: Set<string> | null,
+  allSessions: SessionDoc[],
 ): Row[] {
   const map = new Map<string, Row>();
   for (const s of sessions) {
@@ -167,6 +177,7 @@ function aggregate(
         uid: s.uid,
         displayName: s.displayName,
         points: 0,
+        bonusPoints: 0,
         uniquePlaces: 0,
         winters: 0,
         sessions: 0,
@@ -178,6 +189,10 @@ function aggregate(
     if (s.isUniqueForUser) row.uniquePlaces += 1;
     if (s.isWinter) row.winters += 1;
     row.displayName = s.displayName;
+  }
+  for (const row of map.values()) {
+    row.bonusPoints = bonusPointsForUid(row.uid, allSessions);
+    row.points += row.bonusPoints;
   }
   return [...map.values()];
 }

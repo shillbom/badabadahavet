@@ -5,6 +5,7 @@ export type UserDoc = {
   displayName: string;
   emoji?: string;
   groups: string[];
+  achievements?: Record<string, number>; // id -> unlocked timestamp
   createdAt: number;
 };
 
