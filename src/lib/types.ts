@@ -7,6 +7,9 @@ export type UserDoc = {
   groups: string[];
   achievements?: Record<string, number>; // id -> unlocked timestamp
   createdAt: number;
+  /** Set only via direct Firestore write (e.g. `firebase firestore:write`
+   *  or the console). Rules forbid the user from toggling this themselves. */
+  isAdmin?: boolean;
 };
 
 export type PlaceDoc = {
@@ -29,6 +32,8 @@ export type SessionDoc = {
   date: number; // ms epoch
   note?: string;
   photoUrl?: string;
+  /** Storage path the photo was uploaded to, used for clean-up. */
+  photoPath?: string;
   isUniqueForUser: boolean;
   isWinter: boolean;
   points: number;

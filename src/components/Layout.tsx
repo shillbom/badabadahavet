@@ -37,8 +37,18 @@ export default function Layout() {
         >
           <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
           <div>
-            <div className="font-display text-base font-bold leading-none text-wave-900">
-              {profile?.displayName ?? t("layout.swimmer")}
+            <div className="flex items-center gap-1.5">
+              <div className="font-display text-base font-bold leading-none text-wave-900">
+                {profile?.displayName ?? t("layout.swimmer")}
+              </div>
+              {profile?.isAdmin ? (
+                <span
+                  className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white shadow"
+                  title={t("admin.label")}
+                >
+                  {t("admin.label")}
+                </span>
+              ) : null}
             </div>
             <div className="text-[11px] text-wave-700/70">{groupSubtitle}</div>
           </div>

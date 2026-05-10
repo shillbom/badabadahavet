@@ -1,6 +1,8 @@
 import {
   collection,
   doc,
+  deleteDoc,
+  deleteField,
   getDoc,
   getDocs,
   setDoc,
@@ -13,12 +15,14 @@ import {
   arrayRemove,
   arrayUnion,
   limit,
+  writeBatch,
   Unsubscribe,
 } from "firebase/firestore";
 import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
+  deleteObject,
 } from "firebase/storage";
 import { db, storage } from "@/firebase";
 import {
@@ -155,12 +159,11 @@ export async function createSession(opts: {
   const { points, isWinter } = scoreSession({ isUniqueForUser, date: opts.date });
 
   let photoUrl: string | undefined;
+  let photoPath: string | undefined;
   if (opts.photoFile) {
     const ext = opts.photoFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    const r = storageRef(
-      storage,
-      `sessions/${opts.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`,
-    );
+    photoPath = `sessions/${opts.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const r = storageRef(storage, photoPath);
     await uploadBytes(r, opts.photoFile, {
       contentType: opts.photoFile.type || "image/jpeg",
     });
@@ -179,6 +182,7 @@ export async function createSession(opts: {
     date: opts.date,
     note: opts.note?.trim() || undefined,
     photoUrl,
+    photoPath,
     isUniqueForUser,
     isWinter,
     points,
@@ -288,4 +292,69 @@ export function watchPlaceSessions(
     query(sessionsCol, where("placeId", "==", placeId), orderBy("date", "desc")),
     (snap) => cb(snap.docs.map((d) => d.data() as SessionDoc)),
   );
+}
+
+// ---------- Admin / moderation ----------
+//
+// These are gated by the rules (`isAdminUser()` for Firestore, `isAdmin()`
+// for Storage). The client also hides the UI behind `profile.isAdmin`, but
+// the rules are the source of truth.
+
+/** Rename a place and propagate the new label to every session. */
+export async function adminRenamePlace(placeId: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("empty name");
+  await updateDoc(doc(placesCol, placeId), { name: trimmed });
+  const snap = await getDocs(
+    query(sessionsCol, where("placeId", "==", placeId)),
+  );
+  // Batches max 500 ops; we won't realistically hit that for one spot.
+  const batch = writeBatch(db);
+  snap.forEach((s) => batch.update(s.ref, { placeName: trimmed }));
+  if (!snap.empty) await batch.commit();
+}
+
+/** Permanently strip the photo from a session and delete the storage object. */
+export async function adminClearSessionPhoto(sessionId: string) {
+  const snap = await getDoc(doc(sessionsCol, sessionId));
+  if (!snap.exists()) return;
+  const data = snap.data() as SessionDoc;
+  if (data.photoPath) {
+    try {
+      await deleteObject(storageRef(storage, data.photoPath));
+    } catch {
+      // photo may already be gone — fall through and clear the fields.
+    }
+  }
+  await updateDoc(doc(sessionsCol, sessionId), {
+    photoUrl: deleteField(),
+    photoPath: deleteField(),
+  });
+}
+
+/** Delete a single session and its photo, if any. */
+export async function adminDeleteSession(sessionId: string) {
+  const snap = await getDoc(doc(sessionsCol, sessionId));
+  if (snap.exists()) {
+    const data = snap.data() as SessionDoc;
+    if (data.photoPath) {
+      try {
+        await deleteObject(storageRef(storage, data.photoPath));
+      } catch {
+        // ignore
+      }
+    }
+  }
+  await deleteDoc(doc(sessionsCol, sessionId));
+}
+
+/** Delete a place and cascade-delete every session at it. */
+export async function adminDeletePlace(placeId: string) {
+  const sessions = await getDocs(
+    query(sessionsCol, where("placeId", "==", placeId)),
+  );
+  await Promise.all(
+    sessions.docs.map((s) => adminDeleteSession(s.id)),
+  );
+  await deleteDoc(doc(placesCol, placeId));
 }

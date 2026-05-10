@@ -51,6 +51,24 @@ Open http://localhost:5173 — sign up with any name + password (stored in the a
 2. Drop the real config into `.env.local` and set `VITE_USE_FIREBASE_EMULATORS=0`.
 3. `npm run build && firebase deploy` (rules + hosting + indexes).
 
+## Admin / moderation
+
+Admins can rename and delete spots, delete individual swims, and remove
+bad photos. The flag isn't reachable from the UI on purpose — flip it
+manually:
+
+```bash
+# emulator
+curl -X PATCH \
+  "http://localhost:8080/v1/projects/demo-badligan/databases/(default)/documents/users/<UID>?updateMask.fieldPaths=isAdmin" \
+  -H "Content-Type: application/json" \
+  -d '{"fields":{"isAdmin":{"booleanValue":true}}}'
+```
+
+In production, the simplest path is the Firebase Console → Firestore →
+`users/{uid}` → add field `isAdmin: true`. Rules forbid clients from
+toggling this themselves.
+
 ## Data model
 
 ```

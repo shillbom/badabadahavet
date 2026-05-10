@@ -10,6 +10,11 @@ service cloud.firestore {
     function isSelf(uid) {
       return signedIn() && request.auth.uid == uid;
     }
+    function isAdminUser() {
+      return signedIn()
+             && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -25,8 +30,10 @@ service cloud.firestore {
     // ============================================================
     // users/{uid}
     //   Profile + denormalised group list + unlocked achievements.
-    //   Only the owner may write. Identity (uid) and createdAt are
-    //   immutable. displayName must stay non-empty and bounded.
+    //   Only the owner may write. Identity (uid), createdAt, and
+    //   isAdmin are immutable after create — and isAdmin can never
+    //   be flipped to true by a client; flip it manually in the
+    //   Firebase console / firestore CLI.
     // ============================================================
     match /users/{uid} {
       allow read: if signedIn();
@@ -38,11 +45,16 @@ service cloud.firestore {
                     && request.resource.data.displayName.size() <= 40
                     && request.resource.data.groups is list
                     && request.resource.data.groups.size() == 0
-                    && request.resource.data.createdAt is number;
+                    && request.resource.data.createdAt is number
+                    && (
+                      !('isAdmin' in request.resource.data)
+                      || request.resource.data.isAdmin == false
+                    );
 
       allow update: if isSelf(uid)
                     && unchanged('uid')
                     && unchanged('createdAt')
+                    && unchanged('isAdmin')
                     && request.resource.data.uid == uid
                     && request.resource.data.displayName is string
                     && request.resource.data.displayName.size() > 0
@@ -53,9 +65,7 @@ service cloud.firestore {
 
     // ============================================================
     // places/{id}
-    //   World-readable, any signed-in user can create. Lat/lng/name
-    //   are validated. After creation, location and provenance are
-    //   immutable; only the creator may rename.
+    //   World-readable. Admins may rename/delete for moderation.
     // ============================================================
     match /places/{placeId} {
       allow read: if signedIn();
@@ -69,27 +79,27 @@ service cloud.firestore {
                                    request.resource.data.lng)
                     && request.resource.data.firstSwumAt is number;
 
-      allow update: if signedIn()
-                    && resource.data.createdBy == request.auth.uid
-                    && unchanged('createdBy')
-                    && unchanged('firstSwumAt')
-                    && unchanged('lat')
-                    && unchanged('lng')
-                    && unchanged('id')
-                    && request.resource.data.name is string
-                    && request.resource.data.name.size() > 0
-                    && request.resource.data.name.size() <= 80;
+      // Creator can rename (only); admins can change anything (still
+      // can't move a pin out of bounds because of the basic shape).
+      allow update: if (
+        signedIn()
+        && resource.data.createdBy == request.auth.uid
+        && unchanged('createdBy')
+        && unchanged('firstSwumAt')
+        && unchanged('lat')
+        && unchanged('lng')
+        && unchanged('id')
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+      ) || isAdminUser();
 
-      allow delete: if false;
+      // Only admins can delete.
+      allow delete: if isAdminUser();
     }
 
     // ============================================================
     // sessions/{id}
-    //   World-readable for leaderboards; only the author may write.
-    //   Score-affecting fields are bounded on create and frozen on
-    //   update so the owner cannot retro-actively inflate points.
-    //   Max possible session score: 1 (base) + 2 (new spot) + 2
-    //   (winter) = 5. We reject anything outside [1, 5].
     // ============================================================
     match /sessions/{sessionId} {
       allow read: if signedIn();
@@ -103,8 +113,6 @@ service cloud.firestore {
                     && validLatLng(request.resource.data.lat,
                                    request.resource.data.lng)
                     && request.resource.data.date is number
-                    // Lower bound: 2000-01-01. Upper bound: at most one
-                    // day in the future, to allow timezone fudge.
                     && request.resource.data.date >= 946684800000
                     && request.resource.data.date <= request.time.toMillis() + 86400000
                     && request.resource.data.points is number
@@ -115,31 +123,28 @@ service cloud.firestore {
                     && request.resource.data.displayName is string
                     && request.resource.data.displayName.size() <= 40;
 
-      // Owner can edit cosmetic fields (note, photoUrl, displayName).
-      // Identity, location, date, and scoring are immutable.
-      allow update: if signedIn()
-                    && resource.data.uid == request.auth.uid
-                    && unchanged('uid')
-                    && unchanged('placeId')
-                    && unchanged('lat')
-                    && unchanged('lng')
-                    && unchanged('date')
-                    && unchanged('points')
-                    && unchanged('isUniqueForUser')
-                    && unchanged('isWinter')
-                    && unchanged('createdAt');
+      // Owners can edit cosmetic fields only; admins can moderate (e.g.
+      // strip a bad photoUrl, fix a placeName after a rename).
+      allow update: if (
+        signedIn()
+        && resource.data.uid == request.auth.uid
+        && unchanged('uid')
+        && unchanged('placeId')
+        && unchanged('lat')
+        && unchanged('lng')
+        && unchanged('date')
+        && unchanged('points')
+        && unchanged('isUniqueForUser')
+        && unchanged('isWinter')
+        && unchanged('createdAt')
+      ) || isAdminUser();
 
-      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow delete: if (signedIn() && resource.data.uid == request.auth.uid)
+                    || isAdminUser();
     }
 
     // ============================================================
     // groups/{id}
-    //   World-readable for joining-by-code. Updates must take one of
-    //   three narrow shapes:
-    //     1) a non-member adds only themselves to `members`
-    //     2) an existing member removes only themselves from `members`
-    //     3) the founder renames the group (and changes nothing else)
-    //   The code, founder, createdAt, and id can never change.
     // ============================================================
     match /groups/{groupId} {
       allow read: if signedIn();
@@ -158,7 +163,6 @@ service cloud.firestore {
                     && request.resource.data.createdAt is number;
 
       allow update: if signedIn() && (
-        // 1) joining: only-self added to members, no other field touched
         (
           changedKeys().hasOnly(['members'])
           && !(request.auth.uid in resource.data.members)
@@ -168,7 +172,6 @@ service cloud.firestore {
              == resource.data.members.size() + 1
         )
         ||
-        // 2) leaving: only-self removed from members
         (
           changedKeys().hasOnly(['members'])
           && request.auth.uid in resource.data.members
@@ -178,7 +181,6 @@ service cloud.firestore {
              == resource.data.members.size() - 1
         )
         ||
-        // 3) founder rename: only `name` changes
         (
           resource.data.createdBy == request.auth.uid
           && changedKeys().hasOnly(['name'])
@@ -188,10 +190,9 @@ service cloud.firestore {
         )
       );
 
-      allow delete: if false;
+      allow delete: if isAdminUser();
     }
 
-    // Default deny for any other path.
     match /{document=**} {
       allow read, write: if false;
     }

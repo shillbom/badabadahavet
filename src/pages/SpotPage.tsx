@@ -9,19 +9,31 @@ import {
   Calendar,
   MapPin,
   X,
+  Pencil,
+  Trash2,
+  ImageOff,
 } from "lucide-react";
-import { getPlace, watchPlaceSessions } from "@/lib/data";
+import {
+  adminClearSessionPhoto,
+  adminDeletePlace,
+  adminDeleteSession,
+  adminRenamePlace,
+  getPlace,
+  watchPlaceSessions,
+} from "@/lib/data";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import { useT } from "@/lib/i18n";
+import { toast } from "@/components/ui/Toast";
 
 export default function SpotPage() {
   const { placeId } = useParams<{ placeId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const isAdmin = profile?.isAdmin === true;
   const t = useT();
   const groups = useStore((s) => s.groups);
   const [place, setPlace] = useState<PlaceDoc | null>(null);
@@ -68,6 +80,62 @@ export default function SpotPage() {
     () => visibleSessions.filter((s) => s.photoUrl),
     [visibleSessions],
   );
+
+  async function onAdminRename() {
+    if (!place) return;
+    const next = window.prompt(
+      t("admin.rename.prompt", { name: place.name }),
+      place.name,
+    );
+    if (!next || next.trim() === place.name) return;
+    try {
+      await adminRenamePlace(place.id, next);
+      setPlace({ ...place, name: next.trim() });
+      toast.success(t("admin.rename.success", { name: next.trim() }));
+    } catch {
+      toast.error(t("admin.rename.error"));
+    }
+  }
+
+  async function onAdminDeletePlace() {
+    if (!place) return;
+    if (
+      !window.confirm(
+        t("admin.delete_spot.confirm", {
+          name: place.name,
+          n: sessions.length,
+        }),
+      )
+    )
+      return;
+    try {
+      await adminDeletePlace(place.id);
+      toast.success(t("admin.delete_spot.success"));
+      navigate("/", { replace: true });
+    } catch {
+      toast.error(t("admin.delete_spot.error"));
+    }
+  }
+
+  async function onAdminDeleteSession(id: string) {
+    if (!window.confirm(t("admin.delete_session.confirm"))) return;
+    try {
+      await adminDeleteSession(id);
+      toast.success(t("admin.delete_session.success"));
+    } catch {
+      toast.error(t("admin.delete_session.error"));
+    }
+  }
+
+  async function onAdminRemovePhoto(id: string) {
+    if (!window.confirm(t("admin.remove_photo.confirm"))) return;
+    try {
+      await adminClearSessionPhoto(id);
+      toast.success(t("admin.remove_photo.success"));
+    } catch {
+      toast.error(t("admin.remove_photo.error"));
+    }
+  }
 
   if (loading) {
     return (
@@ -116,6 +184,26 @@ export default function SpotPage() {
         />
       </div>
 
+      {isAdmin ? (
+        <div className="mt-3 flex flex-wrap gap-2 rounded-2xl bg-amber-50/80 p-2 ring-1 ring-amber-200">
+          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">
+            {t("admin.label")}
+          </span>
+          <button
+            onClick={onAdminRename}
+            className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+          >
+            <Pencil className="h-3 w-3" /> {t("admin.rename")}
+          </button>
+          <button
+            onClick={onAdminDeletePlace}
+            className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50"
+          >
+            <Trash2 className="h-3 w-3" /> {t("admin.delete_spot")}
+          </button>
+        </div>
+      ) : null}
+
       {groups.length > 0 ? (
         <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
           <ScopeChip
@@ -137,20 +225,38 @@ export default function SpotPage() {
       {photoSessions.length > 0 ? (
         <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
           {photoSessions.map((s, idx) => (
-            <button
+            <div
               key={s.id}
-              onClick={() => setLightboxIdx(idx)}
               className="relative h-24 w-24 flex-none overflow-hidden rounded-xl ring-1 ring-white/60"
             >
-              <img
-                src={s.photoUrl!}
-                alt=""
-                className="h-full w-full object-cover transition-transform hover:scale-110"
-              />
-              <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                {s.displayName}
-              </span>
-            </button>
+              <button
+                onClick={() => setLightboxIdx(idx)}
+                className="block h-full w-full"
+                aria-label={`${s.displayName}`}
+              >
+                <img
+                  src={s.photoUrl!}
+                  alt=""
+                  className="h-full w-full object-cover transition-transform hover:scale-110"
+                />
+                <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                  {s.displayName}
+                </span>
+              </button>
+              {isAdmin ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAdminRemovePhoto(s.id);
+                  }}
+                  className="absolute right-1 top-1 rounded-full bg-rose-600/90 p-1 text-white shadow ring-1 ring-white/30"
+                  aria-label={t("admin.remove_photo")}
+                  title={t("admin.remove_photo")}
+                >
+                  <ImageOff className="h-3 w-3" />
+                </button>
+              ) : null}
+            </div>
           ))}
         </div>
       ) : null}
@@ -214,8 +320,20 @@ export default function SpotPage() {
                     </span>
                   ) : null}
                 </div>
-                <div className="font-display text-base font-black text-wave-700">
-                  +{s.points}
+                <div className="flex items-center gap-1.5">
+                  <div className="font-display text-base font-black text-wave-700">
+                    +{s.points}
+                  </div>
+                  {isAdmin ? (
+                    <button
+                      onClick={() => onAdminDeleteSession(s.id)}
+                      className="rounded-full bg-white/80 p-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
+                      aria-label={t("admin.delete_session")}
+                      title={t("admin.delete_session")}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  ) : null}
                 </div>
               </div>
               <div className="flex items-center gap-1 text-[11px] text-slate-500">
