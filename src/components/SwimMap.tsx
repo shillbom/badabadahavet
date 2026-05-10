@@ -1,6 +1,7 @@
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L, { type LatLngExpression } from "leaflet";
 import { useEffect, useMemo } from "react";
+import { Link } from "react-router-dom";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 
@@ -39,6 +40,7 @@ export type SwimMapProps = {
   onPick?: (lat: number, lng: number) => void;
   pickedAt?: { lat: number; lng: number } | null;
   className?: string;
+  linkToSpot?: boolean;
 };
 
 export default function SwimMap({
@@ -49,6 +51,7 @@ export default function SwimMap({
   onPick,
   pickedAt,
   className,
+  linkToSpot = true,
 }: SwimMapProps) {
   const fallbackCenter: LatLngExpression = useMemo(() => {
     if (places.length) return [places[0].lat, places[0].lng];
@@ -90,6 +93,14 @@ export default function SwimMap({
                       </li>
                     ))}
                   </ul>
+                  {linkToSpot ? (
+                    <Link
+                      to={`/spot/${p.id}`}
+                      className="mt-1.5 inline-block text-[11px] font-semibold text-wave-700 hover:underline"
+                    >
+                      See full history →
+                    </Link>
+                  ) : null}
                 </div>
               </Popup>
             </Marker>

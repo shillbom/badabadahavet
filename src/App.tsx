@@ -15,6 +15,7 @@ import HistoryPage from "@/pages/HistoryPage";
 import LeaderboardPage from "@/pages/LeaderboardPage";
 import LogSessionPage from "@/pages/LogSessionPage";
 import GroupsPage from "@/pages/GroupsPage";
+import SpotPage from "@/pages/SpotPage";
 import { Toaster } from "@/components/ui/Toast";
 
 export default function App() {
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="leaderboard" element={<LeaderboardPage />} />
             <Route path="groups" element={<GroupsPage />} />
             <Route path="log" element={<LogSessionPage />} />
+            <Route path="spot/:placeId" element={<SpotPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

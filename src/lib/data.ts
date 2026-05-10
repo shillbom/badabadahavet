@@ -10,6 +10,7 @@ import {
   orderBy,
   onSnapshot,
   serverTimestamp,
+  arrayRemove,
   arrayUnion,
   limit,
   Unsubscribe,
@@ -249,5 +250,34 @@ export function watchUserGroups(
   return onSnapshot(
     query(groupsCol, where("members", "array-contains", uid)),
     (snap) => cb(snap.docs.map((d) => d.data() as GroupDoc)),
+  );
+}
+
+export async function leaveGroup(opts: {
+  groupId: string;
+  uid: string;
+}): Promise<void> {
+  await updateDoc(doc(groupsCol, opts.groupId), {
+    members: arrayRemove(opts.uid),
+  });
+  await updateDoc(doc(usersCol, opts.uid), {
+    groups: arrayRemove(opts.groupId),
+  });
+}
+
+// ---------- Spots / detail queries ----------
+
+export async function getPlace(placeId: string) {
+  const snap = await getDoc(doc(placesCol, placeId));
+  return snap.exists() ? (snap.data() as PlaceDoc) : null;
+}
+
+export function watchPlaceSessions(
+  placeId: string,
+  cb: (sessions: SessionDoc[]) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(sessionsCol, where("placeId", "==", placeId), orderBy("date", "desc")),
+    (snap) => cb(snap.docs.map((d) => d.data() as SessionDoc)),
   );
 }

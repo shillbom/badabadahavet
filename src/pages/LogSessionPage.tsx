@@ -189,6 +189,7 @@ export default function LogSessionPage() {
               sessionsByPlace={sessionsByPlace}
               onPick={mode === "pick" ? (lat, lng) => setCoords({ lat, lng }) : undefined}
               pickedAt={coords}
+              linkToSpot={false}
             />
           </div>
 
