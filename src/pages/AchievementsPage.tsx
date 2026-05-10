@@ -112,20 +112,25 @@ function Row({
         !unlocked && "opacity-70",
       )}
     >
-      <div
+      <motion.div
+        whileHover={unlocked ? { rotate: [-3, 3, -2, 0], scale: 1.05 } : undefined}
+        transition={{ duration: 0.6 }}
         className={cn(
-          "flex h-12 w-12 flex-none items-center justify-center rounded-full text-2xl ring-2",
+          "relative flex h-12 w-12 flex-none items-center justify-center rounded-full text-2xl ring-2",
           unlocked
-            ? "bg-gradient-to-br from-amber-200 to-wave-200 ring-amber-300"
+            ? "bg-gradient-to-br from-amber-200 to-wave-200 ring-amber-300 shadow-sm"
             : "bg-slate-100 ring-slate-200 grayscale",
         )}
       >
         {unlocked ? (
-          achievement.emoji
+          <>
+            <span className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-amber-200/60 blur-md" />
+            {achievement.emoji}
+          </>
         ) : (
           <Lock className="h-5 w-5 text-slate-400" />
         )}
-      </div>
+      </motion.div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span
@@ -156,10 +161,16 @@ function Row({
             : null}
         </div>
         {!unlocked && progress > 0 ? (
-          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <div
-              className="h-full rounded-full bg-wave-500"
-              style={{ width: `${Math.round(progress * 100)}%` }}
+          <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${Math.round(progress * 100)}%` }}
+              transition={{
+                duration: 0.9,
+                ease: [0.16, 1, 0.3, 1],
+                delay: Math.min(index, 12) * 0.04,
+              }}
+              className="h-full rounded-full bg-gradient-to-r from-wave-400 to-wave-600"
             />
           </div>
         ) : null}

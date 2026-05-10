@@ -11,16 +11,51 @@ export default function HistoryPage() {
 
   if (sessions.length === 0) {
     return (
-      <div className="px-6 pt-12 text-center">
-        <div className="mx-auto mb-3 h-16 w-16 rounded-full bg-wave-100 text-3xl leading-[4rem]">
-          🐬
-        </div>
-        <p className="font-display text-xl font-bold text-wave-900">
+      <div className="px-6 pt-16 text-center">
+        <motion.div
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 220, damping: 18 }}
+          className="relative mx-auto mb-4 h-20 w-20"
+        >
+          {[0, 1].map((i) => (
+            <motion.span
+              key={i}
+              initial={{ scale: 0.6, opacity: 0.5 }}
+              animate={{ scale: 1.6, opacity: 0 }}
+              transition={{
+                duration: 1.8,
+                delay: i * 0.6,
+                repeat: Infinity,
+                ease: "easeOut",
+              }}
+              className="absolute inset-0 rounded-full border-2 border-wave-300"
+            />
+          ))}
+          <motion.div
+            animate={{ y: [0, -4, 0] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 flex items-center justify-center rounded-full bg-wave-100 text-3xl"
+          >
+            🐬
+          </motion.div>
+        </motion.div>
+        <motion.p
+          initial={{ y: 6, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="font-display text-xl font-bold text-wave-900"
+        >
           {t("history.empty.title")}
-        </p>
-        <p className="mt-1 text-sm text-slate-500">
+        </motion.p>
+        <motion.p
+          initial={{ y: 6, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.18 }}
+          className="mt-1 text-sm text-slate-500"
+        >
           {t("history.empty.helper")}
-        </p>
+        </motion.p>
       </div>
     );
   }

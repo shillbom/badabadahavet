@@ -18,6 +18,20 @@ import {
 } from "@/lib/achievements";
 import { monthShort, useT } from "@/lib/i18n";
 
+const slideVariants = {
+  enter: (dir: 1 | -1) => ({
+    x: dir > 0 ? 60 : -60,
+    opacity: 0,
+    scale: 0.96,
+  }),
+  center: { x: 0, opacity: 1, scale: 1 },
+  exit: (dir: 1 | -1) => ({
+    x: dir > 0 ? -60 : 60,
+    opacity: 0,
+    scale: 0.96,
+  }),
+};
+
 export default function RecapPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -167,8 +181,14 @@ export default function RecapPage() {
   }, [stats, yearBonus, year, yearSessions, unlockedYear, t]);
 
   const [idx, setIdx] = useState(0);
+  const [dir, setDir] = useState<1 | -1>(1);
   const slide = slides[idx];
   const isLast = idx === slides.length - 1;
+
+  const advance = (delta: 1 | -1) => {
+    setDir(delta);
+    setIdx((i) => Math.max(0, Math.min(slides.length - 1, i + delta)));
+  };
 
   return (
     <div className="relative min-h-[calc(100dvh-4rem)] overflow-hidden px-4 pb-12 pt-2">
@@ -198,14 +218,28 @@ export default function RecapPage() {
       </div>
 
       <div className="relative z-10 mt-4 flex h-[60vh] items-center justify-center">
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" custom={dir}>
           <motion.div
             key={idx}
-            initial={{ opacity: 0, y: 24, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -24, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 220, damping: 22 }}
-            className="w-full max-w-sm"
+            custom={dir}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: "spring", stiffness: 240, damping: 26 }}
+            drag="x"
+            dragElastic={0.2}
+            dragConstraints={{ left: 0, right: 0 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.x < -60 && idx < slides.length - 1) {
+                setDir(1);
+                setIdx((i) => i + 1);
+              } else if (info.offset.x > 60 && idx > 0) {
+                setDir(-1);
+                setIdx((i) => i - 1);
+              }
+            }}
+            className="w-full max-w-sm cursor-grab active:cursor-grabbing"
           >
             <SlideCard slide={slide} />
           </motion.div>
@@ -213,29 +247,33 @@ export default function RecapPage() {
       </div>
 
       <div className="relative z-10 mt-4 flex justify-between">
-        <button
+        <motion.button
+          whileTap={{ scale: 0.92 }}
           disabled={idx === 0}
-          onClick={() => setIdx((i) => Math.max(0, i - 1))}
+          onClick={() => advance(-1)}
           className="rounded-full bg-white/80 p-3 ring-1 ring-slate-200 disabled:opacity-40"
           aria-label={t("common.previous")}
         >
           <ChevronLeft className="h-5 w-5" />
-        </button>
+        </motion.button>
         {isLast ? (
-          <Link
-            to="/"
-            className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-5 py-3 text-sm font-medium text-white shadow"
-          >
-            {t("recap.back_to_map")}
-          </Link>
+          <motion.div whileTap={{ scale: 0.96 }}>
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-5 py-3 text-sm font-medium text-white shadow"
+            >
+              {t("recap.back_to_map")}
+            </Link>
+          </motion.div>
         ) : (
-          <button
-            onClick={() => setIdx((i) => Math.min(slides.length - 1, i + 1))}
+          <motion.button
+            whileTap={{ scale: 0.92 }}
+            onClick={() => advance(1)}
             className="rounded-full bg-wave-600 p-3 text-white shadow"
             aria-label={t("common.next")}
           >
             <ChevronRight className="h-5 w-5" />
-          </button>
+          </motion.button>
         )}
       </div>
     </div>

@@ -7,6 +7,8 @@ import type { GroupDoc, SessionDoc } from "@/lib/types";
 import { startOfYear, endOfYear } from "@/lib/scoring";
 import { bonusPointsForUid } from "@/lib/achievements";
 import { useT } from "@/lib/i18n";
+import { AnimatedNumber } from "@/components/AnimatedNumber";
+import { cn } from "@/lib/utils";
 
 type Row = {
   uid: string;
@@ -88,64 +90,111 @@ export default function LeaderboardPage() {
 
       <ol className="space-y-2">
         <AnimatePresence initial={false}>
-          {rows.map((r, i) => (
-            <motion.li
-              key={r.uid}
-              layout
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              className={`glass flex items-center gap-3 p-3 ${
-                user?.uid === r.uid ? "ring-2 ring-wave-400" : ""
-              }`}
-            >
-              <div className="w-7 text-center font-display text-lg font-black">
-                {i === 0 ? (
-                  <Crown className="mx-auto h-5 w-5 text-amber-500" />
-                ) : (
-                  <span className="text-slate-500">{i + 1}</span>
+          {rows.map((r, i) => {
+            const isMe = user?.uid === r.uid;
+            const podium = podiumStyle(i);
+            return (
+              <motion.li
+                key={r.uid}
+                layout
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8, scale: 0.97 }}
+                transition={{ type: "spring", stiffness: 280, damping: 26 }}
+                className={cn(
+                  "glass relative flex items-center gap-3 p-3 transition",
+                  podium.cardClass,
+                  isMe && "ring-2 ring-wave-400",
                 )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-semibold text-wave-900">
-                  {r.displayName}
-                  {user?.uid === r.uid ? (
-                    <span className="ml-2 text-[10px] text-wave-600">
-                      {t("common.you")}
-                    </span>
-                  ) : null}
+              >
+                <div
+                  className={cn(
+                    "flex h-9 w-9 flex-none items-center justify-center rounded-full font-display text-lg font-black",
+                    podium.medalClass,
+                  )}
+                >
+                  {podium.medal ?? <span>{i + 1}</span>}
                 </div>
-                <div className="flex gap-2 text-[11px] text-slate-500">
-                  <span className="inline-flex items-center gap-0.5">
-                    <MapPin className="h-3 w-3" />{" "}
-                    {t("leaderboard.spots", { n: r.uniquePlaces })}
-                  </span>
-                  <span className="inline-flex items-center gap-0.5">
-                    <Snowflake className="h-3 w-3" />{" "}
-                    {t("leaderboard.winters", { n: r.winters })}
-                  </span>
-                  <span>{t("leaderboard.swims", { n: r.sessions })}</span>
-                  {r.bonusPoints > 0 ? (
-                    <span className="text-amber-700">
-                      {t("leaderboard.bonus_hint", { n: r.bonusPoints })}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-semibold text-wave-900">
+                    {r.displayName}
+                    {isMe ? (
+                      <span className="ml-2 rounded-full bg-wave-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-wave-700">
+                        {t("common.you")}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+                    <span className="inline-flex items-center gap-0.5">
+                      <MapPin className="h-3 w-3" />{" "}
+                      {t("leaderboard.spots", { n: r.uniquePlaces })}
                     </span>
-                  ) : null}
+                    <span className="inline-flex items-center gap-0.5">
+                      <Snowflake className="h-3 w-3" />{" "}
+                      {t("leaderboard.winters", { n: r.winters })}
+                    </span>
+                    <span>{t("leaderboard.swims", { n: r.sessions })}</span>
+                    {r.bonusPoints > 0 ? (
+                      <span className="text-amber-700">
+                        {t("leaderboard.bonus_hint", { n: r.bonusPoints })}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
-              <div className="font-display text-2xl font-black text-wave-700">
-                {r.points}
-              </div>
-            </motion.li>
-          ))}
+                <AnimatedNumber
+                  value={r.points}
+                  className="font-display text-2xl font-black text-wave-700"
+                />
+              </motion.li>
+            );
+          })}
         </AnimatePresence>
         {rows.length === 0 ? (
-          <li className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
+          <motion.li
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500"
+          >
             {t("leaderboard.empty")}
-          </li>
+          </motion.li>
         ) : null}
       </ol>
     </div>
   );
+}
+
+function podiumStyle(rank: number): {
+  medal: React.ReactNode | null;
+  medalClass: string;
+  cardClass: string;
+} {
+  if (rank === 0)
+    return {
+      medal: <Crown className="h-5 w-5" />,
+      medalClass:
+        "bg-gradient-to-br from-amber-300 to-amber-500 text-white shadow-md shadow-amber-500/30",
+      cardClass:
+        "bg-gradient-to-r from-amber-50 via-white to-white ring-1 ring-amber-200",
+    };
+  if (rank === 1)
+    return {
+      medal: null,
+      medalClass:
+        "bg-gradient-to-br from-slate-200 to-slate-400 text-white shadow",
+      cardClass: "bg-gradient-to-r from-slate-50 via-white to-white",
+    };
+  if (rank === 2)
+    return {
+      medal: null,
+      medalClass:
+        "bg-gradient-to-br from-orange-300 to-orange-500 text-white shadow",
+      cardClass: "bg-gradient-to-r from-orange-50 via-white to-white",
+    };
+  return {
+    medal: null,
+    medalClass: "bg-slate-100 text-slate-500",
+    cardClass: "",
+  };
 }
 
 function ScopeChip({

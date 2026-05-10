@@ -25,6 +25,7 @@ import {
   evaluateAchievements,
 } from "@/lib/achievements";
 import { monthShort, useT } from "@/lib/i18n";
+import { AnimatedNumber } from "@/components/AnimatedNumber";
 
 export default function MapPage() {
   const { user, profile } = useAuth();
@@ -192,16 +193,21 @@ function Stat({
 }) {
   return (
     <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 280, damping: 24 }}
       whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
       className="glass flex flex-col items-start gap-1 px-3 py-2.5"
     >
       <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-wave-700">
         {icon}
         {label}
       </div>
-      <div className="font-display text-2xl font-black text-wave-900">
-        {value}
-      </div>
+      <AnimatedNumber
+        value={value}
+        className="font-display text-2xl font-black text-wave-900"
+      />
       {sub ? <div className="text-[10px] text-amber-700">{sub}</div> : null}
     </motion.div>
   );

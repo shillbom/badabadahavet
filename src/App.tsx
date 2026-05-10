@@ -25,6 +25,7 @@ import AchievementsPage from "@/pages/AchievementsPage";
 import RecapPage from "@/pages/RecapPage";
 import { Toaster } from "@/components/ui/Toast";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
+import { FullSplash } from "@/components/Splash";
 
 export default function App() {
   const { user, profile, loading } = useAuth();
@@ -93,11 +94,7 @@ export default function App() {
   }, [profile]);
 
   if (loading) {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-wave-600 border-r-transparent" />
-      </div>
-    );
+    return <FullSplash />;
   }
 
   return (
