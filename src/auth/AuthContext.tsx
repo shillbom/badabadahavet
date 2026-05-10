@@ -33,7 +33,7 @@ const Ctx = createContext<AuthCtx | null>(null);
 
 // Username-only "login" — convert handle to a stable fake email for Firebase Auth.
 function handleToEmail(handle: string) {
-  return `${handle.trim().toLowerCase()}@badabadahavet.local`;
+  return `${handle.trim().toLowerCase()}@badligan.local`;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

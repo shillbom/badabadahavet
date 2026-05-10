@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { localeBcp } from "./i18n";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -7,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatDate(d: Date | number) {
   const date = typeof d === "number" ? new Date(d) : d;
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString(localeBcp(), {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -16,7 +17,7 @@ export function formatDate(d: Date | number) {
 
 export function formatDateTime(d: Date | number) {
   const date = typeof d === "number" ? new Date(d) : d;
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(localeBcp(), {
     month: "short",
     day: "numeric",
     hour: "2-digit",

@@ -1,6 +1,6 @@
-# badabadahavet 🌊
+# Badligan 🌊
 
-A friendly little competition app for swim-spot collectors. React + Firebase, mobile-browser-first.
+A friendly little competition app for swim-spot collectors. React + Firebase, mobile-browser-first. UI is in Swedish by default with English as a second language; toggle in the header (or on the login screen).
 
 ## Scoring
 

@@ -6,6 +6,7 @@ import { useAuth } from "@/auth/AuthContext";
 import type { GroupDoc, SessionDoc } from "@/lib/types";
 import { startOfYear, endOfYear } from "@/lib/scoring";
 import { bonusPointsForUid } from "@/lib/achievements";
+import { useT } from "@/lib/i18n";
 
 type Row = {
   uid: string;
@@ -21,6 +22,7 @@ export default function LeaderboardPage() {
   const all = useStore((s) => s.allSessions);
   const groups = useStore((s) => s.groups);
   const { user } = useAuth();
+  const t = useT();
 
   const year = new Date().getFullYear();
   const [scope, setScope] = useState<string>("global");
@@ -38,8 +40,6 @@ export default function LeaderboardPage() {
       scope === "global"
         ? null
         : new Set(groups.find((g) => g.id === scope)?.members ?? []);
-    // Bonus achievement points are computed against ALL sessions (not the
-    // year-only filter) since most achievements are lifetime.
     const rows = aggregate(filtered, memberFilter, all);
     return rows.sort((a, b) => b.points - a.points);
   }, [filtered, groups, scope, all]);
@@ -50,19 +50,18 @@ export default function LeaderboardPage() {
     <div className="px-4 pt-2">
       <div className="mb-3 flex items-end justify-between">
         <h2 className="font-display text-2xl font-black text-wave-900">
-          Top charts
+          {t("leaderboard.title")}
         </h2>
-        <button
-          onClick={() => setYearOnly((v) => !v)}
-          className="chip"
-        >
-          {yearOnly ? `${year} only` : "All time"}
+        <button onClick={() => setYearOnly((v) => !v)} className="chip">
+          {yearOnly
+            ? t("leaderboard.year_only", { year })
+            : t("leaderboard.all_time")}
         </button>
       </div>
 
       <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4">
         <ScopeChip
-          label="🌍 Global"
+          label={t("leaderboard.scope.global")}
           active={scope === "global"}
           onClick={() => setScope("global")}
         />
@@ -78,7 +77,9 @@ export default function LeaderboardPage() {
 
       {activeGroup ? (
         <div className="mb-3 flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2 ring-1 ring-white/60">
-          <span className="text-xs text-slate-500">Group code</span>
+          <span className="text-xs text-slate-500">
+            {t("leaderboard.group_code")}
+          </span>
           <code className="font-mono text-sm font-bold tracking-widest text-wave-800">
             {activeGroup.code}
           </code>
@@ -109,20 +110,24 @@ export default function LeaderboardPage() {
                 <div className="truncate font-semibold text-wave-900">
                   {r.displayName}
                   {user?.uid === r.uid ? (
-                    <span className="ml-2 text-[10px] text-wave-600">you</span>
+                    <span className="ml-2 text-[10px] text-wave-600">
+                      {t("common.you")}
+                    </span>
                   ) : null}
                 </div>
                 <div className="flex gap-2 text-[11px] text-slate-500">
                   <span className="inline-flex items-center gap-0.5">
-                    <MapPin className="h-3 w-3" /> {r.uniquePlaces} spots
+                    <MapPin className="h-3 w-3" />{" "}
+                    {t("leaderboard.spots", { n: r.uniquePlaces })}
                   </span>
                   <span className="inline-flex items-center gap-0.5">
-                    <Snowflake className="h-3 w-3" /> {r.winters} winter
+                    <Snowflake className="h-3 w-3" />{" "}
+                    {t("leaderboard.winters", { n: r.winters })}
                   </span>
-                  <span>· {r.sessions} swims</span>
+                  <span>{t("leaderboard.swims", { n: r.sessions })}</span>
                   {r.bonusPoints > 0 ? (
                     <span className="text-amber-700">
-                      · +{r.bonusPoints} 🏅
+                      {t("leaderboard.bonus_hint", { n: r.bonusPoints })}
                     </span>
                   ) : null}
                 </div>
@@ -135,7 +140,7 @@ export default function LeaderboardPage() {
         </AnimatePresence>
         {rows.length === 0 ? (
           <li className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
-            No swims yet — be the first.
+            {t("leaderboard.empty")}
           </li>
         ) : null}
       </ol>

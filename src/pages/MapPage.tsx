@@ -17,16 +17,18 @@ import { useStore } from "@/store/sessions";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
-import { MONTHS, computeMyStats } from "@/lib/stats";
+import { computeMyStats } from "@/lib/stats";
 import { formatDate } from "@/lib/utils";
 import {
   ACHIEVEMENTS,
   ACHIEVEMENTS_BY_ID,
   evaluateAchievements,
 } from "@/lib/achievements";
+import { monthShort, useT } from "@/lib/i18n";
 
 export default function MapPage() {
   const { user, profile } = useAuth();
+  const t = useT();
   const places = useStore((s) => s.places);
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
@@ -64,6 +66,16 @@ export default function MapPage() {
 
   const totalPoints = stats.totalPoints + bonusPts;
 
+  const greetingName = profile?.displayName ?? t("layout.swimmer");
+  const subtitle =
+    mySessions.length === 0
+      ? t("map.empty.subtitle")
+      : stats.daysSinceLast === 0
+        ? t("map.last.today")
+        : stats.daysSinceLast === 1
+          ? t("map.last.yesterday")
+          : t("map.last.days", { n: stats.daysSinceLast ?? 0 });
+
   return (
     <div className="px-4 pt-2">
       <motion.div
@@ -72,33 +84,27 @@ export default function MapPage() {
         className="mb-3"
       >
         <h2 className="font-display text-2xl font-black text-wave-900">
-          Hej {profile?.displayName ?? "swimmer"} 👋
+          {t("map.greeting", { name: greetingName })}
         </h2>
-        <p className="text-sm text-slate-500">
-          {mySessions.length === 0
-            ? "Tap + to log your first dip."
-            : stats.daysSinceLast === 0
-              ? "You swam today — nice."
-              : stats.daysSinceLast === 1
-                ? "You swam yesterday."
-                : `It's been ${stats.daysSinceLast} days since your last dip.`}
-        </p>
+        <p className="text-sm text-slate-500">{subtitle}</p>
       </motion.div>
 
       <div className="grid grid-cols-3 gap-2">
         <Stat
-          label="Points"
+          label={t("map.stat.points")}
           value={totalPoints}
           icon={<Trophy className="h-4 w-4" />}
-          sub={bonusPts > 0 ? `+${bonusPts} from bonuses` : undefined}
+          sub={
+            bonusPts > 0 ? t("map.bonus.subtitle", { n: bonusPts }) : undefined
+          }
         />
         <Stat
-          label="Spots"
+          label={t("map.stat.spots")}
           value={stats.uniquePlaces}
           icon={<MapPin className="h-4 w-4" />}
         />
         <Stat
-          label="Winter"
+          label={t("map.stat.winter")}
           value={stats.winterSwims}
           icon={<Snowflake className="h-4 w-4" />}
         />
@@ -113,10 +119,10 @@ export default function MapPage() {
             <Sparkles className="h-5 w-5 text-amber-500" />
             <div className="min-w-0 flex-1">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Year recap
+                {t("map.recap.label")}
               </div>
               <div className="font-display text-sm font-bold text-wave-900">
-                Rewind {new Date().getFullYear()} →
+                {t("map.recap.cta", { year: new Date().getFullYear() })}
               </div>
             </div>
           </Link>
@@ -127,10 +133,13 @@ export default function MapPage() {
             <Award className="h-5 w-5 text-amber-500" />
             <div className="min-w-0 flex-1">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Achievements
+                {t("map.achievements.label")}
               </div>
               <div className="font-display text-sm font-bold text-wave-900">
-                {unlocked.size}/{ACHIEVEMENTS.length} earned
+                {t("map.achievements.count", {
+                  n: unlocked.size,
+                  total: ACHIEVEMENTS.length,
+                })}
               </div>
             </div>
           </Link>
@@ -147,7 +156,7 @@ export default function MapPage() {
               <span
                 key={a.id}
                 className="flex-none rounded-full bg-white/80 px-2.5 py-1 text-base ring-1 ring-amber-200"
-                title={`${a.name} · +${a.points}`}
+                title={`${t(`achievement.${a.id}.name`)} · +${a.points}`}
               >
                 {a.emoji}
               </span>
@@ -163,7 +172,7 @@ export default function MapPage() {
 
       {mySessions.length === 0 ? (
         <p className="mt-4 text-center text-xs text-slate-500">
-          No swims yet — when you log one, a pin shows up here. ✨
+          {t("map.empty.helper")}
         </p>
       ) : null}
     </div>
@@ -193,50 +202,50 @@ function Stat({
       <div className="font-display text-2xl font-black text-wave-900">
         {value}
       </div>
-      {sub ? (
-        <div className="text-[10px] text-amber-700">{sub}</div>
-      ) : null}
+      {sub ? <div className="text-[10px] text-amber-700">{sub}</div> : null}
     </motion.div>
   );
 }
 
-function Vibes({
-  stats,
-}: {
-  stats: ReturnType<typeof computeMyStats>;
-}) {
+function Vibes({ stats }: { stats: ReturnType<typeof computeMyStats> }) {
+  const t = useT();
+  const streakValue =
+    stats.currentWeekStreak === 0
+      ? "—"
+      : stats.currentWeekStreak === 1
+        ? t("vibes.streak.weeks_one")
+        : t("vibes.streak.weeks_many", { n: stats.currentWeekStreak });
+  const streakSub =
+    stats.longestWeekStreak > stats.currentWeekStreak
+      ? t("vibes.streak.best", { n: stats.longestWeekStreak })
+      : t("vibes.streak.on_fire");
+
+  const lastValue =
+    stats.daysSinceLast == null
+      ? "—"
+      : stats.daysSinceLast === 0
+        ? t("vibes.last_swim.today")
+        : t("vibes.last_swim.days_ago", { n: stats.daysSinceLast });
+  const lastSub = t("vibes.last_swim.total", { n: stats.totalSwims });
+
   return (
     <div className="mt-4 space-y-2">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        Vibes
+        {t("vibes.title")}
       </h3>
 
       <div className="grid grid-cols-2 gap-2">
         <MiniStat
           icon={<Flame className="h-4 w-4 text-amber-500" />}
-          label="Streak"
-          value={
-            stats.currentWeekStreak === 0
-              ? "—"
-              : `${stats.currentWeekStreak} wk${stats.currentWeekStreak === 1 ? "" : "s"}`
-          }
-          sub={
-            stats.longestWeekStreak > stats.currentWeekStreak
-              ? `Best: ${stats.longestWeekStreak} wks`
-              : "On fire"
-          }
+          label={t("vibes.streak")}
+          value={streakValue}
+          sub={streakSub}
         />
         <MiniStat
           icon={<Clock className="h-4 w-4 text-wave-600" />}
-          label="Last swim"
-          value={
-            stats.daysSinceLast == null
-              ? "—"
-              : stats.daysSinceLast === 0
-                ? "Today"
-                : `${stats.daysSinceLast}d ago`
-          }
-          sub={`${stats.totalSwims} swims total`}
+          label={t("vibes.last_swim")}
+          value={lastValue}
+          sub={lastSub}
         />
       </div>
 
@@ -248,7 +257,7 @@ function Vibes({
           <Star className="h-5 w-5 text-amber-500" />
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Most-loved spot
+              {t("vibes.fav_spot")}
             </div>
             <div className="truncate font-display text-base font-bold text-wave-900">
               {stats.favouriteSpot.name}
@@ -265,10 +274,10 @@ function Vibes({
           <Compass className="h-5 w-5 text-wave-600" />
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Your watery range
+              {t("vibes.range")}
             </div>
             <div className="text-sm text-wave-900">
-              spans <strong>{stats.range.km.toFixed(1)} km</strong>
+              {t("vibes.range.spans", { n: stats.range.km.toFixed(1) })}
             </div>
           </div>
         </div>
@@ -279,11 +288,13 @@ function Vibes({
           <CalendarHeart className="h-5 w-5 text-rose-500" />
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              Best month so far
+              {t("vibes.best_month")}
             </div>
             <div className="text-sm text-wave-900">
-              <strong>{MONTHS[stats.bestMonth.month]}</strong> ·{" "}
-              {stats.bestMonth.points} pts
+              {t("vibes.best_month.value", {
+                month: monthShort(stats.bestMonth.month),
+                n: stats.bestMonth.points,
+              })}
             </div>
           </div>
         </div>
@@ -297,12 +308,13 @@ function Vibes({
           <span className="text-2xl">🗓️</span>
           <div className="min-w-0 flex-1">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-wave-700">
-              On this day
+              {t("vibes.on_this_day")}
             </div>
             <div className="text-sm text-wave-900">
-              You swam at{" "}
-              <strong className="truncate">{stats.onThisDay.placeName}</strong>{" "}
-              on {formatDate(stats.onThisDay.date)}
+              {t("vibes.on_this_day.text", {
+                place: stats.onThisDay.placeName,
+                date: formatDate(stats.onThisDay.date),
+              })}
               {stats.onThisDay.isWinter ? " ❄️" : ""}
             </div>
           </div>

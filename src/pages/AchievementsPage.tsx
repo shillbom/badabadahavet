@@ -10,11 +10,13 @@ import {
   type Achievement,
   type AchievementContext,
 } from "@/lib/achievements";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 export default function AchievementsPage() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const t = useT();
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
 
@@ -51,17 +53,20 @@ export default function AchievementsPage() {
         <button
           onClick={() => navigate(-1)}
           className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label="Back"
+          aria-label={t("common.back")}
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div>
           <h2 className="font-display text-2xl font-black text-wave-900">
-            Achievements
+            {t("achievements.title")}
           </h2>
           <p className="text-xs text-slate-500">
-            {unlocked.size} of {ACHIEVEMENTS.length} unlocked · +{totalBonus}{" "}
-            bonus pts
+            {t("achievements.summary", {
+              n: unlocked.size,
+              total: ACHIEVEMENTS.length,
+              pts: totalBonus,
+            })}
           </p>
         </div>
       </div>
@@ -95,6 +100,7 @@ function Row({
   ctx: AchievementContext;
   index: number;
 }) {
+  const t = useT();
   const progress = achievement.progress?.(ctx) ?? (unlocked ? 1 : 0);
   return (
     <motion.li
@@ -114,7 +120,11 @@ function Row({
             : "bg-slate-100 ring-slate-200 grayscale",
         )}
       >
-        {unlocked ? achievement.emoji : <Lock className="h-5 w-5 text-slate-400" />}
+        {unlocked ? (
+          achievement.emoji
+        ) : (
+          <Lock className="h-5 w-5 text-slate-400" />
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -124,7 +134,7 @@ function Row({
               unlocked ? "text-wave-900" : "text-slate-500",
             )}
           >
-            {achievement.name}
+            {t(`achievement.${achievement.id}.name`)}
           </span>
           <span
             className={cn(
@@ -140,9 +150,9 @@ function Row({
           </span>
         </div>
         <div className="text-[11px] text-slate-500">
-          {achievement.description}
+          {t(`achievement.${achievement.id}.desc`)}
           {unlocked && unlockedAt
-            ? ` · earned ${new Date(unlockedAt).toLocaleDateString()}`
+            ? ` · ${t("achievements.earned_on", { date: formatDate(unlockedAt) })}`
             : null}
         </div>
         {!unlocked && progress > 0 ? (

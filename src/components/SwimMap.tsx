@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
 
 // Fix default marker icon paths for bundlers (Leaflet's default icons are broken under Vite).
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })
@@ -53,6 +54,7 @@ export default function SwimMap({
   className,
   linkToSpot = true,
 }: SwimMapProps) {
+  const t = useT();
   const fallbackCenter: LatLngExpression = useMemo(() => {
     if (places.length) return [places[0].lat, places[0].lng];
     return [59.32, 18.06]; // Stockholm — a wholesome default for swim spots
@@ -83,7 +85,9 @@ export default function SwimMap({
                 <div className="text-sm">
                   <div className="font-semibold text-wave-900">{p.name}</div>
                   <div className="text-[11px] text-slate-500">
-                    {sessions.length} swim{sessions.length === 1 ? "" : "s"}
+                    {sessions.length === 1
+                      ? t("map.popup.swims_one")
+                      : t("map.popup.swims_many", { n: sessions.length })}
                   </div>
                   <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
                     {sessions.slice(0, 5).map((s) => (
@@ -98,7 +102,7 @@ export default function SwimMap({
                       to={`/spot/${p.id}`}
                       className="mt-1.5 inline-block text-[11px] font-semibold text-wave-700 hover:underline"
                     >
-                      See full history →
+                      {t("map.popup.see_full_history")}
                     </Link>
                   ) : null}
                 </div>

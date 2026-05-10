@@ -177,17 +177,3 @@ function haversineKm(
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-export const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];

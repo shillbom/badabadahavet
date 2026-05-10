@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
 import { createGroup, joinGroupByCode, leaveGroup } from "@/lib/data";
+import { useT } from "@/lib/i18n";
 
 export default function GroupsPage() {
   const { user } = useAuth();
+  const t = useT();
   const groups = useStore((s) => s.groups);
   const [groupName, setGroupName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -19,16 +21,16 @@ export default function GroupsPage() {
     e.preventDefault();
     if (!user) return;
     if (!groupName.trim()) {
-      toast.error("Pick a group name");
+      toast.error(t("groups.create.error.empty"));
       return;
     }
     setBusy(true);
     try {
       const g = await createGroup({ name: groupName, uid: user.uid });
-      toast.success(`Group "${g.name}" created · code ${g.code}`);
+      toast.success(t("groups.create.success", { name: g.name, code: g.code }));
       setGroupName("");
-    } catch (err) {
-      toast.error((err as Error).message ?? "Couldn't create");
+    } catch {
+      toast.error(t("groups.create.error.generic"));
     } finally {
       setBusy(false);
     }
@@ -38,19 +40,19 @@ export default function GroupsPage() {
     e.preventDefault();
     if (!user) return;
     if (joinCode.trim().length < 3) {
-      toast.error("That code looks too short");
+      toast.error(t("groups.join.too_short"));
       return;
     }
     setBusy(true);
     try {
       const g = await joinGroupByCode({ code: joinCode, uid: user.uid });
-      if (!g) toast.error("No group with that code");
+      if (!g) toast.error(t("groups.join.not_found"));
       else {
-        toast.success(`Joined ${g.name}`);
+        toast.success(t("groups.join.success", { name: g.name }));
         setJoinCode("");
       }
-    } catch (err) {
-      toast.error((err as Error).message ?? "Couldn't join");
+    } catch {
+      toast.error(t("groups.join.error.generic"));
     } finally {
       setBusy(false);
     }
@@ -58,26 +60,26 @@ export default function GroupsPage() {
 
   function copyCode(code: string) {
     navigator.clipboard.writeText(code).then(
-      () => toast.success("Code copied"),
-      () => toast.error("Copy failed"),
+      () => toast.success(t("groups.code_copied")),
+      () => toast.error(t("groups.copy_failed")),
     );
   }
 
   async function onLeave(groupId: string, name: string) {
     if (!user) return;
-    if (!window.confirm(`Leave "${name}"?`)) return;
+    if (!window.confirm(t("groups.leave_confirm", { name }))) return;
     try {
       await leaveGroup({ groupId, uid: user.uid });
-      toast.success(`Left ${name}`);
-    } catch (err) {
-      toast.error((err as Error).message ?? "Couldn't leave");
+      toast.success(t("groups.left", { name }));
+    } catch {
+      toast.error(t("groups.leave.error.generic"));
     }
   }
 
   return (
     <div className="px-4 pt-2">
       <h2 className="mb-3 font-display text-2xl font-black text-wave-900">
-        Groups
+        {t("groups.title")}
       </h2>
 
       <motion.form
@@ -85,10 +87,10 @@ export default function GroupsPage() {
         layout
         className="glass mb-3 space-y-3 p-4"
       >
-        <Label>Create a new group</Label>
+        <Label>{t("groups.create.label")}</Label>
         <div className="flex gap-2">
           <Input
-            placeholder="e.g. Wednesday dippers"
+            placeholder={t("groups.create.placeholder")}
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
           />
@@ -103,7 +105,7 @@ export default function GroupsPage() {
         layout
         className="glass mb-5 space-y-3 p-4"
       >
-        <Label>Join with a code</Label>
+        <Label>{t("groups.join.label")}</Label>
         <div className="flex gap-2">
           <Input
             placeholder="ABCDE"
@@ -119,22 +121,22 @@ export default function GroupsPage() {
             loading={busy}
             className="px-4"
           >
-            Join
+            {t("groups.join.button")}
           </Button>
         </div>
       </motion.form>
 
       <div className="mb-2 flex items-baseline justify-between">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Your groups
+          {t("groups.your_groups")}
         </h3>
         <span className="text-[11px] text-slate-400">
-          You can be in as many as you like
+          {t("groups.unlimited_hint")}
         </span>
       </div>
       {groups.length === 0 ? (
         <div className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
-          No groups yet — create one and share the code.
+          {t("groups.empty")}
         </div>
       ) : (
         <ul className="space-y-2">
@@ -156,8 +158,12 @@ export default function GroupsPage() {
                     {g.name}
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    {g.members.length} member{g.members.length === 1 ? "" : "s"}
-                    {g.createdBy === user?.uid ? " · founder" : ""}
+                    {g.members.length === 1
+                      ? t("groups.member_one")
+                      : t("groups.member_many", { n: g.members.length })}
+                    {g.createdBy === user?.uid
+                      ? ` · ${t("groups.founder")}`
+                      : ""}
                   </div>
                 </div>
                 <button
@@ -170,8 +176,8 @@ export default function GroupsPage() {
                 <button
                   onClick={() => onLeave(g.id, g.name)}
                   className="rounded-full bg-white/70 p-2 text-slate-500 ring-1 ring-slate-200 hover:bg-rose-50 hover:text-rose-600"
-                  aria-label={`Leave ${g.name}`}
-                  title="Leave group"
+                  aria-label={t("groups.leave_aria", { name: g.name })}
+                  title={t("groups.leave_title")}
                 >
                   <LogOut className="h-3.5 w-3.5" />
                 </button>

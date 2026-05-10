@@ -1,0 +1,569 @@
+import { create } from "zustand";
+
+export type Locale = "sv" | "en";
+
+const STORAGE_KEY = "badligan.locale";
+
+function detectInitial(): Locale {
+  if (typeof window === "undefined") return "sv";
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved === "sv" || saved === "en") return saved;
+  // Default to Swedish unless the browser strongly prefers English.
+  const langs = navigator.languages?.length
+    ? navigator.languages
+    : [navigator.language];
+  for (const l of langs) {
+    if (l?.toLowerCase().startsWith("sv")) return "sv";
+    if (l?.toLowerCase().startsWith("en")) return "en";
+  }
+  return "sv";
+}
+
+type LocaleState = {
+  locale: Locale;
+  setLocale: (l: Locale) => void;
+};
+
+export const useLocale = create<LocaleState>((set) => ({
+  locale: detectInitial(),
+  setLocale: (l) => {
+    if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, l);
+    set({ locale: l });
+    if (typeof document !== "undefined") document.documentElement.lang = l;
+  },
+}));
+
+if (typeof document !== "undefined") {
+  document.documentElement.lang = useLocale.getState().locale;
+}
+
+type Vars = Record<string, string | number>;
+
+function format(template: string, vars?: Vars): string {
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (_, k) =>
+    k in vars ? String(vars[k]) : `{${k}}`,
+  );
+}
+
+export function t(key: string, vars?: Vars): string {
+  const locale = useLocale.getState().locale;
+  const str = MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key;
+  return format(str, vars);
+}
+
+export function useT(): (key: string, vars?: Vars) => string {
+  const locale = useLocale((s) => s.locale);
+  return (key, vars) =>
+    format(MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key, vars);
+}
+
+export function plural(n: number, sv: [string, string], en: [string, string]) {
+  const locale = useLocale.getState().locale;
+  const pair = locale === "sv" ? sv : en;
+  return n === 1 ? pair[0] : pair[1];
+}
+
+export function monthShort(idx: number): string {
+  const locale = useLocale.getState().locale;
+  return new Date(2025, idx, 1).toLocaleString(localeBcp(locale), {
+    month: "short",
+  });
+}
+
+export function monthLong(idx: number): string {
+  const locale = useLocale.getState().locale;
+  return new Date(2025, idx, 1).toLocaleString(localeBcp(locale), {
+    month: "long",
+  });
+}
+
+export function localeBcp(l?: Locale): string {
+  return (l ?? useLocale.getState().locale) === "sv" ? "sv-SE" : "en-GB";
+}
+
+const MESSAGES: Record<Locale, Record<string, string>> = {
+  sv: {
+    "app.name": "Badligan",
+    "app.tagline": "En liten, vänlig badtävling",
+    "common.loading": "Laddar…",
+    "common.you": "du",
+    "common.back": "Tillbaka",
+    "common.close": "Stäng",
+    "common.previous": "Föregående",
+    "common.next": "Nästa",
+    "common.cancel": "Avbryt",
+
+    "lang.toggle": "Språk",
+    "lang.sv": "Svenska",
+    "lang.en": "English",
+
+    "auth.login": "Logga in",
+    "auth.signup": "Skapa konto",
+    "auth.name": "Namn",
+    "auth.password": "Lösenord",
+    "auth.dive_in": "Plums i",
+    "auth.create_account": "Skapa konto",
+    "auth.welcome": "Välkommen, {name}!",
+    "auth.hello_again": "Hej igen, {name}!",
+    "auth.fun_disclaimer": "Bara på skoj — använd inte ett riktigt lösenord.",
+    "auth.handle_placeholder": "t.ex. utter",
+    "auth.password_placeholder": "••••••",
+    "auth.error.validation": "Välj ett namn och lösenord (minst 4 tecken)",
+    "auth.error.wrong_credentials": "Fel namn eller lösenord",
+    "auth.error.user_not_found": "Ingen badare med det namnet ännu",
+    "auth.error.taken": "Det namnet är taget",
+    "auth.error.weak_password": "Välj ett längre lösenord",
+    "auth.error.generic": "Kunde inte logga in",
+
+    "layout.swimmer": "Badare",
+    "layout.solo_swimmer": "Solobadare",
+    "layout.groups_one": "1 grupp",
+    "layout.groups_many": "{n} grupper",
+    "layout.log_out": "Logga ut",
+    "layout.log_a_swim": "Logga ett bad",
+
+    "nav.map": "Karta",
+    "nav.history": "Historik",
+    "nav.top": "Topp",
+    "nav.groups": "Grupper",
+
+    "map.greeting": "Hej {name} 👋",
+    "map.empty.subtitle": "Tryck + för att logga ditt första bad.",
+    "map.last.today": "Du badade idag — fint.",
+    "map.last.yesterday": "Du badade igår.",
+    "map.last.days": "Det är {n} dagar sen ditt senaste dopp.",
+    "map.empty.helper": "Inga bad ännu — när du loggar ett dyker en pin upp här. ✨",
+    "map.stat.points": "Poäng",
+    "map.stat.spots": "Platser",
+    "map.stat.winter": "Vinter",
+    "map.bonus.subtitle": "+{n} från bonusar",
+    "map.recap.label": "Årssammanfattning",
+    "map.recap.cta": "Bläddra tillbaka {year} →",
+    "map.achievements.label": "Bedrifter",
+    "map.achievements.count": "{n}/{total} klara",
+
+    "vibes.title": "Stämningen",
+    "vibes.streak": "Svit",
+    "vibes.streak.weeks_one": "1 v",
+    "vibes.streak.weeks_many": "{n} v",
+    "vibes.streak.best": "Bäst: {n} v",
+    "vibes.streak.on_fire": "Det brinner",
+    "vibes.last_swim": "Senaste bad",
+    "vibes.last_swim.today": "Idag",
+    "vibes.last_swim.days_ago": "{n}d sedan",
+    "vibes.last_swim.total": "{n} bad totalt",
+    "vibes.fav_spot": "Favoritplats",
+    "vibes.range": "Din räckvidd",
+    "vibes.range.spans": "spänner över {n} km",
+    "vibes.best_month": "Bästa månaden hittills",
+    "vibes.best_month.value": "{month} · {n} p",
+    "vibes.on_this_day": "På den här dagen",
+    "vibes.on_this_day.text": "Du badade vid {place} den {date}",
+
+    "history.title": "Historik",
+    "history.empty.title": "Inga bad ännu",
+    "history.empty.helper": "Tryck på + för att logga ditt första bad.",
+    "history.chip.new_spot": "ny plats",
+    "history.chip.winter": "vinter",
+
+    "leaderboard.title": "Topplista",
+    "leaderboard.year_only": "Endast {year}",
+    "leaderboard.all_time": "Genom tiderna",
+    "leaderboard.scope.global": "🌍 Globalt",
+    "leaderboard.group_code": "Gruppkod",
+    "leaderboard.spots": "{n} platser",
+    "leaderboard.winters": "{n} vinter",
+    "leaderboard.swims": "· {n} bad",
+    "leaderboard.bonus_hint": "· +{n} 🏅",
+    "leaderboard.empty": "Inga bad ännu — bli först.",
+
+    "groups.title": "Grupper",
+    "groups.create.label": "Skapa en ny grupp",
+    "groups.create.placeholder": "t.ex. Onsdagsdoppen",
+    "groups.create.error.empty": "Välj ett gruppnamn",
+    "groups.create.error.generic": "Kunde inte skapa",
+    "groups.create.success": "Grupp \"{name}\" skapad · kod {code}",
+    "groups.join.label": "Gå med via kod",
+    "groups.join.button": "Gå med",
+    "groups.join.too_short": "Den koden ser för kort ut",
+    "groups.join.not_found": "Ingen grupp med den koden",
+    "groups.join.success": "Gick med i {name}",
+    "groups.join.error.generic": "Kunde inte gå med",
+    "groups.your_groups": "Dina grupper",
+    "groups.unlimited_hint": "Du kan vara med i hur många du vill",
+    "groups.empty": "Inga grupper ännu — skapa en och dela koden.",
+    "groups.member_one": "1 medlem",
+    "groups.member_many": "{n} medlemmar",
+    "groups.founder": "grundare",
+    "groups.code_copied": "Kod kopierad",
+    "groups.copy_failed": "Kunde inte kopiera",
+    "groups.leave_confirm": "Lämna \"{name}\"?",
+    "groups.left": "Lämnade {name}",
+    "groups.leave_aria": "Lämna {name}",
+    "groups.leave_title": "Lämna gruppen",
+    "groups.leave.error.generic": "Kunde inte lämna",
+
+    "log.title": "Logga ett bad",
+    "log.mode.now": "Här & nu",
+    "log.mode.pick": "Välj på karta",
+    "log.geo.unavailable": "Geolocation finns inte",
+    "log.geo.failed": "Kunde inte hämta plats — prova \"Välj på karta\"",
+    "log.coords.near": "nära {name}",
+    "log.coords.reading": "Läser av din plats…",
+    "log.coords.tap_map": "Tryck på kartan för att släppa en pin.",
+    "log.field.spot_name": "Platsens namn",
+    "log.field.spot_name.placeholder": "t.ex. Långholmen",
+    "log.field.when": "När",
+    "log.field.note": "Anteckning (valfritt)",
+    "log.field.note.placeholder": "Kallt, soligt, modigt?",
+    "log.field.photo": "Bild (valfritt)",
+    "log.add_photo": "Lägg till en bild",
+    "log.remove_photo": "Ta bort bild",
+    "log.winter_chip": "❄️ Vinterdopp — +2 bonus",
+    "log.save": "Spara badet",
+    "log.error.generic": "Kunde inte spara",
+    "log.error.location": "Behöver en plats — tryck på kartan eller tillåt GPS.",
+    "log.error.name": "Ge platsen ett namn.",
+    "log.error.date": "Det datumet ser inte rätt ut.",
+
+    "spot.first_dipped": "första doppet {date}",
+    "spot.scope.everyone": "🌍 Alla",
+    "spot.stat.swims": "Bad",
+    "spot.stat.people": "Personer",
+    "spot.stat.winter": "Vinter",
+    "spot.top_swimmer": "{name} har flest dopp här ({n})",
+    "spot.recent_dips": "Senaste dopp",
+    "spot.group_dips": "Gruppdopp",
+    "spot.empty.all": "Inga bad här ännu.",
+    "spot.empty.group": "Ingen i gruppen har badat här ännu.",
+    "spot.log_here": "Logga ett bad här",
+    "spot.not_found": "Den platsen finns inte (längre).",
+
+    "achievements.title": "Bedrifter",
+    "achievements.summary": "{n} av {total} klara · +{pts} bonuspoäng",
+    "achievements.earned_on": "klar {date}",
+    "achievements.unlocked_label": "Bedrift",
+    "achievements.bonus_pts": "+{n} bonuspoäng",
+
+    "recap.title": "Sammanfattning · {year}",
+    "recap.intro.subtitle": "Ditt år i bad",
+    "recap.intro.label_one": "bad",
+    "recap.intro.label_many": "bad",
+    "recap.points.title": "Poäng",
+    "recap.points.bonus": "+{n} från bedrifter",
+    "recap.points.normal": "Pass, nya platser, vinterdopp",
+    "recap.points.label": "poäng i år",
+    "recap.spots.title": "Upptäckta platser",
+    "recap.spots.subtitle": "Färska vatten, helt dina",
+    "recap.spots.label": "unika platser",
+    "recap.winter.title": "Vinterdopp",
+    "recap.winter.brave": "Brrr — gjord av annat virke",
+    "recap.winter.cold": "Kallt men kraftfullt",
+    "recap.winter.maybe": "Kanske nästa år ❄️",
+    "recap.winter.label_one": "vinterdopp",
+    "recap.winter.label_many": "vinterdopp",
+    "recap.fav.title": "Älsklingsplats",
+    "recap.fav.label_one": "bad där",
+    "recap.fav.label_many": "bad där",
+    "recap.month.title": "Bästa månaden",
+    "recap.month.subtitle": "Din höjdpunkt",
+    "recap.month.label": "{n} p",
+    "recap.range.title": "Vattenräckvidd",
+    "recap.range.subtitle": "Boundingbox för alla dina platser",
+    "recap.range.label": "km bred",
+    "recap.achievements.title": "Bedrifter klara",
+    "recap.achievements.subtitle": "{n} klara i år",
+    "recap.achievements.empty": "Inga än — logga några bad till så börjar de droppa in!",
+    "recap.achievements.see_all": "Se alla",
+    "recap.achievements.more": "+ {n} till",
+    "recap.outro.title": "Fortsätt",
+    "recap.outro.subtitle": "Varje dopp räknas.",
+    "recap.back_to_map": "Tillbaka till kartan",
+
+    "celebration.swim.new_spot": "ny plats",
+    "celebration.swim.winter": "vinter",
+    "celebration.swim.points": "+{n} p",
+
+    "map.popup.swims_one": "1 bad",
+    "map.popup.swims_many": "{n} bad",
+    "map.popup.see_full_history": "Se all historik →",
+
+    "achievement.ICE_BREAKER.name": "Isbrytaren",
+    "achievement.ICE_BREAKER.desc": "Logga ditt första bad",
+    "achievement.HABIT_FORMING.name": "Vanebildare",
+    "achievement.HABIT_FORMING.desc": "Fem bad i loggboken",
+    "achievement.FIFTY_DIPS.name": "Halvsekel",
+    "achievement.FIFTY_DIPS.desc": "50 loggade bad",
+    "achievement.COLLECTOR.name": "Platssamlare",
+    "achievement.COLLECTOR.desc": "Fem unika platser",
+    "achievement.EXPLORER.name": "Upptäckare",
+    "achievement.EXPLORER.desc": "Femton unika platser",
+    "achievement.POLAR_BEAR.name": "Isbjörn",
+    "achievement.POLAR_BEAR.desc": "Första vinterdoppet",
+    "achievement.COLD_PURIST.name": "Kalldoppspurist",
+    "achievement.COLD_PURIST.desc": "Fem vinterdopp",
+    "achievement.WINTER_WARRIOR.name": "Vinterkrigare",
+    "achievement.WINTER_WARRIOR.desc": "Tio vinterdopp",
+    "achievement.STREAK_3.name": "På rull",
+    "achievement.STREAK_3.desc": "Tre veckor i rad",
+    "achievement.STREAK_6.name": "Ostoppbar",
+    "achievement.STREAK_6.desc": "Sex veckor i rad",
+    "achievement.GLOBETROTTER.name": "Världsvan",
+    "achievement.GLOBETROTTER.desc": "Platserna spänner 50 km",
+    "achievement.WANDERLUST.name": "Reslysten",
+    "achievement.WANDERLUST.desc": "Platserna spänner 250 km",
+    "achievement.BUDDY_UP.name": "Kompisdopp",
+    "achievement.BUDDY_UP.desc": "Dela en plats med en annan badare",
+    "achievement.SOCIAL_BUTTERFLY.name": "Social fjäril",
+    "achievement.SOCIAL_BUTTERFLY.desc": "Dela en plats med 3+ andra",
+    "achievement.DAWN_PATROL.name": "Gryningspatrull",
+    "achievement.DAWN_PATROL.desc": "Tre bad före kl 7",
+    "achievement.NIGHT_OWL.name": "Nattuggla",
+    "achievement.NIGHT_OWL.desc": "Tre bad efter kl 20",
+    "achievement.ALL_SEASONS.name": "Alla årstider",
+    "achievement.ALL_SEASONS.desc": "Ett dopp i vinter, vår, sommar och höst",
+  },
+
+  en: {
+    "app.name": "Badligan",
+    "app.tagline": "A friendly little swim-spot competition",
+    "common.loading": "Loading…",
+    "common.you": "you",
+    "common.back": "Back",
+    "common.close": "Close",
+    "common.previous": "Previous",
+    "common.next": "Next",
+    "common.cancel": "Cancel",
+
+    "lang.toggle": "Language",
+    "lang.sv": "Svenska",
+    "lang.en": "English",
+
+    "auth.login": "Log in",
+    "auth.signup": "Sign up",
+    "auth.name": "Name",
+    "auth.password": "Password",
+    "auth.dive_in": "Dive in",
+    "auth.create_account": "Create account",
+    "auth.welcome": "Welcome, {name}!",
+    "auth.hello_again": "Hello again, {name}!",
+    "auth.fun_disclaimer": "Just for fun — please don't reuse a real password.",
+    "auth.handle_placeholder": "e.g. otter",
+    "auth.password_placeholder": "••••••",
+    "auth.error.validation": "Pick a name and a password (min 4 chars)",
+    "auth.error.wrong_credentials": "Wrong name or password",
+    "auth.error.user_not_found": "No swimmer with that name yet",
+    "auth.error.taken": "That name is taken",
+    "auth.error.weak_password": "Pick a longer password",
+    "auth.error.generic": "Couldn't sign you in",
+
+    "layout.swimmer": "Swimmer",
+    "layout.solo_swimmer": "Solo swimmer",
+    "layout.groups_one": "1 group",
+    "layout.groups_many": "{n} groups",
+    "layout.log_out": "Log out",
+    "layout.log_a_swim": "Log a swim",
+
+    "nav.map": "Map",
+    "nav.history": "History",
+    "nav.top": "Top",
+    "nav.groups": "Groups",
+
+    "map.greeting": "Hi {name} 👋",
+    "map.empty.subtitle": "Tap + to log your first dip.",
+    "map.last.today": "You swam today — nice.",
+    "map.last.yesterday": "You swam yesterday.",
+    "map.last.days": "It's been {n} days since your last dip.",
+    "map.empty.helper": "No swims yet — when you log one, a pin shows up here. ✨",
+    "map.stat.points": "Points",
+    "map.stat.spots": "Spots",
+    "map.stat.winter": "Winter",
+    "map.bonus.subtitle": "+{n} from bonuses",
+    "map.recap.label": "Year recap",
+    "map.recap.cta": "Rewind {year} →",
+    "map.achievements.label": "Achievements",
+    "map.achievements.count": "{n}/{total} earned",
+
+    "vibes.title": "Vibes",
+    "vibes.streak": "Streak",
+    "vibes.streak.weeks_one": "1 wk",
+    "vibes.streak.weeks_many": "{n} wks",
+    "vibes.streak.best": "Best: {n} wks",
+    "vibes.streak.on_fire": "On fire",
+    "vibes.last_swim": "Last swim",
+    "vibes.last_swim.today": "Today",
+    "vibes.last_swim.days_ago": "{n}d ago",
+    "vibes.last_swim.total": "{n} swims total",
+    "vibes.fav_spot": "Most-loved spot",
+    "vibes.range": "Your watery range",
+    "vibes.range.spans": "spans {n} km",
+    "vibes.best_month": "Best month so far",
+    "vibes.best_month.value": "{month} · {n} pts",
+    "vibes.on_this_day": "On this day",
+    "vibes.on_this_day.text": "You swam at {place} on {date}",
+
+    "history.title": "History",
+    "history.empty.title": "No swims yet",
+    "history.empty.helper": "Tap the + button to log your first dip.",
+    "history.chip.new_spot": "new spot",
+    "history.chip.winter": "winter",
+
+    "leaderboard.title": "Top charts",
+    "leaderboard.year_only": "{year} only",
+    "leaderboard.all_time": "All time",
+    "leaderboard.scope.global": "🌍 Global",
+    "leaderboard.group_code": "Group code",
+    "leaderboard.spots": "{n} spots",
+    "leaderboard.winters": "{n} winter",
+    "leaderboard.swims": "· {n} swims",
+    "leaderboard.bonus_hint": "· +{n} 🏅",
+    "leaderboard.empty": "No swims yet — be the first.",
+
+    "groups.title": "Groups",
+    "groups.create.label": "Create a new group",
+    "groups.create.placeholder": "e.g. Wednesday dippers",
+    "groups.create.error.empty": "Pick a group name",
+    "groups.create.error.generic": "Couldn't create",
+    "groups.create.success": "Group \"{name}\" created · code {code}",
+    "groups.join.label": "Join with a code",
+    "groups.join.button": "Join",
+    "groups.join.too_short": "That code looks too short",
+    "groups.join.not_found": "No group with that code",
+    "groups.join.success": "Joined {name}",
+    "groups.join.error.generic": "Couldn't join",
+    "groups.your_groups": "Your groups",
+    "groups.unlimited_hint": "You can be in as many as you like",
+    "groups.empty": "No groups yet — create one and share the code.",
+    "groups.member_one": "1 member",
+    "groups.member_many": "{n} members",
+    "groups.founder": "founder",
+    "groups.code_copied": "Code copied",
+    "groups.copy_failed": "Copy failed",
+    "groups.leave_confirm": "Leave \"{name}\"?",
+    "groups.left": "Left {name}",
+    "groups.leave_aria": "Leave {name}",
+    "groups.leave_title": "Leave group",
+    "groups.leave.error.generic": "Couldn't leave",
+
+    "log.title": "Log a swim",
+    "log.mode.now": "Here & now",
+    "log.mode.pick": "Pick on map",
+    "log.geo.unavailable": "Geolocation not available",
+    "log.geo.failed": "Couldn't read your location — try Pick on map",
+    "log.coords.near": "near {name}",
+    "log.coords.reading": "Reading your location…",
+    "log.coords.tap_map": "Tap the map to drop a pin.",
+    "log.field.spot_name": "Spot name",
+    "log.field.spot_name.placeholder": "e.g. Långholmen",
+    "log.field.when": "When",
+    "log.field.note": "Note (optional)",
+    "log.field.note.placeholder": "Cold, sunny, brave?",
+    "log.field.photo": "Photo (optional)",
+    "log.add_photo": "Add a photo",
+    "log.remove_photo": "Remove photo",
+    "log.winter_chip": "❄️ Winter dip — +2 bonus",
+    "log.save": "Save swim",
+    "log.error.generic": "Couldn't save",
+    "log.error.location": "Need a location — tap the map or allow GPS.",
+    "log.error.name": "Give the spot a name.",
+    "log.error.date": "That date doesn't look right.",
+
+    "spot.first_dipped": "first dipped {date}",
+    "spot.scope.everyone": "🌍 Everyone",
+    "spot.stat.swims": "Swims",
+    "spot.stat.people": "People",
+    "spot.stat.winter": "Winter",
+    "spot.top_swimmer": "{name} has the most dips here ({n})",
+    "spot.recent_dips": "Recent dips",
+    "spot.group_dips": "Group dips",
+    "spot.empty.all": "No swims here yet.",
+    "spot.empty.group": "Nobody in this group has swum here yet.",
+    "spot.log_here": "Log a swim here",
+    "spot.not_found": "That spot doesn't exist (any more).",
+
+    "achievements.title": "Achievements",
+    "achievements.summary": "{n} of {total} unlocked · +{pts} bonus pts",
+    "achievements.earned_on": "earned {date}",
+    "achievements.unlocked_label": "Achievement",
+    "achievements.bonus_pts": "+{n} bonus pts",
+
+    "recap.title": "Recap · {year}",
+    "recap.intro.subtitle": "Your year in dips",
+    "recap.intro.label_one": "swim",
+    "recap.intro.label_many": "swims",
+    "recap.points.title": "Points",
+    "recap.points.bonus": "+{n} from achievements",
+    "recap.points.normal": "Sessions, new spots, winter dips",
+    "recap.points.label": "points this year",
+    "recap.spots.title": "Spots discovered",
+    "recap.spots.subtitle": "Fresh waters, all yours",
+    "recap.spots.label": "unique spots",
+    "recap.winter.title": "Winter dips",
+    "recap.winter.brave": "Brrr — built different",
+    "recap.winter.cold": "Cold but mighty",
+    "recap.winter.maybe": "Maybe next year ❄️",
+    "recap.winter.label_one": "winter dip",
+    "recap.winter.label_many": "winter dips",
+    "recap.fav.title": "Most-loved spot",
+    "recap.fav.label_one": "swim there",
+    "recap.fav.label_many": "swims there",
+    "recap.month.title": "Best month",
+    "recap.month.subtitle": "Your peak season",
+    "recap.month.label": "{n} pts",
+    "recap.range.title": "Watery range",
+    "recap.range.subtitle": "Bounding box of all your spots",
+    "recap.range.label": "km wide",
+    "recap.achievements.title": "Achievements earned",
+    "recap.achievements.subtitle": "{n} unlocked this year",
+    "recap.achievements.empty": "Nothing unlocked yet — log a few more swims to start collecting!",
+    "recap.achievements.see_all": "See all",
+    "recap.achievements.more": "+ {n} more",
+    "recap.outro.title": "Keep going",
+    "recap.outro.subtitle": "Every dip counts.",
+    "recap.back_to_map": "Back to map",
+
+    "celebration.swim.new_spot": "new spot",
+    "celebration.swim.winter": "winter",
+    "celebration.swim.points": "+{n} pts",
+
+    "map.popup.swims_one": "1 swim",
+    "map.popup.swims_many": "{n} swims",
+    "map.popup.see_full_history": "See full history →",
+
+    "achievement.ICE_BREAKER.name": "Ice breaker",
+    "achievement.ICE_BREAKER.desc": "Log your first swim",
+    "achievement.HABIT_FORMING.name": "Habit forming",
+    "achievement.HABIT_FORMING.desc": "Five swims in the books",
+    "achievement.FIFTY_DIPS.name": "Half-century",
+    "achievement.FIFTY_DIPS.desc": "50 swims logged",
+    "achievement.COLLECTOR.name": "Spot collector",
+    "achievement.COLLECTOR.desc": "Five unique spots",
+    "achievement.EXPLORER.name": "Explorer",
+    "achievement.EXPLORER.desc": "Fifteen unique spots",
+    "achievement.POLAR_BEAR.name": "Polar bear",
+    "achievement.POLAR_BEAR.desc": "First winter dip",
+    "achievement.COLD_PURIST.name": "Cold purist",
+    "achievement.COLD_PURIST.desc": "Five winter dips",
+    "achievement.WINTER_WARRIOR.name": "Winter warrior",
+    "achievement.WINTER_WARRIOR.desc": "Ten winter dips",
+    "achievement.STREAK_3.name": "On a roll",
+    "achievement.STREAK_3.desc": "Three weeks in a row",
+    "achievement.STREAK_6.name": "Unstoppable",
+    "achievement.STREAK_6.desc": "Six weeks in a row",
+    "achievement.GLOBETROTTER.name": "Globetrotter",
+    "achievement.GLOBETROTTER.desc": "Spots span 50 km",
+    "achievement.WANDERLUST.name": "Wanderlust",
+    "achievement.WANDERLUST.desc": "Spots span 250 km",
+    "achievement.BUDDY_UP.name": "Buddy up",
+    "achievement.BUDDY_UP.desc": "Share a spot with another swimmer",
+    "achievement.SOCIAL_BUTTERFLY.name": "Social butterfly",
+    "achievement.SOCIAL_BUTTERFLY.desc": "Share a spot with 3+ others",
+    "achievement.DAWN_PATROL.name": "Dawn patrol",
+    "achievement.DAWN_PATROL.desc": "Three swims before 7 am",
+    "achievement.NIGHT_OWL.name": "Night owl",
+    "achievement.NIGHT_OWL.desc": "Three swims after 8 pm",
+    "achievement.ALL_SEASONS.name": "All seasons",
+    "achievement.ALL_SEASONS.desc": "A dip in winter, spring, summer, autumn",
+  },
+};

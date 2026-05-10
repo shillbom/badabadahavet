@@ -16,16 +16,18 @@ import { formatDate, formatDateTime } from "@/lib/utils";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
+import { useT } from "@/lib/i18n";
 
 export default function SpotPage() {
   const { placeId } = useParams<{ placeId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const t = useT();
   const groups = useStore((s) => s.groups);
   const [place, setPlace] = useState<PlaceDoc | null>(null);
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scope, setScope] = useState<"all" | string>("all"); // "all" or group id
+  const [scope, setScope] = useState<"all" | string>("all");
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export default function SpotPage() {
   if (!place) {
     return (
       <div className="px-4 pt-6 text-center text-sm text-slate-500">
-        That spot doesn't exist (any more).
+        {t("spot.not_found")}
       </div>
     );
   }
@@ -88,7 +90,7 @@ export default function SpotPage() {
         <button
           onClick={() => navigate(-1)}
           className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label="Back"
+          aria-label={t("common.back")}
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
@@ -98,8 +100,8 @@ export default function SpotPage() {
           </h2>
           <div className="flex items-center gap-1 text-[11px] text-slate-500">
             <MapPin className="h-3 w-3" />
-            {place.lat.toFixed(4)}, {place.lng.toFixed(4)} · first dipped{" "}
-            {formatDate(place.firstSwumAt)}
+            {place.lat.toFixed(4)}, {place.lng.toFixed(4)} ·{" "}
+            {t("spot.first_dipped", { date: formatDate(place.firstSwumAt) })}
           </div>
         </div>
       </div>
@@ -117,7 +119,7 @@ export default function SpotPage() {
       {groups.length > 0 ? (
         <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
           <ScopeChip
-            label="🌍 Everyone"
+            label={t("spot.scope.everyone")}
             active={scope === "all"}
             onClick={() => setScope("all")}
           />
@@ -154,14 +156,14 @@ export default function SpotPage() {
       ) : null}
 
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <Stat label="Swims" value={stats.total} />
+        <Stat label={t("spot.stat.swims")} value={stats.total} />
         <Stat
-          label="People"
+          label={t("spot.stat.people")}
           value={stats.swimmerCount}
           icon={<Users className="h-3.5 w-3.5" />}
         />
         <Stat
-          label="Winter"
+          label={t("spot.stat.winter")}
           value={stats.winterCount}
           icon={<Snowflake className="h-3.5 w-3.5" />}
         />
@@ -170,20 +172,17 @@ export default function SpotPage() {
       {stats.topSwimmer ? (
         <div className="mt-3 glass flex items-center gap-3 p-3">
           <Sparkles className="h-4 w-4 text-amber-500" />
-          <div className="text-sm">
-            <span className="font-semibold text-wave-900">
-              {stats.topSwimmer.name}
-            </span>
-            <span className="text-slate-500">
-              {" "}
-              has the most dips here ({stats.topSwimmer.count})
-            </span>
+          <div className="text-sm text-wave-900">
+            {t("spot.top_swimmer", {
+              name: stats.topSwimmer.name,
+              n: stats.topSwimmer.count,
+            })}
           </div>
         </div>
       ) : null}
 
       <h3 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {scope === "all" ? "Recent dips" : "Group dips"}
+        {scope === "all" ? t("spot.recent_dips") : t("spot.group_dips")}
       </h3>
       <ul className="space-y-2">
         {visibleSessions.map((s, i) => (
@@ -211,7 +210,7 @@ export default function SpotPage() {
                   {s.displayName}
                   {s.uid === user?.uid ? (
                     <span className="ml-1.5 text-[10px] text-wave-600">
-                      you
+                      {t("common.you")}
                     </span>
                   ) : null}
                 </div>
@@ -235,9 +234,7 @@ export default function SpotPage() {
         ))}
         {visibleSessions.length === 0 ? (
           <li className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
-            {scope === "all"
-              ? "No swims here yet."
-              : "Nobody in this group has swum here yet."}
+            {scope === "all" ? t("spot.empty.all") : t("spot.empty.group")}
           </li>
         ) : null}
       </ul>
@@ -247,7 +244,7 @@ export default function SpotPage() {
           to="/log"
           className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-4 py-2 text-sm font-medium text-white shadow"
         >
-          Log a swim here
+          {t("spot.log_here")}
         </Link>
       </div>
 
@@ -289,6 +286,7 @@ function Lightbox({
   index: number | null;
   onClose: () => void;
 }) {
+  const t = useT();
   const s = index != null ? sessions[index] : null;
   return (
     <AnimatePresence>
@@ -304,7 +302,7 @@ function Lightbox({
           <button
             onClick={onClose}
             className="absolute right-4 top-[max(env(safe-area-inset-top),1rem)] rounded-full bg-white/10 p-2 text-white"
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             <X className="h-4 w-4" />
           </button>

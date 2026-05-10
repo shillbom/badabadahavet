@@ -10,16 +10,18 @@ import {
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { startOfYear, endOfYear } from "@/lib/scoring";
-import { MONTHS, computeMyStats } from "@/lib/stats";
+import { computeMyStats } from "@/lib/stats";
 import {
   ACHIEVEMENTS,
   ACHIEVEMENTS_BY_ID,
   evaluateAchievements,
 } from "@/lib/achievements";
+import { monthShort, useT } from "@/lib/i18n";
 
 export default function RecapPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const t = useT();
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
 
@@ -33,20 +35,13 @@ export default function RecapPage() {
   );
   const stats = useMemo(() => computeMyStats(yearSessions), [yearSessions]);
 
-  const ctxAllTime = useMemo(
-    () => ({ uid: user?.uid ?? "", mySessions, allSessions }),
-    [user, mySessions, allSessions],
-  );
-  const unlockedAllTime = useMemo(
-    () => evaluateAchievements(ctxAllTime),
-    [ctxAllTime],
-  );
-
   const ctxYear = useMemo(
     () => ({
       uid: user?.uid ?? "",
       mySessions: yearSessions,
-      allSessions: allSessions.filter((s) => s.date >= startTs && s.date <= endTs),
+      allSessions: allSessions.filter(
+        (s) => s.date >= startTs && s.date <= endTs,
+      ),
     }),
     [user, yearSessions, allSessions, startTs, endTs],
   );
@@ -67,58 +62,66 @@ export default function RecapPage() {
     const best = stats.bestMonth;
     const winters = stats.winterSwims;
     const range = stats.range?.km ?? 0;
-    const newAchievements = [...unlockedYear].filter(
-      (id) => !unlockedAllTime.has(id) || true, // show all year achievements
-    );
+    const earnedThisYear = [...unlockedYear];
     return [
       {
         kind: "intro",
         title: `${year}`,
-        subtitle: "Your year in dips",
+        subtitle: t("recap.intro.subtitle"),
         accent: "🌊",
         big: yearSessions.length.toString(),
-        bigLabel: `swim${yearSessions.length === 1 ? "" : "s"}`,
+        bigLabel:
+          yearSessions.length === 1
+            ? t("recap.intro.label_one")
+            : t("recap.intro.label_many"),
       },
       {
         kind: "stat",
-        title: "Points",
+        title: t("recap.points.title"),
         subtitle: yearBonus
-          ? `+${yearBonus} from achievements`
-          : "Sessions, new spots, winter dips",
+          ? t("recap.points.bonus", { n: yearBonus })
+          : t("recap.points.normal"),
         accent: "🏆",
         big: total.toString(),
-        bigLabel: "points this year",
+        bigLabel: t("recap.points.label"),
       },
       {
         kind: "stat",
-        title: "Spots discovered",
-        subtitle: stats.uniquePlaces > 1 ? "Fresh waters, all yours" : undefined,
+        title: t("recap.spots.title"),
+        subtitle:
+          stats.uniquePlaces > 1 ? t("recap.spots.subtitle") : undefined,
         accent: "📍",
         big: stats.uniquePlaces.toString(),
-        bigLabel: "unique spots",
+        bigLabel: t("recap.spots.label"),
       },
       {
         kind: "stat",
-        title: "Winter dips",
+        title: t("recap.winter.title"),
         subtitle:
           winters >= 5
-            ? "Brrr — built different"
+            ? t("recap.winter.brave")
             : winters > 0
-              ? "Cold but mighty"
-              : "Maybe next year ❄️",
+              ? t("recap.winter.cold")
+              : t("recap.winter.maybe"),
         accent: "❄️",
         big: winters.toString(),
-        bigLabel: `winter dip${winters === 1 ? "" : "s"}`,
+        bigLabel:
+          winters === 1
+            ? t("recap.winter.label_one")
+            : t("recap.winter.label_many"),
       },
       ...(fav
         ? [
             {
               kind: "stat" as const,
-              title: "Most-loved spot",
+              title: t("recap.fav.title"),
               subtitle: fav.name,
               accent: "⭐",
               big: fav.count.toString(),
-              bigLabel: `swim${fav.count === 1 ? "" : "s"} there`,
+              bigLabel:
+                fav.count === 1
+                  ? t("recap.fav.label_one")
+                  : t("recap.fav.label_many"),
               link: `/spot/${fav.placeId}`,
             },
           ]
@@ -127,11 +130,11 @@ export default function RecapPage() {
         ? [
             {
               kind: "stat" as const,
-              title: "Best month",
-              subtitle: "Your peak season",
+              title: t("recap.month.title"),
+              subtitle: t("recap.month.subtitle"),
               accent: "🗓️",
-              big: MONTHS[best.month],
-              bigLabel: `${best.points} pts`,
+              big: monthShort(best.month),
+              bigLabel: t("recap.month.label", { n: best.points }),
             },
           ]
         : []),
@@ -139,29 +142,29 @@ export default function RecapPage() {
         ? [
             {
               kind: "stat" as const,
-              title: "Watery range",
-              subtitle: "Bounding box of all your spots",
+              title: t("recap.range.title"),
+              subtitle: t("recap.range.subtitle"),
               accent: "🧭",
               big: `${range.toFixed(0)}`,
-              bigLabel: "km wide",
+              bigLabel: t("recap.range.label"),
             },
           ]
         : []),
       {
         kind: "achievements",
-        title: "Achievements earned",
-        subtitle: `${newAchievements.length} unlocked this year`,
+        title: t("recap.achievements.title"),
+        subtitle: t("recap.achievements.subtitle", { n: earnedThisYear.length }),
         accent: "🏅",
-        ids: newAchievements,
+        ids: earnedThisYear,
       },
       {
         kind: "outro",
-        title: "Keep going",
-        subtitle: "Every dip counts.",
+        title: t("recap.outro.title"),
+        subtitle: t("recap.outro.subtitle"),
         accent: "💧",
       },
     ];
-  }, [stats, yearBonus, year, yearSessions, unlockedYear, unlockedAllTime]);
+  }, [stats, yearBonus, year, yearSessions, unlockedYear, t]);
 
   const [idx, setIdx] = useState(0);
   const slide = slides[idx];
@@ -174,12 +177,12 @@ export default function RecapPage() {
         <button
           onClick={() => navigate(-1)}
           className="rounded-full bg-white/80 p-2 ring-1 ring-slate-200"
-          aria-label="Back"
+          aria-label={t("common.back")}
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
         <h2 className="font-display text-xl font-black text-wave-900">
-          Recap · {year}
+          {t("recap.title", { year })}
         </h2>
       </div>
 
@@ -214,7 +217,7 @@ export default function RecapPage() {
           disabled={idx === 0}
           onClick={() => setIdx((i) => Math.max(0, i - 1))}
           className="rounded-full bg-white/80 p-3 ring-1 ring-slate-200 disabled:opacity-40"
-          aria-label="Previous"
+          aria-label={t("common.previous")}
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -223,15 +226,13 @@ export default function RecapPage() {
             to="/"
             className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-5 py-3 text-sm font-medium text-white shadow"
           >
-            Back to map
+            {t("recap.back_to_map")}
           </Link>
         ) : (
           <button
-            onClick={() =>
-              setIdx((i) => Math.min(slides.length - 1, i + 1))
-            }
+            onClick={() => setIdx((i) => Math.min(slides.length - 1, i + 1))}
             className="rounded-full bg-wave-600 p-3 text-white shadow"
-            aria-label="Next"
+            aria-label={t("common.next")}
           >
             <ChevronRight className="h-5 w-5" />
           </button>
@@ -314,10 +315,11 @@ function AchievementsSlide({
   ids: string[];
   subtitle?: string;
 }) {
+  const t = useT();
   if (ids.length === 0)
     return (
       <p className="max-w-xs text-sm text-slate-600">
-        Nothing unlocked yet — log a few more swims to start collecting!
+        {t("recap.achievements.empty")}
       </p>
     );
   return (
@@ -334,7 +336,7 @@ function AchievementsSlide({
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.05, type: "spring", stiffness: 240 }}
               className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-2xl shadow ring-2 ring-amber-300"
-              title={a.name}
+              title={t(`achievement.${id}.name`)}
             >
               {a.emoji}
             </motion.div>
@@ -343,14 +345,14 @@ function AchievementsSlide({
       </div>
       {ids.length > 9 ? (
         <div className="mt-1 text-[11px] text-slate-500">
-          + {ids.length - 9} more
+          {t("recap.achievements.more", { n: ids.length - 9 })}
         </div>
       ) : null}
       <Link
         to="/achievements"
         className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-wave-700"
       >
-        See all <Award className="h-3 w-3" />
+        {t("recap.achievements.see_all")} <Award className="h-3 w-3" />
       </Link>
     </>
   );
@@ -387,4 +389,3 @@ function ConfettiBackdrop() {
     </div>
   );
 }
-

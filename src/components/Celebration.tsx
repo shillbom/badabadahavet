@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
 import type { Achievement } from "@/lib/achievements";
 import { Sparkles } from "lucide-react";
+import { useT } from "@/lib/i18n";
 
 type Splash = {
   kind: "swim";
@@ -81,6 +82,7 @@ function SwimSplash({
 }: {
   data: Extract<Splash, { kind: "swim" }>;
 }) {
+  const t = useT();
   return (
     <motion.div
       initial={{ scale: 0.6, opacity: 0, y: 20 }}
@@ -108,17 +110,17 @@ function SwimSplash({
         transition={{ delay: 0.18 }}
         className="mt-3 rounded-full bg-white/95 px-5 py-2 font-display text-2xl font-black text-wave-800 shadow-lg"
       >
-        +{data.points} pts
+        {t("celebration.swim.points", { n: data.points })}
       </motion.div>
       <div className="mt-2 flex gap-1.5">
         {data.isNewSpot ? (
           <span className="chip">
-            <Sparkles className="h-3 w-3" /> new spot
+            <Sparkles className="h-3 w-3" /> {t("celebration.swim.new_spot")}
           </span>
         ) : null}
         {data.isWinter ? (
           <span className="chip bg-sky-100 text-sky-800 ring-sky-200">
-            ❄️ winter
+            ❄️ {t("celebration.swim.winter")}
           </span>
         ) : null}
       </div>
@@ -131,6 +133,7 @@ function AchievementSplash({
 }: {
   data: Extract<Splash, { kind: "achievement" }>;
 }) {
+  const t = useT();
   return (
     <motion.div
       initial={{ scale: 0.6, opacity: 0, rotate: -8 }}
@@ -141,7 +144,7 @@ function AchievementSplash({
     >
       <div className="relative flex flex-col items-center rounded-3xl bg-gradient-to-br from-amber-200 via-white to-wave-200 p-6 shadow-2xl ring-1 ring-amber-300/60">
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow">
-          Achievement
+          {t("achievements.unlocked_label")}
         </div>
         <motion.div
           initial={{ y: 14, scale: 0.7, rotate: -6 }}
@@ -153,14 +156,14 @@ function AchievementSplash({
         </motion.div>
         <div className="mt-3 text-center">
           <div className="font-display text-xl font-black text-wave-900">
-            {data.achievement.name}
+            {t(`achievement.${data.achievement.id}.name`)}
           </div>
           <div className="mt-0.5 text-xs text-slate-600">
-            {data.achievement.description}
+            {t(`achievement.${data.achievement.id}.desc`)}
           </div>
         </div>
         <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white">
-          +{data.achievement.points} bonus pts
+          {t("achievements.bonus_pts", { n: data.achievement.points })}
         </div>
       </div>
     </motion.div>

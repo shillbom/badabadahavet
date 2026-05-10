@@ -3,10 +3,21 @@ import { motion } from "framer-motion";
 import { LogOut, Map as MapIcon, History, Trophy, Plus } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { cn } from "@/lib/utils";
+import { useT } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export default function Layout() {
   const { profile, logout } = useAuth();
   const navigate = useNavigate();
+  const t = useT();
+
+  const groupCount = profile?.groups.length ?? 0;
+  const groupSubtitle =
+    groupCount === 0
+      ? t("layout.solo_swimmer")
+      : groupCount === 1
+        ? t("layout.groups_one")
+        : t("layout.groups_many", { n: groupCount });
 
   return (
     <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
@@ -15,22 +26,22 @@ export default function Layout() {
           <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
           <div>
             <div className="font-display text-base font-bold leading-none text-wave-900">
-              {profile?.displayName ?? "Swimmer"}
+              {profile?.displayName ?? t("layout.swimmer")}
             </div>
-            <div className="text-[11px] text-wave-700/70">
-              {profile?.groups.length
-                ? `${profile.groups.length} group${profile.groups.length > 1 ? "s" : ""}`
-                : "Solo swimmer"}
-            </div>
+            <div className="text-[11px] text-wave-700/70">{groupSubtitle}</div>
           </div>
         </div>
-        <button
-          onClick={() => logout()}
-          className="rounded-full bg-white/70 p-2 text-slate-600 ring-1 ring-slate-200 hover:bg-white"
-          aria-label="Log out"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher />
+          <button
+            onClick={() => logout()}
+            className="rounded-full bg-white/70 p-2 text-slate-600 ring-1 ring-slate-200 hover:bg-white"
+            aria-label={t("layout.log_out")}
+            title={t("layout.log_out")}
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto pb-32">
@@ -47,7 +58,7 @@ export default function Layout() {
           "bg-wave-600 text-white shadow-xl shadow-wave-800/40",
           "ring-4 ring-white/70",
         )}
-        aria-label="Log a swim"
+        aria-label={t("layout.log_a_swim")}
       >
         <Plus className="h-6 w-6" />
       </motion.button>
@@ -55,11 +66,27 @@ export default function Layout() {
       <nav
         className="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/80 px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur"
       >
-        <NavTab to="/" label="Map" icon={<MapIcon className="h-5 w-5" />} />
-        <NavTab to="/history" label="History" icon={<History className="h-5 w-5" />} />
+        <NavTab
+          to="/"
+          label={t("nav.map")}
+          icon={<MapIcon className="h-5 w-5" />}
+        />
+        <NavTab
+          to="/history"
+          label={t("nav.history")}
+          icon={<History className="h-5 w-5" />}
+        />
         <span className="w-14" aria-hidden />
-        <NavTab to="/leaderboard" label="Top" icon={<Trophy className="h-5 w-5" />} />
-        <NavTab to="/groups" label="Groups" icon={<span className="text-base">👥</span>} />
+        <NavTab
+          to="/leaderboard"
+          label={t("nav.top")}
+          icon={<Trophy className="h-5 w-5" />}
+        />
+        <NavTab
+          to="/groups"
+          label={t("nav.groups")}
+          icon={<span className="text-base">👥</span>}
+        />
       </nav>
     </div>
   );
