@@ -107,27 +107,39 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "auth.create_account": "Skapa konto",
     "auth.welcome": "Välkommen, {name}!",
     "auth.hello_again": "Hej igen!",
-    "auth.fun_disclaimer": "Bara på skoj — återanvänd inte ett riktigt lösenord.",
+    "auth.fun_disclaimer":
+      "Bara på skoj — återanvänd inte ett riktigt lösenord.",
     "auth.handle_placeholder": "t.ex. utter",
     "auth.email_placeholder": "du@exempel.se",
     "auth.password_placeholder": "••••••",
     "auth.forgot": "Glömt lösenord?",
     "auth.reset_sent": "Återställningslänk skickad till din e-post 💌",
-    "auth.privacy_note": "Vi använder bara din e-post för att kunna återställa lösenordet — inga utskick, ingen marknadsföring.",
+    "auth.privacy_note":
+      "Vi använder bara din e-post för att kunna återställa lösenordet — inga utskick, ingen marknadsföring.",
     "auth.home_country": "Hemland",
-    "auth.home_country.hint": "Bad i ditt hemland ger säsongspoäng — utländska bad räknas separat.",
+    "auth.home_country.hint":
+      "Bad i ditt hemland ger säsongspoäng — utländska bad räknas separat.",
     "auth.terms.prefix": "Jag har läst och godkänner",
     "auth.terms.link": "villkoren",
-    "auth.error.terms_required": "Du måste godkänna villkoren för att skapa ett konto",
+    "auth.error.terms_required":
+      "Du måste godkänna villkoren för att skapa ett konto",
     "terms.title": "Vänliga villkor",
-    "terms.intro": "Det här är en liten badtävling mellan vänner. Korta regler, inget krångel:",
-    "terms.cookies": "🍪 Vi använder cookies och localStorage så att appen funkar — utan dem kan vi inte hålla dig inloggad eller komma ihåg dina inställningar.",
-    "terms.email": "📨 Din e-post används endast för att kunna återställa ditt lösenord. Vi varken säljer eller delar den, och du får ingen reklam.",
-    "terms.storage": "☁️ Dina bad, foton och kontouppgifter lagras hos Google Firebase (Firestore, Storage och Authentication). Du kan när som helst radera allt från profilen.",
-    "terms.data": "🗺️ Förslag på badplatser och vattentemperaturer hämtas från Hav och Vatten (badplatsen.havochvatten.se). Du kan logga bad även på platser som inte finns i deras register.",
-    "terms.content": "🤝 Skriv inget korkat och ladda inte upp olämpliga bilder. Admins kan ta bort bidrag som bryter mot detta.",
-    "terms.safety": "🌊 Bada smart. Du badar på eget ansvar — appen är gjord för kul, inte säkerhetsbedömning.",
-    "terms.delete": "🗑️ Du kan radera ditt konto och all data när som helst från profilen.",
+    "terms.intro":
+      "Det här är en liten badtävling mellan vänner. Korta regler, inget krångel:",
+    "terms.cookies":
+      "🍪 Vi använder cookies och localStorage så att appen funkar — utan dem kan vi inte hålla dig inloggad eller komma ihåg dina inställningar.",
+    "terms.email":
+      "📨 Din e-post används endast för att kunna återställa ditt lösenord. Vi varken säljer eller delar den, och du får ingen reklam.",
+    "terms.storage":
+      "☁️ Dina bad, foton och kontouppgifter lagras hos Google Firebase (Firestore, Storage och Authentication). Du kan när som helst radera allt från profilen.",
+    "terms.data":
+      "🗺️ Förslag på badplatser och vattentemperaturer hämtas från Hav och Vatten (badplatsen.havochvatten.se). Du kan logga bad även på platser som inte finns i deras register.",
+    "terms.content":
+      "🤝 Skriv inget korkat och ladda inte upp olämpliga bilder. Admins kan ta bort bidrag som bryter mot detta.",
+    "terms.safety":
+      "🌊 Bada smart. Du badar på eget ansvar — appen är gjord för kul, inte säkerhetsbedömning.",
+    "terms.delete":
+      "🗑️ Du kan radera ditt konto och all data när som helst från profilen.",
     "terms.fun": "✨ Ha kul! Det viktigaste är att komma i vattnet.",
     "terms.accept": "Jag förstår — godkänn",
     "auth.error.validation": "Välj ett namn och lösenord (minst 6 tecken)",
@@ -156,7 +168,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.last.today": "Du har badat idag — snyggt!",
     "map.last.yesterday": "Du badade igår.",
     "map.last.days": "{n} dagar sedan ditt senaste dopp.",
-    "map.empty.helper": "Inga bad ännu — logga ditt första så dyker en pin upp här. ✨",
+    "map.empty.helper":
+      "Inga bad ännu — logga ditt första så dyker en pin upp här. ✨",
     "map.center_on_me": "Centrera på min position",
     "map.theme": "Kartstil",
     "map.theme.voyager": "Mjuk",
@@ -198,7 +211,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "history.empty.helper": "Tryck på + för att logga ditt första bad.",
     "history.chip.new_spot": "ny plats",
     "history.chip.winter": "vinter",
-    "history.streak.empty": "Ingen aktiv streak just nu — bada idag eller igår för att starta en.",
+    "history.streak.empty":
+      "Ingen aktiv streak just nu — bada idag eller igår för att starta en.",
     "history.spots.count_one": "1 bad",
     "history.spots.count_many": "{n} bad",
     "history.back": "Alla bad",
@@ -221,7 +235,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "groups.create.placeholder": "t.ex. Onsdagsdoppen",
     "groups.create.error.empty": "Välj ett gruppnamn",
     "groups.create.error.generic": "Kunde inte skapa",
-    "groups.create.success": "Grupp \"{name}\" skapad · kod {code}",
+    "groups.create.success": 'Grupp "{name}" skapad · kod {code}',
     "groups.join.label": "Gå med via kod",
     "groups.join.button": "Gå med",
     "groups.join.too_short": "Den koden ser för kort ut",
@@ -236,7 +250,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "groups.founder": "grundare",
     "groups.code_copied": "Kod kopierad",
     "groups.copy_failed": "Kunde inte kopiera",
-    "groups.leave_confirm": "Lämna \"{name}\"?",
+    "groups.leave_confirm": 'Lämna "{name}"?',
     "groups.left": "Lämnade {name}",
     "groups.leave_aria": "Lämna {name}",
     "groups.leave_title": "Lämna gruppen",
@@ -246,7 +260,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.mode.now": "Här & nu",
     "log.mode.pick": "Välj på karta",
     "log.geo.unavailable": "Platsdelning är inte tillgängligt här",
-    "log.geo.failed": "Kunde inte hämta din plats — prova \"Välj på karta\"",
+    "log.geo.failed": 'Kunde inte hämta din plats — prova "Välj på karta"',
     "log.coords.near": "nära {name}",
     "log.coords.reading": "Läser av din plats…",
     "log.coords.tap_map": "Tryck på kartan för att släppa en pin.",
@@ -254,8 +268,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.field.spot_name.placeholder": "t.ex. Långholmen",
     "log.field.spot_name.unlock": "Lås upp namn",
     "log.field.when": "När",
-    "log.field.when.now_hint": "Loggas automatiskt med tiden just nu — växla till välj på karta för att ändra.",
-    "log.search.placeholder": "Sök bland sparade platser…",
+    "log.field.when.now_hint":
+      "Loggas automatiskt med tiden just nu — växla till välj på karta för att ändra.",
+    "log.search.placeholder": "Sök bland badplatser…",
     "log.field.note": "Anteckning (valfritt)",
     "log.field.note.placeholder": "Kallt, soligt, modigt?",
     "log.field.photo": "Bild (valfritt)",
@@ -269,7 +284,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.xmas_chip": "Julafton — +5 bonus",
     "log.save": "Spara badet",
     "log.error.generic": "Kunde inte spara",
-    "log.error.location": "Vi behöver en plats — tryck på kartan eller tillåt platsdelning.",
+    "log.error.location":
+      "Vi behöver en plats — tryck på kartan eller tillåt platsdelning.",
     "log.error.name": "Ge platsen ett namn.",
     "log.error.date": "Datumet ser inte rätt ut.",
 
@@ -288,11 +304,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "admin.label": "Admin",
     "admin.rename": "Döp om plats",
-    "admin.rename.prompt": "Nytt namn för \"{name}\"",
+    "admin.rename.prompt": 'Nytt namn för "{name}"',
     "admin.rename.success": "Plats omdöpt till {name}",
     "admin.rename.error": "Kunde inte döpa om",
     "admin.delete_spot": "Radera plats",
-    "admin.delete_spot.confirm": "Radera \"{name}\" och alla {n} bad här? Det går inte att ångra.",
+    "admin.delete_spot.confirm":
+      'Radera "{name}" och alla {n} bad här? Det går inte att ångra.',
     "admin.delete_spot.success": "Platsen är raderad",
     "admin.delete_spot.error": "Kunde inte radera platsen",
     "admin.delete_session": "Radera bad",
@@ -338,7 +355,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "recap.range.label": "km bred",
     "recap.achievements.title": "Bedrifter klara",
     "recap.achievements.subtitle": "{n} klara i år",
-    "recap.achievements.empty": "Inga än — logga några bad till så börjar de droppa in!",
+    "recap.achievements.empty":
+      "Inga än — logga några bad till så börjar de droppa in!",
     "recap.achievements.see_all": "Se alla",
     "recap.achievements.more": "+ {n} till",
     "recap.outro.title": "Fortsätt",
@@ -346,21 +364,30 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "recap.back_to_map": "Tillbaka till kartan",
 
     "about.title": "Om Badligan",
-    "about.tagline": "En liten, vänlig badtävling — byggd på sommarmornar och vinterdopp.",
+    "about.tagline":
+      "En liten, vänlig badtävling — byggd på sommarmornar och vinterdopp.",
     "about.what.title": "Vad är det här?",
-    "about.what.body": "Badligan är en lekfull tävling mellan badare. Logga dina dopp, samla poäng, jaga bedrifter och tävla med dina vänner i grupper. Helt gratis, ingen reklam.",
+    "about.what.body":
+      "Badligan är en lekfull tävling mellan badare. Logga dina dopp, samla poäng, jaga bedrifter och tävla med dina vänner i grupper. Helt gratis, ingen reklam.",
     "about.scoring.title": "Hur poängen funkar",
-    "about.scoring.bracket": "Bad i ditt hemland ger 1–4 poäng beroende på månad: 1 p maj–sep, 2 p apr & okt, 3 p mar & nov, 4 p jan, feb & dec.",
-    "about.scoring.new_place": "Första gången du badar på en ny plats: +2 bonus.",
+    "about.scoring.bracket":
+      "Bad i ditt hemland ger 1–4 poäng beroende på månad: 1 p maj–sep, 2 p apr & okt, 3 p mar & nov, 4 p jan, feb & dec.",
+    "about.scoring.new_place":
+      "Första gången du badar på en ny plats: +2 bonus.",
     "about.scoring.xmas": "Bada på julafton i ditt hemland: +5 bonus.",
-    "about.scoring.abroad": "Bad utomlands räknas separat — landbonus är på gång.",
-    "about.scoring.streak": "Streak räknar antalet dagar i rad du badat. Idag eller igår håller den vid liv.",
+    "about.scoring.abroad":
+      "Bad utomlands räknas separat — landbonus är på gång.",
+    "about.scoring.streak":
+      "Streak räknar antalet dagar i rad du badat. Idag eller igår håller den vid liv.",
     "about.data.title": "Datakällor",
-    "about.data.body": "Förslag på badplatser och vattentemperaturer kommer från Havs- och vattenmyndighetens öppna data,",
+    "about.data.body":
+      "Förslag på badplatser och vattentemperaturer kommer från Havs- och vattenmyndighetens öppna data,",
     "about.privacy.title": "Integritet",
-    "about.privacy.body": "Din e-post används bara om du behöver återställa lösenordet. Vi delar inte din data, skickar ingen reklam och du kan radera kontot när som helst från profilen.",
+    "about.privacy.body":
+      "Din e-post används bara om du behöver återställa lösenordet. Vi delar inte din data, skickar ingen reklam och du kan radera kontot när som helst från profilen.",
     "about.tech.title": "Teknik",
-    "about.tech.body": "Byggt med React, Vite, Firebase, Leaflet och Tailwind. Kartan använder CartoDB-tiles ovanpå OpenStreetMap.",
+    "about.tech.body":
+      "Byggt med React, Vite, Firebase, Leaflet och Tailwind. Kartan använder CartoDB-tiles ovanpå OpenStreetMap.",
     "about.tech.source": "Källkoden finns på",
 
     "profile.title": "Profil",
@@ -368,11 +395,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "profile.home_country_saved": "Hemland uppdaterat",
     "profile.danger.title": "Farozon",
     "profile.delete.button": "Radera mitt konto",
-    "profile.delete.confirm": "Det här raderar ditt konto, alla dina bad, foton och gruppmedlemskap. Det går inte att ångra.",
+    "profile.delete.confirm":
+      "Det här raderar ditt konto, alla dina bad, foton och gruppmedlemskap. Det går inte att ångra.",
     "profile.delete.confirm_button": "Ja, radera",
     "profile.delete.deleting": "Raderar…",
     "profile.delete.error": "Kunde inte radera kontot. Försök igen.",
-    "profile.delete.relogin": "Logga ut och in igen och försök sedan radera kontot.",
+    "profile.delete.relogin":
+      "Logga ut och in igen och försök sedan radera kontot.",
     "profile.language": "Språk",
     "profile.change_emoji": "Välj din ikon",
     "profile.name_label": "Visningsnamn",
@@ -463,21 +492,31 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "auth.password_placeholder": "••••••",
     "auth.forgot": "Forgot your password?",
     "auth.reset_sent": "Reset link sent to your email 💌",
-    "auth.privacy_note": "We only use your email to let you reset your password — no newsletters, no marketing, ever.",
+    "auth.privacy_note":
+      "We only use your email to let you reset your password — no newsletters, no marketing, ever.",
     "auth.home_country": "Home country",
-    "auth.home_country.hint": "Swims in your home country earn the seasonal bracket points — foreign swims count separately.",
+    "auth.home_country.hint":
+      "Swims in your home country earn the seasonal bracket points — foreign swims count separately.",
     "auth.terms.prefix": "I've read and agree to the",
     "auth.terms.link": "terms",
     "auth.error.terms_required": "Please accept the terms to create an account",
     "terms.title": "Friendly terms",
-    "terms.intro": "This is a little swim competition between friends. Short rules, no fuss:",
-    "terms.cookies": "🍪 We use cookies and localStorage so the app actually works — without them we can't keep you signed in or remember your settings.",
-    "terms.email": "📨 We use your email only to let you reset your password. We never sell or share it, and we won't send you marketing.",
-    "terms.storage": "☁️ Your swims, photos and account details are stored on Google Firebase (Firestore, Storage and Authentication). You can delete everything from your profile at any time.",
-    "terms.data": "🗺️ Suggested swim spots and water temperatures come from the Swedish Agency for Marine and Water Management (badplatsen.havochvatten.se). You can still log swims at spots that aren't in their register.",
-    "terms.content": "🤝 Don't write stupid stuff and don't upload inappropriate images. Admins may remove content that breaks this.",
-    "terms.safety": "🌊 Swim smart. You swim at your own risk — this app is for fun, not safety advice.",
-    "terms.delete": "🗑️ You can delete your account and all your data any time from your profile.",
+    "terms.intro":
+      "This is a little swim competition between friends. Short rules, no fuss:",
+    "terms.cookies":
+      "🍪 We use cookies and localStorage so the app actually works — without them we can't keep you signed in or remember your settings.",
+    "terms.email":
+      "📨 We use your email only to let you reset your password. We never sell or share it, and we won't send you marketing.",
+    "terms.storage":
+      "☁️ Your swims, photos and account details are stored on Google Firebase (Firestore, Storage and Authentication). You can delete everything from your profile at any time.",
+    "terms.data":
+      "🗺️ Suggested swim spots and water temperatures come from the Swedish Agency for Marine and Water Management (badplatsen.havochvatten.se). You can still log swims at spots that aren't in their register.",
+    "terms.content":
+      "🤝 Don't write stupid stuff and don't upload inappropriate images. Admins may remove content that breaks this.",
+    "terms.safety":
+      "🌊 Swim smart. You swim at your own risk — this app is for fun, not safety advice.",
+    "terms.delete":
+      "🗑️ You can delete your account and all your data any time from your profile.",
     "terms.fun": "✨ Have fun! The main rule is to actually get in the water.",
     "terms.accept": "Got it — accept",
     "auth.error.validation": "Pick a name and a password (min 6 chars)",
@@ -506,7 +545,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.last.today": "You swam today — nice.",
     "map.last.yesterday": "You swam yesterday.",
     "map.last.days": "It's been {n} days since your last dip.",
-    "map.empty.helper": "No swims yet — when you log one, a pin shows up here. ✨",
+    "map.empty.helper":
+      "No swims yet — when you log one, a pin shows up here. ✨",
     "map.center_on_me": "Center on my location",
     "map.theme": "Map style",
     "map.theme.voyager": "Soft",
@@ -548,7 +588,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "history.empty.helper": "Tap the + button to log your first dip.",
     "history.chip.new_spot": "new spot",
     "history.chip.winter": "winter",
-    "history.streak.empty": "No active streak — swim today or yesterday to start one.",
+    "history.streak.empty":
+      "No active streak — swim today or yesterday to start one.",
     "history.spots.count_one": "1 swim",
     "history.spots.count_many": "{n} swims",
     "history.back": "All swims",
@@ -571,7 +612,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "groups.create.placeholder": "e.g. Wednesday dippers",
     "groups.create.error.empty": "Pick a group name",
     "groups.create.error.generic": "Couldn't create",
-    "groups.create.success": "Group \"{name}\" created · code {code}",
+    "groups.create.success": 'Group "{name}" created · code {code}',
     "groups.join.label": "Join with a code",
     "groups.join.button": "Join",
     "groups.join.too_short": "That code looks too short",
@@ -586,7 +627,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "groups.founder": "founder",
     "groups.code_copied": "Code copied",
     "groups.copy_failed": "Copy failed",
-    "groups.leave_confirm": "Leave \"{name}\"?",
+    "groups.leave_confirm": 'Leave "{name}"?',
     "groups.left": "Left {name}",
     "groups.leave_aria": "Leave {name}",
     "groups.leave_title": "Leave group",
@@ -604,8 +645,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.field.spot_name.placeholder": "e.g. Långholmen",
     "log.field.spot_name.unlock": "Unlock name",
     "log.field.when": "When",
-    "log.field.when.now_hint": "Auto-logged as right now — switch to pick to change.",
-    "log.search.placeholder": "Search saved spots…",
+    "log.field.when.now_hint":
+      "Auto-logged as right now — switch to pick to change.",
+    "log.search.placeholder": "Search for spots…",
     "log.field.note": "Note (optional)",
     "log.field.note.placeholder": "Cold, sunny, brave?",
     "log.field.photo": "Photo (optional)",
@@ -638,11 +680,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "admin.label": "Admin",
     "admin.rename": "Rename spot",
-    "admin.rename.prompt": "New name for \"{name}\"",
+    "admin.rename.prompt": 'New name for "{name}"',
     "admin.rename.success": "Renamed to {name}",
     "admin.rename.error": "Couldn't rename",
     "admin.delete_spot": "Delete spot",
-    "admin.delete_spot.confirm": "Delete \"{name}\" and all {n} swims here? This can't be undone.",
+    "admin.delete_spot.confirm":
+      'Delete "{name}" and all {n} swims here? This can\'t be undone.',
     "admin.delete_spot.success": "Spot deleted",
     "admin.delete_spot.error": "Couldn't delete spot",
     "admin.delete_session": "Delete swim",
@@ -688,7 +731,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "recap.range.label": "km wide",
     "recap.achievements.title": "Achievements earned",
     "recap.achievements.subtitle": "{n} unlocked this year",
-    "recap.achievements.empty": "Nothing unlocked yet — log a few more swims to start collecting!",
+    "recap.achievements.empty":
+      "Nothing unlocked yet — log a few more swims to start collecting!",
     "recap.achievements.see_all": "See all",
     "recap.achievements.more": "+ {n} more",
     "recap.outro.title": "Keep going",
@@ -696,21 +740,29 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "recap.back_to_map": "Back to map",
 
     "about.title": "About Badligan",
-    "about.tagline": "A friendly little swim-spot competition — built on summer mornings and winter dips.",
+    "about.tagline":
+      "A friendly little swim-spot competition — built on summer mornings and winter dips.",
     "about.what.title": "What is this?",
-    "about.what.body": "Badligan is a playful contest between swimmers. Log your dips, collect points, chase achievements and compete with friends in groups. Free, no ads.",
+    "about.what.body":
+      "Badligan is a playful contest between swimmers. Log your dips, collect points, chase achievements and compete with friends in groups. Free, no ads.",
     "about.scoring.title": "How scoring works",
-    "about.scoring.bracket": "Swims in your home country earn 1–4 points depending on month: 1 pt May–Sep, 2 pt Apr & Oct, 3 pt Mar & Nov, 4 pt Jan, Feb & Dec.",
+    "about.scoring.bracket":
+      "Swims in your home country earn 1–4 points depending on month: 1 pt May–Sep, 2 pt Apr & Oct, 3 pt Mar & Nov, 4 pt Jan, Feb & Dec.",
     "about.scoring.new_place": "First time swimming at a new spot: +2 bonus.",
     "about.scoring.xmas": "Christmas Eve swim in your home country: +5 bonus.",
-    "about.scoring.abroad": "Swims abroad are tallied separately — country bonus coming.",
-    "about.scoring.streak": "Your streak counts consecutive days with a swim. Today or yesterday keeps it alive.",
+    "about.scoring.abroad":
+      "Swims abroad are tallied separately — country bonus coming.",
+    "about.scoring.streak":
+      "Your streak counts consecutive days with a swim. Today or yesterday keeps it alive.",
     "about.data.title": "Data sources",
-    "about.data.body": "Suggested swim spots and water temperatures come from the Swedish Agency for Marine and Water Management's open data,",
+    "about.data.body":
+      "Suggested swim spots and water temperatures come from the Swedish Agency for Marine and Water Management's open data,",
     "about.privacy.title": "Privacy",
-    "about.privacy.body": "Your email is only used so you can reset your password. We never share your data, send marketing, and you can delete your account any time from your profile.",
+    "about.privacy.body":
+      "Your email is only used so you can reset your password. We never share your data, send marketing, and you can delete your account any time from your profile.",
     "about.tech.title": "Tech",
-    "about.tech.body": "Built with React, Vite, Firebase, Leaflet and Tailwind. The map uses CartoDB tiles over OpenStreetMap.",
+    "about.tech.body":
+      "Built with React, Vite, Firebase, Leaflet and Tailwind. The map uses CartoDB tiles over OpenStreetMap.",
     "about.tech.source": "Source code lives on",
 
     "profile.title": "Profile",
@@ -718,7 +770,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "profile.home_country_saved": "Home country updated",
     "profile.danger.title": "Danger zone",
     "profile.delete.button": "Delete my account",
-    "profile.delete.confirm": "This permanently removes you, every swim, photo, and group membership. There's no undo.",
+    "profile.delete.confirm":
+      "This permanently removes you, every swim, photo, and group membership. There's no undo.",
     "profile.delete.confirm_button": "Yes, delete",
     "profile.delete.deleting": "Deleting…",
     "profile.delete.error": "Couldn't delete the account. Please try again.",

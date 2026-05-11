@@ -371,7 +371,7 @@ export default function SpotPage() {
 
       <div className="mt-6 text-center">
         <Link
-          to="/log"
+          to={`/log?placeId=${place.id}`}
           className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-4 py-2 text-sm font-medium text-white shadow"
         >
           {t("spot.log_here")}

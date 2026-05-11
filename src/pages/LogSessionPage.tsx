@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin,
@@ -32,6 +32,7 @@ type Mode = "now" | "pick";
 export default function LogSessionPage() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const t = useT();
   // The native datetime-local picker formats date + 12h/24h time from
   // the input's own `lang`, not from <html lang>. en-GB → 24h with sane
@@ -42,22 +43,33 @@ export default function LogSessionPage() {
   const places = useStore((s) => s.places);
   const allSessions = useStore((s) => s.allSessions);
 
-  const [mode, setMode] = useState<Mode>("now");
-  const [name, setName] = useState("");
+  // Pre-select a place when navigating from SpotPage (?placeId=xxx).
+  const preselectedPlaceId = searchParams.get("placeId");
+  const preselectedPlace = preselectedPlaceId
+    ? (places.find((p) => p.id === preselectedPlaceId) ?? null)
+    : null;
+
+  const [mode, setMode] = useState<Mode>(preselectedPlaceId ? "pick" : "now");
+  const [name, setName] = useState(preselectedPlace?.name ?? "");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(() => toLocalInput(new Date()));
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
-    null,
+    preselectedPlace
+      ? { lat: preselectedPlace.lat, lng: preselectedPlace.lng }
+      : null,
   );
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [country, setCountry] = useState<string | null>(null);
-  const [pickedPlaceId, setPickedPlaceId] = useState<string | null>(null);
-  const [searchOrigin, setSearchOrigin] = useState<{ lat: number; lng: number } | null>(
-    null,
+  const [pickedPlaceId, setPickedPlaceId] = useState<string | null>(
+    preselectedPlaceId,
   );
+  const [searchOrigin, setSearchOrigin] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   // Tracks whether we've already done the "auto-attach to nearest place"
   // check for the current "now" mode entry. Reset each time the user
@@ -70,7 +82,10 @@ export default function LogSessionPage() {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) =>
-        setSearchOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        setSearchOrigin({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        }),
       () => {},
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
     );
@@ -324,17 +339,39 @@ export default function LogSessionPage() {
               <SwimMap
                 places={places}
                 sessionsByPlace={sessionsByPlace}
+                center={
+                  preselectedPlace
+                    ? [preselectedPlace.lat, preselectedPlace.lng]
+                    : undefined
+                }
+                zoom={preselectedPlace ? 14 : undefined}
+                skipInitialFit={!!preselectedPlace}
                 onPick={
                   mode === "pick"
                     ? (lat, lng) => {
                         // Snap to the nearest existing place if the tap
                         // lands inside its merge radius — otherwise the
                         // user ends up with two near-identical pins.
-                        let snap: { id: string; lat: number; lng: number; name: string; dist: number } | null = null;
+                        let snap: {
+                          id: string;
+                          lat: number;
+                          lng: number;
+                          name: string;
+                          dist: number;
+                        } | null = null;
                         for (const p of places) {
                           const d = haversineMeters({ lat, lng }, p);
-                          if (d <= PLACE_RADIUS_METERS && (!snap || d < snap.dist)) {
-                            snap = { id: p.id, lat: p.lat, lng: p.lng, name: p.name, dist: d };
+                          if (
+                            d <= PLACE_RADIUS_METERS &&
+                            (!snap || d < snap.dist)
+                          ) {
+                            snap = {
+                              id: p.id,
+                              lat: p.lat,
+                              lng: p.lng,
+                              name: p.name,
+                              dist: d,
+                            };
                           }
                         }
                         if (snap) {
@@ -359,7 +396,7 @@ export default function LogSessionPage() {
                 activePlaceId={pickedPlaceId}
                 lockPan={mode === "now"}
                 keepCenteredOn={
-                  mode === "now" ? searchOrigin ?? coords : null
+                  mode === "now" ? (searchOrigin ?? coords) : null
                 }
                 canPickExisting={
                   mode === "now"
@@ -372,7 +409,6 @@ export default function LogSessionPage() {
                 }
               />
             </div>
-
           </div>
 
           <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-white/60">
@@ -400,9 +436,7 @@ export default function LogSessionPage() {
             <div className="relative">
               <Input
                 id="name"
-                placeholder={
-                  suggestion ?? t("log.field.spot_name.placeholder")
-                }
+                placeholder={suggestion ?? t("log.field.spot_name.placeholder")}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={!!pickedPlaceId}
@@ -436,7 +470,9 @@ export default function LogSessionPage() {
               onChange={(e) => setDate(e.target.value)}
               disabled={mode === "now"}
               readOnly={mode === "now"}
-              className={mode === "now" ? "bg-slate-100 text-slate-500" : undefined}
+              className={
+                mode === "now" ? "bg-slate-100 text-slate-500" : undefined
+              }
             />
             {mode === "now" ? (
               <div className="text-[11px] text-slate-500">
@@ -456,8 +492,7 @@ export default function LogSessionPage() {
                           : "chip bg-emerald-100 text-emerald-800 ring-emerald-200"
                   }
                 >
-                  {t(`log.bracket.${bracket.category}`)} · +
-                  {bracket.basePoints}
+                  {t(`log.bracket.${bracket.category}`)} · +{bracket.basePoints}
                 </div>
               ) : (
                 <div className="chip bg-slate-100 text-slate-700 ring-slate-200">

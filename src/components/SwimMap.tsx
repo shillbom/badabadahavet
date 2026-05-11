@@ -171,6 +171,9 @@ export type SwimMapProps = {
   /** Filter which existing places offer the "Use this spot" affordance.
    *  Defaults to all places when `onPickExisting` is set. */
   canPickExisting?: (place: PlaceDoc) => boolean;
+  /** When true, suppresses the initial auto-fit-to-all-places so the
+   *  map stays on the explicitly provided center/zoom. */
+  skipInitialFit?: boolean;
 };
 
 const userLocationIcon = L.divIcon({
@@ -215,6 +218,7 @@ export default function SwimMap({
   lockPan,
   keepCenteredOn,
   canPickExisting,
+  skipInitialFit,
 }: SwimMapProps) {
   const t = useT();
   // Theme picker is currently disabled — the calm "Soft" (Voyager) tiles
@@ -256,6 +260,7 @@ export default function SwimMap({
           places={places}
           userLocation={userLocation ?? null}
           fitToken={fitToken}
+          skipInitialFit={skipInitialFit}
         />
         {keepCenteredOn ? <KeepCentered target={keepCenteredOn} /> : null}
         {userLocation ? (
@@ -451,10 +456,12 @@ function FitToPlaces({
   places,
   userLocation,
   fitToken,
+  skipInitialFit,
 }: {
   places: PlaceDoc[];
   userLocation: { lat: number; lng: number } | null;
   fitToken?: number;
+  skipInitialFit?: boolean;
 }) {
   const map = useMap();
   const hasInitialFit = useRef(false);
@@ -467,6 +474,10 @@ function FitToPlaces({
     const tokenChanged = fitToken !== lastFitToken.current;
     lastFitToken.current = fitToken;
     if (hasInitialFit.current && !tokenChanged) return;
+    if (skipInitialFit && !tokenChanged) {
+      hasInitialFit.current = true;
+      return;
+    }
 
     if (places.length) {
       const pts: [number, number][] = places.map((p) => [p.lat, p.lng]);
