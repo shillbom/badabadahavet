@@ -365,9 +365,12 @@ export async function leaveGroup(opts: {
   groupId: string;
   uid: string;
 }): Promise<void> {
-  await updateDoc(doc(groupsCol, opts.groupId), {
-    members: arrayRemove(opts.uid),
-  });
+  void opts.uid; // handled server-side from auth context
+  const callable = httpsCallable<{ groupId: string }, void>(
+    functions,
+    "leaveGroup",
+  );
+  await callable({ groupId: opts.groupId });
 }
 
 /** Group creator updates name and/or emoji. */

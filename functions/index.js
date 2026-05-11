@@ -196,6 +196,69 @@ export const lookupGroupByCode = onCall(
 );
 
 /**
+ * Callable: leave a group.
+ *
+ *   data: { groupId: string }
+ *
+ * Three cases handled atomically:
+ *   1. Last member leaves  → group is deleted.
+ *   2. Founder leaves, others remain → ownership transferred to the first
+ *      remaining member (sorted by join order in the members array).
+ *   3. Regular member leaves → just removed from the members array.
+ */
+export const leaveGroup = onCall(
+  {
+    region: PROJECT_REGION,
+    maxInstances: 5,
+    memory: "256MiB",
+    timeoutSeconds: 15,
+  },
+  async (req) => {
+    if (!req.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const groupId = req.data?.groupId;
+    if (typeof groupId !== "string" || !groupId) {
+      throw new HttpsError("invalid-argument", "groupId is required.");
+    }
+
+    const db = getFirestore();
+    const groupRef = db.collection("groups").doc(groupId);
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(groupRef);
+      if (!snap.exists) {
+        throw new HttpsError("not-found", "Group not found.");
+      }
+      const data = snap.data();
+      const uid = req.auth.uid;
+
+      if (!Array.isArray(data.members) || !data.members.includes(uid)) {
+        throw new HttpsError("permission-denied", "Not a member of this group.");
+      }
+
+      const remaining = data.members.filter((m) => m !== uid);
+
+      if (remaining.length === 0) {
+        // Last person out — delete the group entirely.
+        tx.delete(groupRef);
+      } else if (data.createdBy === uid) {
+        // Founder leaving — hand ownership to the first remaining member.
+        tx.update(groupRef, {
+          members: remaining,
+          createdBy: remaining[0],
+        });
+      } else {
+        // Regular member — just remove them.
+        tx.update(groupRef, {
+          members: FieldValue.arrayRemove(uid),
+        });
+      }
+    });
+  },
+);
+
+/**
  * Callable: join a group by its share code.
  *
  *   data: { code: string }
