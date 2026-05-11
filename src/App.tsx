@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import {
@@ -15,19 +15,23 @@ import {
 } from "@/lib/achievements";
 import LoginPage from "@/pages/LoginPage";
 import Layout from "@/components/Layout";
-import MapPage from "@/pages/MapPage";
-import HistoryPage from "@/pages/HistoryPage";
-import LeaderboardPage from "@/pages/LeaderboardPage";
-import LogSessionPage from "@/pages/LogSessionPage";
-import GroupsPage from "@/pages/GroupsPage";
-import SpotPage from "@/pages/SpotPage";
-import AchievementsPage from "@/pages/AchievementsPage";
-import RecapPage from "@/pages/RecapPage";
-import ProfilePage from "@/pages/ProfilePage";
-import AboutPage from "@/pages/AboutPage";
 import { Toaster } from "@/components/ui/Toast";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
 import { FullSplash } from "@/components/Splash";
+
+// Route-level code splitting: Leaflet, clustering, framer-motion-heavy
+// pages and the recap stay out of the initial JS bundle until the user
+// navigates to them.
+const MapPage = lazy(() => import("@/pages/MapPage"));
+const HistoryPage = lazy(() => import("@/pages/HistoryPage"));
+const LeaderboardPage = lazy(() => import("@/pages/LeaderboardPage"));
+const LogSessionPage = lazy(() => import("@/pages/LogSessionPage"));
+const GroupsPage = lazy(() => import("@/pages/GroupsPage"));
+const SpotPage = lazy(() => import("@/pages/SpotPage"));
+const AchievementsPage = lazy(() => import("@/pages/AchievementsPage"));
+const RecapPage = lazy(() => import("@/pages/RecapPage"));
+const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const AboutPage = lazy(() => import("@/pages/AboutPage"));
 
 export default function App() {
   const { user, profile, loading } = useAuth();
@@ -108,21 +112,23 @@ export default function App() {
           <Route path="*" element={<LoginPage />} />
         </Routes>
       ) : (
-        <Routes>
-          <Route element={<Layout />}>
-            <Route index element={<MapPage />} />
-            <Route path="history" element={<HistoryPage />} />
-            <Route path="leaderboard" element={<LeaderboardPage />} />
-            <Route path="groups" element={<GroupsPage />} />
-            <Route path="log" element={<LogSessionPage />} />
-            <Route path="spot/:placeId" element={<SpotPage />} />
-            <Route path="achievements" element={<AchievementsPage />} />
-            <Route path="recap" element={<RecapPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="about" element={<AboutPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
+        <Suspense fallback={<FullSplash />}>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route index element={<MapPage />} />
+              <Route path="history" element={<HistoryPage />} />
+              <Route path="leaderboard" element={<LeaderboardPage />} />
+              <Route path="groups" element={<GroupsPage />} />
+              <Route path="log" element={<LogSessionPage />} />
+              <Route path="spot/:placeId" element={<SpotPage />} />
+              <Route path="achievements" element={<AchievementsPage />} />
+              <Route path="recap" element={<RecapPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="about" element={<AboutPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </Suspense>
       )}
     </>
   );

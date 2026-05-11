@@ -1,8 +1,40 @@
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&display=swap");
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Tell Tailwind v4 where to look for class usage. */
+@source "../index.html";
+@source "./**/*.{ts,tsx}";
+
+/* Theme — Tailwind v4 reads custom tokens from CSS instead of a JS config. */
+@theme {
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-wave-50: #eff9ff;
+  --color-wave-100: #def1ff;
+  --color-wave-200: #b6e4ff;
+  --color-wave-300: #76d0ff;
+  --color-wave-400: #2bb8ff;
+  --color-wave-500: #019eea;
+  --color-wave-600: #007ec6;
+  --color-wave-700: #0264a0;
+  --color-wave-800: #065684;
+  --color-wave-900: #0b486d;
+
+  --animate-bob: bob 3s ease-in-out infinite;
+  --animate-ripple: ripple 1.6s ease-out infinite;
+}
+
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes ripple {
+  0% { transform: scale(0.6); opacity: 0.6; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
 
 @layer base {
   html,
