@@ -22,13 +22,15 @@ import { readFileSync } from "node:fs";
 const WRITE = process.argv.includes("--write");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "badligan";
 
-// Endpoint that returns the latest water-temperature measurement for a
-// single bath. Returns `null` / 404 when no measurement exists.
+// Per-bath detail document. The latest temperature reading is at the
+// root level as `sampleTemperature` (string °C) + `sampleDate` (ms).
 const TEMP_URL = (nutsCode) =>
-  `https://badplatsen.havochvatten.se/badplatsen/api/detail/${encodeURIComponent(nutsCode)}/watertemperature`;
+  `https://badplatsen.havochvatten.se/badplatsen/api/detail/${encodeURIComponent(nutsCode)}`;
 
-// Ignore readings older than this many days — keeps the map honest.
-const MAX_AGE_DAYS = 14;
+// Most sensors only run during summer, so a year-round 14-day filter
+// would hide everything off-season. Keep the latest reading regardless
+// of age — the popup/tooltip surfaces "X days ago" so users can judge.
+const MAX_AGE_DAYS = 365;
 
 // Small pause between requests so we don't hammer the API.
 const REQUEST_DELAY_MS = 100;
@@ -56,20 +58,22 @@ async function fetchTemp(nutsCode) {
     });
     if (!res.ok) return null;
     const data = await res.json();
-    // The endpoint shape varies — accept any of {value/temperature, sampleDate/date/timestamp}.
-    const temp =
-      typeof data?.value === "number"
-        ? data.value
-        : typeof data?.temperature === "number"
-          ? data.temperature
-          : typeof data?.celsius === "number"
-            ? data.celsius
-            : null;
+    // sampleTemperature comes back as a string ("17"); coerce defensively.
+    const raw =
+      data?.sampleTemperature ??
+      data?.value ??
+      data?.temperature ??
+      data?.celsius;
+    const temp = typeof raw === "string" ? Number(raw) : raw;
+    if (typeof temp !== "number" || Number.isNaN(temp) || temp < -5 || temp > 40) {
+      return null;
+    }
     const stampRaw =
       data?.sampleDate ?? data?.date ?? data?.timestamp ?? data?.measuredAt;
-    if (typeof temp !== "number" || temp < -5 || temp > 40) return null;
-    const stamp = stampRaw ? Date.parse(stampRaw) : Date.now();
-    if (Number.isNaN(stamp)) return null;
+    // sampleDate is already epoch ms in the badplatsen feed.
+    const stamp =
+      typeof stampRaw === "number" ? stampRaw : Date.parse(stampRaw ?? "");
+    if (!stamp || Number.isNaN(stamp)) return null;
     const ageDays = (Date.now() - stamp) / 86_400_000;
     if (ageDays > MAX_AGE_DAYS) return null;
     return { temp, stamp };
