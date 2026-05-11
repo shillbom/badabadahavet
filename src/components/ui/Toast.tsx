@@ -1,3 +1,4 @@
+import type * as React from "react";
 import { create } from "zustand";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, AlertTriangle, Info } from "lucide-react";
@@ -33,7 +34,7 @@ export const toast = {
   info: (m: string) => useToastStore.getState().push("info", m),
 };
 
-const iconFor: Record<ToastKind, JSX.Element> = {
+const iconFor: Record<ToastKind, React.ReactElement> = {
   success: <CheckCircle2 className="h-4 w-4 text-emerald-600" />,
   error: <AlertTriangle className="h-4 w-4 text-rose-600" />,
   info: <Info className="h-4 w-4 text-wave-600" />,

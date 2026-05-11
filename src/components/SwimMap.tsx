@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { LocateFixed } from "lucide-react";
 import { MAP_THEMES } from "@/lib/mapThemes";
+import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
 import { formatDate, cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
@@ -269,6 +270,13 @@ export default function SwimMap({
                     ? tempIcon(p.waterTemp)
                     : dropletIcon
               }
+              eventHandlers={{
+                // Hovering / clicking a pin → kick off a server-side
+                // refresh if the temperature is more than an hour old.
+                // Throttled locally + server-side so it's safe to call.
+                mouseover: () => maybeRefreshPlaceTemp(p),
+                click: () => maybeRefreshPlaceTemp(p),
+              }}
             >
               {typeof p.waterTemp === "number" ? (
                 <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>

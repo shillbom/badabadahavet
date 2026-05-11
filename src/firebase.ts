@@ -7,6 +7,7 @@ import {
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import { getAnalytics, isSupported as analyticsSupported } from "firebase/analytics";
 
 const firebaseConfig: FirebaseOptions = {
@@ -31,6 +32,7 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+export const functions = getFunctions(app, "europe-west1");
 
 const useEmulators =
   import.meta.env.VITE_USE_FIREBASE_EMULATORS === "1" ||
@@ -42,6 +44,7 @@ if (useEmulators && typeof window !== "undefined") {
   connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
   connectFirestoreEmulator(db, host, 8080);
   connectStorageEmulator(storage, host, 9199);
+  connectFunctionsEmulator(functions, host, 5001);
 }
 
 setPersistence(auth, browserLocalPersistence).catch(() => {

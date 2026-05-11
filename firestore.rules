@@ -196,6 +196,13 @@ service cloud.firestore {
       allow delete: if isAdminUser();
     }
 
+    // refreshUsage/{uid}: written ONLY by the refreshPlaceTemp Cloud
+    // Function (Admin SDK bypasses these rules). Clients can't touch
+    // this collection — it's purely a server-side throttle ledger.
+    match /refreshUsage/{uid} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
