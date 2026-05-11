@@ -48,7 +48,7 @@ export default function LeaderboardPage() {
         <span className="chip">{t("leaderboard.year_only", { year })}</span>
       </div>
 
-      <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4">
+      <div className="no-scrollbar -mx-4 py-1 mb-3 flex gap-2 overflow-x-auto px-4">
         <ScopeChip
           label={t("leaderboard.scope.global")}
           active={scope === "global"}

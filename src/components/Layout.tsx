@@ -38,7 +38,7 @@ export default function Layout() {
   const isMapPage = location.pathname === "/";
 
   return (
-    <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col md:border-x md:border-white/60 md:bg-white/30 md:backdrop-blur-sm md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)]">
+    <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:backdrop-blur-sm md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)]">
       <header className="sticky top-0 z-[1000] flex items-center justify-between bg-gradient-to-b from-white/80 to-transparent px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 backdrop-blur-sm">
         <Link to="/profile" className="flex items-center gap-2">
           <motion.div
