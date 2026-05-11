@@ -204,7 +204,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "leaderboard.title": "Topplista",
     "leaderboard.year_only": "Endast {year}",
-    "leaderboard.all_time": "Genom tiderna",
     "leaderboard.scope.global": "🌍 Globalt",
     "leaderboard.group_code": "Gruppkod",
     "leaderboard.spots": "{n} platser",
@@ -261,7 +260,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.field.photo": "Bild (valfritt)",
     "log.add_photo": "Lägg till en bild",
     "log.remove_photo": "Ta bort bild",
-    "log.winter_chip": "❄️ Vinterdopp — +2 bonus",
     "log.bracket.A": "Sommarsäsong (maj–sep)",
     "log.bracket.B": "Mellansäsong (apr & okt)",
     "log.bracket.C": "Kallt vatten (mar & nov)",
@@ -531,7 +529,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "leaderboard.title": "Top charts",
     "leaderboard.year_only": "{year} only",
-    "leaderboard.all_time": "All time",
     "leaderboard.scope.global": "🌍 Global",
     "leaderboard.group_code": "Group code",
     "leaderboard.spots": "{n} spots",
@@ -588,7 +585,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.field.photo": "Photo (optional)",
     "log.add_photo": "Add a photo",
     "log.remove_photo": "Remove photo",
-    "log.winter_chip": "❄️ Winter dip — +2 bonus",
     "log.bracket.A": "Summer season (May–Sep)",
     "log.bracket.B": "Shoulder season (Apr & Oct)",
     "log.bracket.C": "Cold water (Mar & Nov)",

@@ -33,6 +33,7 @@ import {
 } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS, scoreSession } from "./scoring";
+import { compressImage } from "./image";
 
 const usersCol = collection(db, "users");
 const placesCol = collection(db, "places");
@@ -210,11 +211,12 @@ export async function createSession(opts: {
   let photoUrl: string | undefined;
   let photoPath: string | undefined;
   if (opts.photoFile) {
-    const ext = opts.photoFile.name.split(".").pop()?.toLowerCase() ?? "jpg";
+    const compressed = await compressImage(opts.photoFile);
+    const ext = compressed.name.split(".").pop()?.toLowerCase() ?? "jpg";
     photoPath = `sessions/${opts.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const r = storageRef(storage, photoPath);
-    await uploadBytes(r, opts.photoFile, {
-      contentType: opts.photoFile.type || "image/jpeg",
+    await uploadBytes(r, compressed, {
+      contentType: compressed.type || "image/jpeg",
     });
     photoUrl = await getDownloadURL(r);
   }

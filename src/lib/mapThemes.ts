@@ -1,4 +1,6 @@
-import { create } from "zustand";
+// Map tile themes. Only the first entry (Voyager) is currently rendered;
+// the rest are kept here for the theme picker that lives commented-out in
+// SwimMap.tsx — easy to flip back on without re-researching tile URLs.
 
 export type MapTheme = {
   id: string;
@@ -62,30 +64,3 @@ export const MAP_THEMES: MapTheme[] = [
     maxZoom: 19,
   },
 ];
-
-const STORAGE_KEY = "badligan.mapTheme";
-
-function loadInitial(): string {
-  if (typeof window === "undefined") return "voyager";
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && MAP_THEMES.some((t) => t.id === saved)) return saved;
-  return "voyager";
-}
-
-type State = {
-  themeId: string;
-  setTheme: (id: string) => void;
-};
-
-export const useMapTheme = create<State>((set) => ({
-  themeId: loadInitial(),
-  setTheme: (id) => {
-    if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, id);
-    set({ themeId: id });
-  },
-}));
-
-export function currentTheme(): MapTheme {
-  const id = useMapTheme.getState().themeId;
-  return MAP_THEMES.find((t) => t.id === id) ?? MAP_THEMES[0];
-}

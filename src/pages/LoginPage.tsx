@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Globe, Lock, Mail, Sparkles, User, Waves, X } from "lucide-react";
+import { Globe, Lock, Mail, Sparkles, User, X } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
@@ -126,9 +126,13 @@ export default function LoginPage() {
         transition={{ type: "spring", stiffness: 220, damping: 22 }}
         className="z-10 flex flex-col items-center"
       >
-        <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-wave-600 text-white shadow-lg shadow-wave-700/30 animate-bob">
-          <Waves className="h-8 w-8" />
-        </div>
+        <img
+          src="/web-app-manifest-192x192.png"
+          alt="Badligan"
+          width="80"
+          height="80"
+          className="mb-3 h-20 w-20 rounded-2xl shadow-lg shadow-wave-700/30 animate-bob"
+        />
         <h1 className="font-display text-4xl font-black text-wave-900">
           {t("app.name")}
         </h1>
