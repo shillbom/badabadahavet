@@ -65,6 +65,8 @@ export type SessionDoc = {
 export type GroupDoc = {
   id: string;
   name: string;
+  /** Optional emoji icon chosen by the group creator. */
+  emoji?: string;
   code: string;
   members: string[];
   createdBy: string;

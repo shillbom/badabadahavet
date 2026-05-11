@@ -345,6 +345,31 @@ export async function leaveGroup(opts: {
   });
 }
 
+/** Group creator updates name and/or emoji. */
+export async function updateGroupMeta(
+  groupId: string,
+  opts: { name?: string; emoji?: string },
+): Promise<void> {
+  const updates: Record<string, string> = {};
+  if (opts.name !== undefined) updates.name = opts.name.trim();
+  if (opts.emoji !== undefined) updates.emoji = opts.emoji;
+  if (Object.keys(updates).length)
+    await updateDoc(doc(groupsCol, groupId), updates);
+}
+
+/** Group creator removes another member from the group. */
+export async function kickGroupMember(opts: {
+  groupId: string;
+  memberUid: string;
+}): Promise<void> {
+  await updateDoc(doc(groupsCol, opts.groupId), {
+    members: arrayRemove(opts.memberUid),
+  });
+  await updateDoc(doc(usersCol, opts.memberUid), {
+    groups: arrayRemove(opts.groupId),
+  });
+}
+
 // ---------- Spots / detail queries ----------
 
 export async function getPlace(placeId: string) {

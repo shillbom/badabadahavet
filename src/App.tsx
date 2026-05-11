@@ -108,30 +108,30 @@ export default function App() {
     <>
       <Toaster />
       <CelebrationOverlay />
-      <Suspense fallback={<FullSplash />}>
-        {!user ? (
+      {!user ? (
+        <Suspense fallback={<FullSplash />}>
           <Routes>
             <Route path="about" element={<AboutPage />} />
             <Route path="*" element={<LoginPage />} />
           </Routes>
-        ) : (
-          <Routes>
-            <Route element={<Layout />}>
-              <Route index element={<MapPage />} />
-              <Route path="history" element={<HistoryPage />} />
-              <Route path="leaderboard" element={<LeaderboardPage />} />
-              <Route path="groups" element={<GroupsPage />} />
-              <Route path="log" element={<LogSessionPage />} />
-              <Route path="spot/:placeId" element={<SpotPage />} />
-              <Route path="achievements" element={<AchievementsPage />} />
-              <Route path="recap" element={<RecapPage />} />
-              <Route path="profile" element={<ProfilePage />} />
-              <Route path="about" element={<AboutPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-        )}
-      </Suspense>
+        </Suspense>
+      ) : (
+        <Routes>
+          <Route element={<Layout />}>
+            <Route index element={<MapPage />} />
+            <Route path="history" element={<HistoryPage />} />
+            <Route path="leaderboard" element={<LeaderboardPage />} />
+            <Route path="groups" element={<GroupsPage />} />
+            <Route path="log" element={<LogSessionPage />} />
+            <Route path="spot/:placeId" element={<SpotPage />} />
+            <Route path="achievements" element={<AchievementsPage />} />
+            <Route path="recap" element={<RecapPage />} />
+            <Route path="profile" element={<ProfilePage />} />
+            <Route path="about" element={<AboutPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      )}
     </>
   );
 }

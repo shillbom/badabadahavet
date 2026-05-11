@@ -1,6 +1,13 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Map as MapIcon, History, Trophy, Plus } from "lucide-react";
+import { Suspense } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
@@ -54,21 +61,25 @@ export default function Layout() {
                   </span>
                 ) : null}
               </div>
-              <div className="text-[11px] text-wave-700/70">{groupSubtitle}</div>
+              <div className="text-[11px] text-wave-700/70">
+                {groupSubtitle}
+              </div>
             </div>
           </motion.div>
         </Link>
         <div className="w-8" aria-hidden />
       </header>
 
-      <main className={cn(
-        "relative flex flex-1 flex-col",
-        isMapPage
-          ? "overflow-hidden"
-          : hideChrome
-            ? "overflow-y-auto pb-4"
-            : "overflow-y-auto pb-32",
-      )}>
+      <main
+        className={cn(
+          "relative flex flex-1 flex-col",
+          isMapPage
+            ? "overflow-hidden"
+            : hideChrome
+              ? "overflow-y-auto pb-4"
+              : "overflow-y-auto pb-32",
+        )}
+      >
         {/* Per-page entrance animations live in each page; we no longer
             wrap the Outlet in AnimatePresence because under StrictMode
             mid-flight exits could leave the next page at opacity 0. */}
@@ -79,7 +90,15 @@ export default function Layout() {
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           className={isMapPage ? "flex min-h-0 flex-1 flex-col" : undefined}
         >
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex h-40 items-center justify-center">
+                <div className="h-7 w-7 animate-spin rounded-full border-2 border-wave-600 border-r-transparent" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </motion.div>
       </main>
 
@@ -120,7 +139,11 @@ export default function Layout() {
             transition={{ type: "spring", stiffness: 280, damping: 28 }}
             className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur"
           >
-            <NavTab to="/" label={t("nav.map")} icon={<MapIcon className="h-5 w-5" />} />
+            <NavTab
+              to="/"
+              label={t("nav.map")}
+              icon={<MapIcon className="h-5 w-5" />}
+            />
             <NavTab
               to="/history"
               label={t("nav.history")}
