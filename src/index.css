@@ -76,3 +76,9 @@
   font-size: 10px !important;
   background: rgba(255, 255, 255, 0.7) !important;
 }
+/* Hide zoom buttons on touch devices — pinch-zoom is the natural gesture */
+@media (pointer: coarse) {
+  .leaflet-control-zoom {
+    display: none !important;
+  }
+}

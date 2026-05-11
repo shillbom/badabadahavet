@@ -123,24 +123,28 @@ export default function LogSessionPage() {
   }, [coords]);
 
   // When entering "now" mode, auto-attach to the nearest existing place
-  // within 150 m. Runs at most once per now-mode entry, so the user can
-  // still clear the lock without it snapping back.
+  // within 200 m. Runs once per now-mode entry so the user can clear the
+  // lock without it snapping back. If nothing is nearby, auto-switches to
+  // "pick" mode so the user can place a pin manually.
   useEffect(() => {
     if (mode !== "now") return;
     if (!coords) return;
-    if (places.length === 0) return;
     if (autoPickedNowRef.current) return;
     if (pickedPlaceId) return;
     autoPickedNowRef.current = true;
     let best: { p: (typeof places)[number]; dist: number } | null = null;
     for (const p of places) {
       const d = haversineMeters(coords, p);
-      if (d <= 150 && (!best || d < best.dist)) best = { p, dist: d };
+      if (d <= 200 && (!best || d < best.dist)) best = { p, dist: d };
     }
     if (best) {
       setCoords({ lat: best.p.lat, lng: best.p.lng });
       setName(best.p.name);
       setPickedPlaceId(best.p.id);
+    } else if (places.length > 0) {
+      // Nothing within 200 m — switch to pick-on-map so the user can
+      // drop a pin at their actual location.
+      setMode("pick");
     }
   }, [mode, coords, places, pickedPlaceId]);
 
@@ -186,19 +190,24 @@ export default function LogSessionPage() {
   useEffect(() => {
     if (mode === "now") {
       setPickedPlaceId(null);
+      setName("");
       setSearch("");
       autoPickedNowRef.current = false;
+      setDate(toLocalInput(new Date()));
       if (!navigator.geolocation) {
         toast.error(t("log.geo.unavailable"));
+        setMode("pick");
         return;
       }
       navigator.geolocation.getCurrentPosition(
         (pos) =>
           setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => toast.error(t("log.geo.failed")),
+        () => {
+          toast.error(t("log.geo.failed"));
+          setMode("pick");
+        },
         { enableHighAccuracy: true, timeout: 8000 },
       );
-      setDate(toLocalInput(new Date()));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);

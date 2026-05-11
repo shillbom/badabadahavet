@@ -526,6 +526,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.popup.age.days": "för {n} dagar sedan",
     "map.show.all": "🌍 Visa alla platser",
     "map.show.mine": "📍 Bara mina",
+    "map.toggle_satellite": "Satellit",
+    "map.toggle_terrain": "Terräng",
 
     "achievement.ICE_BREAKER.name": "Isbrytaren",
     "achievement.ICE_BREAKER.desc": "Logga ditt första bad",
@@ -932,6 +934,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.popup.age.days": "{n} d ago",
     "map.show.all": "🌍 Show all places",
     "map.show.mine": "📍 Just mine",
+    "map.toggle_satellite": "Satellite",
+    "map.toggle_terrain": "Terrain",
 
     "achievement.ICE_BREAKER.name": "Ice breaker",
     "achievement.ICE_BREAKER.desc": "Log your first swim",

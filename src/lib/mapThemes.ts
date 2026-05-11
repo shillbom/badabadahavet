@@ -63,4 +63,13 @@ export const MAP_THEMES: MapTheme[] = [
     subdomains: "abc",
     maxZoom: 19,
   },
+  {
+    id: "satellite",
+    label: "Satellit",
+    swatch: "linear-gradient(135deg,#2d4a2d,#1a2d1a)",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution:
+      'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+    maxZoom: 20,
+  },
 ];

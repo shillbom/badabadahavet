@@ -10,9 +10,9 @@ import L, { type LatLngExpression } from "leaflet";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import MarkerClusterGroup from "react-leaflet-cluster";
-import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Link } from "react-router-dom";
-import { LocateFixed } from "lucide-react";
+import { Layers, LocateFixed } from "lucide-react";
 import { MAP_THEMES } from "@/lib/mapThemes";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
@@ -225,10 +225,10 @@ export default function SwimMap({
   mapRef: externalMapRef,
 }: SwimMapProps) {
   const t = useT();
-  // Theme picker is currently disabled — the calm "Soft" (Voyager) tiles
-  // are the only style. The picker UI below is left commented out so we
-  // can flip it back on easily later.
-  const theme = MAP_THEMES[0];
+  const [satellite, setSatellite] = useState(false);
+  const baseTheme = MAP_THEMES[0];
+  const satelliteTheme = MAP_THEMES.find((t) => t.id === "satellite")!;
+  const theme = satellite ? satelliteTheme : baseTheme;
   const fallbackCenter: LatLngExpression = useMemo(() => {
     if (userLocation) return [userLocation.lat, userLocation.lng];
     if (places.length) return [places[0].lat, places[0].lng];
@@ -263,6 +263,17 @@ export default function SwimMap({
           subdomains={theme.subdomains ?? "abc"}
           maxZoom={theme.maxZoom ?? 19}
         />
+        {/* Transparent labels overlay on top of satellite imagery */}
+        {satellite && (
+          <TileLayer
+            key="satellite-labels"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            attribution=""
+            maxZoom={20}
+            opacity={1}
+          />
+        )}
+        <MapZoomLock locked={!!lockPan} />
         <FitToPlaces
           places={places}
           userLocation={userLocation ?? null}
@@ -286,6 +297,11 @@ export default function SwimMap({
             const isActive = activePlaceId === p.id;
             const sessions = sessionsByPlace.get(p.id) ?? [];
             const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
+            // When logging a swim, clicking a pickable pin selects it
+            // immediately — no popup button needed.
+            const isPickable =
+              !!onPickExisting && (!canPickExisting || canPickExisting(p));
+
             return (
               <Marker
                 key={p.id}
@@ -298,11 +314,14 @@ export default function SwimMap({
                       : dropletIcon
                 }
                 eventHandlers={{
-                  // Hovering / clicking a pin → kick off a server-side
-                  // refresh if the temperature is more than an hour old.
-                  // Throttled locally + server-side so it's safe to call.
                   mouseover: () => maybeRefreshPlaceTemp(p),
-                  click: () => maybeRefreshPlaceTemp(p),
+                  click: () => {
+                    maybeRefreshPlaceTemp(p);
+                    if (isPickable) {
+                      mapRef.current?.closePopup();
+                      onPickExisting(p);
+                    }
+                  },
                 }}
               >
                 {hasFreshTemp(p) ? (
@@ -319,72 +338,63 @@ export default function SwimMap({
                     </div>
                   </Tooltip>
                 ) : null}
-                <Popup>
-                  <div className="text-sm">
-                    <div className="font-semibold text-wave-900">{p.name}</div>
-                    <div className="text-[11px] text-slate-500">
-                      {sessions.length === 1
-                        ? t("map.popup.swims_one")
-                        : sessions.length > 0
-                          ? t("map.popup.swims_many", { n: sessions.length })
-                          : t("map.popup.no_swims_yet")}
-                    </div>
-                    {hasFreshTemp(p) ? (
-                      <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
-                        💧 {p.waterTemp.toFixed(1)} °C
-                        {p.waterTempAt ? (
-                          <span className="font-normal text-sky-600">
-                            · {formatAge(p.waterTempAt, t)}
-                          </span>
-                        ) : null}
+                {/* Only show popup when not in logging mode — clicking a
+                    pin while logging selects it immediately instead. */}
+                {!isPickable ? (
+                  <Popup>
+                    <div className="text-sm">
+                      <div className="font-semibold text-wave-900">{p.name}</div>
+                      <div className="text-[11px] text-slate-500">
+                        {sessions.length === 1
+                          ? t("map.popup.swims_one")
+                          : sessions.length > 0
+                            ? t("map.popup.swims_many", { n: sessions.length })
+                            : t("map.popup.no_swims_yet")}
                       </div>
-                    ) : null}
-                    {photos.length ? (
-                      <div className="mt-1.5 flex gap-1 overflow-x-auto">
-                        {photos.map((s) => (
-                          <img
-                            key={s.id}
-                            src={s.photoUrl}
-                            alt=""
-                            loading="lazy"
-                            className="h-12 w-12 flex-none rounded-md object-cover ring-1 ring-slate-200"
-                          />
+                      {hasFreshTemp(p) ? (
+                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                          💧 {p.waterTemp.toFixed(1)} °C
+                          {p.waterTempAt ? (
+                            <span className="font-normal text-sky-600">
+                              · {formatAge(p.waterTempAt, t)}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      {photos.length ? (
+                        <div className="mt-1.5 flex gap-1 overflow-x-auto">
+                          {photos.map((s) => (
+                            <img
+                              key={s.id}
+                              src={s.photoUrl}
+                              alt=""
+                              loading="lazy"
+                              className="h-12 w-12 flex-none rounded-md object-cover ring-1 ring-slate-200"
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                      <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                        {sessions.slice(0, 5).map((s) => (
+                          <li key={s.id} className="text-[11px]">
+                            {formatDate(s.date)} — {s.displayName}
+                            {s.isWinter ? " ❄️" : ""}
+                          </li>
                         ))}
-                      </div>
-                    ) : null}
-                    <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
-                      {sessions.slice(0, 5).map((s) => (
-                        <li key={s.id} className="text-[11px]">
-                          {formatDate(s.date)} — {s.displayName}
-                          {s.isWinter ? " ❄️" : ""}
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-1.5 flex flex-wrap gap-2">
-                      {onPickExisting &&
-                      (!canPickExisting || canPickExisting(p)) ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            mapRef.current?.closePopup();
-                            onPickExisting(p);
-                          }}
-                          className="rounded-full bg-wave-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-wave-700"
-                        >
-                          {t("map.popup.use_this_spot")}
-                        </button>
-                      ) : null}
+                      </ul>
                       {linkToSpot ? (
-                        <Link
-                          to={`/spot/${p.id}`}
-                          className="text-[11px] font-semibold text-wave-700 hover:underline"
-                        >
-                          {t("map.popup.see_full_history")}
-                        </Link>
+                        <div className="mt-1.5">
+                          <Link
+                            to={`/spot/${p.id}`}
+                            className="text-[11px] font-semibold text-wave-700 hover:underline"
+                          >
+                            {t("map.popup.see_full_history")}
+                          </Link>
+                        </div>
                       ) : null}
                     </div>
-                  </div>
-                </Popup>
+                  </Popup>
+                ) : null}
               </Marker>
             );
           })}
@@ -394,6 +404,25 @@ export default function SwimMap({
         ) : null}
         {onPick ? <ClickToPick onPick={onPick} /> : null}
       </MapContainer>
+      {/* Layer toggle — top right, shows what you'll switch TO */}
+      <button
+        type="button"
+        onClick={() => setSatellite((v) => !v)}
+        className={cn(
+          "absolute right-3 top-12 z-[600] flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold shadow-md ring-1 transition active:scale-95",
+          satellite
+            ? "bg-white/95 text-wave-800 ring-slate-200 hover:bg-white"
+            : "bg-white/95 text-wave-800 ring-slate-200 hover:bg-white",
+        )}
+        aria-label={
+          satellite ? t("map.toggle_terrain") : t("map.toggle_satellite")
+        }
+      >
+        <Layers className="h-3.5 w-3.5" />
+        {satellite ? t("map.toggle_terrain") : t("map.toggle_satellite")}
+      </button>
+
+      {/* Locate me — bottom right, Google Maps style */}
       {userLocation ? (
         <button
           type="button"
@@ -404,42 +433,13 @@ export default function SwimMap({
                 animate: true,
               });
           }}
-          className="absolute right-3 top-[3rem] z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition active:scale-95 hover:bg-white"
+          className="absolute right-3 bottom-5 z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition active:scale-95 hover:bg-white"
           aria-label={t("map.center_on_me")}
           title={t("map.center_on_me")}
         >
           <LocateFixed className="h-5 w-5" />
         </button>
       ) : null}
-
-      {/* Theme picker — kept as a comment in case we want it back. */}
-      {/*
-      <div className="absolute right-3 top-14 z-[600]">
-        <button
-          type="button"
-          onClick={() => setPickerOpen((v) => !v)}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200"
-          aria-label={t("map.theme")}
-        >
-          <Palette className="h-5 w-5" />
-        </button>
-        {pickerOpen ? (
-          <div className="absolute right-12 top-0 flex flex-col gap-1 rounded-xl bg-white/95 p-1.5 shadow-md ring-1 ring-slate-200">
-            {MAP_THEMES.map((th) => (
-              <button
-                key={th.id}
-                type="button"
-                onClick={() => { setTheme(th.id); setPickerOpen(false); }}
-                className="flex items-center gap-2 rounded-lg px-2 py-1 text-xs font-semibold"
-              >
-                <span style={{ background: th.swatch }} className="h-5 w-5 rounded-md" />
-                {t(`map.theme.${th.id}`)}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-      */}
     </div>
   );
 }
@@ -456,6 +456,25 @@ function KeepCentered({ target }: { target: { lat: number; lng: number } }) {
       map.off("zoomend", recenter);
     };
   }, [map, target.lat, target.lng]);
+  return null;
+}
+
+/** Disables / re-enables all zoom interactions reactively. */
+function MapZoomLock({ locked }: { locked: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    if (locked) {
+      map.scrollWheelZoom.disable();
+      map.touchZoom.disable();
+      map.doubleClickZoom.disable();
+      map.boxZoom.disable();
+    } else {
+      map.scrollWheelZoom.enable();
+      map.touchZoom.enable();
+      map.doubleClickZoom.enable();
+      map.boxZoom.enable();
+    }
+  }, [map, locked]);
   return null;
 }
 

@@ -18,13 +18,17 @@ export default function MapPage() {
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
 
-  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [myLocation, setMyLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [fitToken, setFitToken] = useState(0);
   const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) =>
+        setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
       () => {},
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
     );
@@ -79,10 +83,7 @@ export default function MapPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+6rem)] gap-3">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <h2 className="font-display text-2xl font-black text-wave-900">
           {greeting}
         </h2>
@@ -95,7 +96,9 @@ export default function MapPage() {
           label={t("map.stat.points")}
           value={totalPoints}
           icon={<Trophy className="h-4 w-4" />}
-          sub={bonusPts > 0 ? t("map.bonus.subtitle", { n: bonusPts }) : undefined}
+          sub={
+            bonusPts > 0 ? t("map.bonus.subtitle", { n: bonusPts }) : undefined
+          }
         />
         <Stat
           onClick={() => setFitToken((n) => n + 1)}
@@ -175,7 +178,10 @@ function Stat({
       whileTap={{ scale: 0.98 }}
     >
       {to ? (
-        <Link to={to} className="glass flex flex-col items-start gap-1 px-3 py-2.5">
+        <Link
+          to={to}
+          className="glass flex flex-col items-start gap-1 px-3 py-2.5"
+        >
           {inner}
         </Link>
       ) : (
