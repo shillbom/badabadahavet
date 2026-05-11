@@ -397,33 +397,37 @@ function AchievementsSlide({
 }
 
 function ConfettiBackdrop() {
-  const pieces = Array.from({ length: 30 }, (_, i) => i);
   const emojis = ["🌊", "💧", "❄️", "✨", "⭐", "🐬"];
+  // Memoize so positions/timing don't re-randomize on every slide navigation.
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 30 }, (_, i) => ({
+        key: i,
+        left: Math.random() * 100,
+        delay: Math.random() * 4,
+        duration: 5 + Math.random() * 4,
+      })),
+    [],
+  );
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {pieces.map((i) => {
-        const left = Math.random() * 100;
-        const delay = Math.random() * 4;
-        const duration = 5 + Math.random() * 4;
-        const e = emojis[i % emojis.length];
-        return (
-          <motion.span
-            key={i}
-            initial={{ y: -40, opacity: 0 }}
-            animate={{ y: "100dvh", opacity: [0, 1, 0.7, 0] }}
-            transition={{
-              duration,
-              delay,
-              repeat: Infinity,
-              ease: "linear",
-            }}
-            className="absolute select-none text-lg"
-            style={{ left: `${left}%` }}
-          >
-            {e}
-          </motion.span>
-        );
-      })}
+      {pieces.map(({ key, left, delay, duration }) => (
+        <motion.span
+          key={key}
+          initial={{ y: -40, opacity: 0 }}
+          animate={{ y: "100dvh", opacity: [0, 1, 0.7, 0] }}
+          transition={{
+            duration,
+            delay,
+            repeat: Infinity,
+            ease: "linear",
+          }}
+          className="absolute select-none text-lg"
+          style={{ left: `${left}%` }}
+        >
+          {emojis[key % emojis.length]}
+        </motion.span>
+      ))}
     </div>
   );
 }

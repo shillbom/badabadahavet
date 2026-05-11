@@ -7,6 +7,7 @@ import {
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
+import { getAnalytics, isSupported as analyticsSupported } from "firebase/analytics";
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "demo-key",
@@ -23,6 +24,7 @@ const firebaseConfig: FirebaseOptions = {
   appId:
     import.meta.env.VITE_FIREBASE_APP_ID ??
     "1:000000000000:web:0000000000000000000000",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 export const app = initializeApp(firebaseConfig);
@@ -45,3 +47,20 @@ if (useEmulators && typeof window !== "undefined") {
 setPersistence(auth, browserLocalPersistence).catch(() => {
   /* ignored — falls back to in-memory */
 });
+
+// Firebase Analytics — only in real (non-emulator) builds, only when the
+// browser supports it (no SSR, not blocked by privacy add-ons, etc.) and
+// only when a measurementId was actually configured.
+if (
+  !useEmulators &&
+  typeof window !== "undefined" &&
+  firebaseConfig.measurementId
+) {
+  analyticsSupported()
+    .then((ok) => {
+      if (ok) getAnalytics(app);
+    })
+    .catch(() => {
+      /* analytics is best-effort — ignore failures */
+    });
+}

@@ -5,6 +5,7 @@ export type MyStats = {
   totalPoints: number;
   uniquePlaces: number;
   winterSwims: number;
+  currentDayStreak: number;
   daysSinceLast: number | null;
   currentWeekStreak: number;
   longestWeekStreak: number;
@@ -31,6 +32,11 @@ function weekStartMs(ts: number): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() - day).getTime();
 }
 
+function dayStartMs(ts: number): number {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
 export function computeMyStats(sessions: SessionDoc[]): MyStats {
   if (sessions.length === 0) {
     return {
@@ -38,6 +44,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
       totalPoints: 0,
       uniquePlaces: 0,
       winterSwims: 0,
+      currentDayStreak: 0,
       daysSinceLast: null,
       currentWeekStreak: 0,
       longestWeekStreak: 0,
@@ -72,6 +79,16 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
   const sortedDesc = [...sessions].sort((a, b) => b.date - a.date);
   const lastDate = sortedDesc[0].date;
   const daysSinceLast = Math.floor((Date.now() - lastDate) / DAY_MS);
+
+  // Day streak: consecutive calendar days (today or yesterday counts as active).
+  const daysWithSwim = new Set<number>(sessions.map((s) => dayStartMs(s.date)));
+  let currentDayStreak = 0;
+  let dayCursor = dayStartMs(Date.now());
+  if (!daysWithSwim.has(dayCursor)) dayCursor -= DAY_MS;
+  while (daysWithSwim.has(dayCursor)) {
+    currentDayStreak++;
+    dayCursor -= DAY_MS;
+  }
 
   // Week streaks: walk back week-by-week from the most recent swim's week.
   const weeksWithSwim = new Set<number>(
@@ -151,6 +168,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
     totalPoints,
     uniquePlaces: placeCounts.size,
     winterSwims,
+    currentDayStreak,
     daysSinceLast,
     currentWeekStreak,
     longestWeekStreak,

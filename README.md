@@ -51,6 +51,25 @@ Open http://localhost:5173 — sign up with any name + password (stored in the a
 2. Drop the real config into `.env.local` and set `VITE_USE_FIREBASE_EMULATORS=0`.
 3. `npm run build && firebase deploy` (rules + hosting + indexes).
 
+### Continuous deploy from GitHub
+
+`.github/workflows/deploy.yml` builds and deploys to the **live** channel on every push to `main`. `.github/workflows/preview.yml` builds a preview channel on every pull request and posts the URL as a PR comment.
+
+Both workflows need the following **GitHub repository secrets**:
+
+| Secret | Value |
+| --- | --- |
+| `FIREBASE_SERVICE_ACCOUNT` | The full JSON of a service account with the `Firebase Hosting Admin` role. Generate from the Firebase console → Project settings → Service accounts → "Generate new private key", then paste the raw JSON. |
+| `VITE_FIREBASE_API_KEY` | From the web app config |
+| `VITE_FIREBASE_AUTH_DOMAIN` | e.g. `your-project.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | e.g. `your-project` — also used as the deploy target |
+| `VITE_FIREBASE_STORAGE_BUCKET` | e.g. `your-project.appspot.com` |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | |
+| `VITE_FIREBASE_APP_ID` | |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Optional — `G-…` ID for Firebase Analytics |
+
+Rules and indexes are **not** auto-deployed — run `firebase deploy --only firestore:rules,storage:rules,firestore:indexes` locally when you change them.
+
 ## Admin / moderation
 
 Admins can rename and delete spots, delete individual swims, and remove

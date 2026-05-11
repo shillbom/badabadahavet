@@ -4,7 +4,6 @@ import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { GroupDoc, SessionDoc } from "@/lib/types";
-import { startOfYear, endOfYear } from "@/lib/scoring";
 import { bonusPointsForUid } from "@/lib/achievements";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
@@ -28,23 +27,15 @@ export default function LeaderboardPage() {
 
   const year = new Date().getFullYear();
   const [scope, setScope] = useState<string>("global");
-  const [yearOnly, setYearOnly] = useState(true);
-
-  const filtered = useMemo(() => {
-    if (!yearOnly) return all;
-    const start = startOfYear(year);
-    const end = endOfYear(year);
-    return all.filter((s) => s.date >= start && s.date <= end);
-  }, [all, yearOnly, year]);
 
   const rows = useMemo<Row[]>(() => {
     const memberFilter: Set<string> | null =
       scope === "global"
         ? null
         : new Set(groups.find((g) => g.id === scope)?.members ?? []);
-    const rows = aggregate(filtered, memberFilter, all);
+    const rows = aggregate(all, memberFilter, all);
     return rows.sort((a, b) => b.points - a.points);
-  }, [filtered, groups, scope, all]);
+  }, [all, groups, scope]);
 
   const activeGroup: GroupDoc | undefined = groups.find((g) => g.id === scope);
 
@@ -54,11 +45,7 @@ export default function LeaderboardPage() {
         <h2 className="font-display text-2xl font-black text-wave-900">
           {t("leaderboard.title")}
         </h2>
-        <button onClick={() => setYearOnly((v) => !v)} className="chip">
-          {yearOnly
-            ? t("leaderboard.year_only", { year })
-            : t("leaderboard.all_time")}
-        </button>
+        <span className="chip">{t("leaderboard.year_only", { year })}</span>
       </div>
 
       <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4">
@@ -127,13 +114,21 @@ export default function LeaderboardPage() {
                   <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
                     <span className="inline-flex items-center gap-0.5">
                       <MapPin className="h-3 w-3" />{" "}
-                      {t("leaderboard.spots", { n: r.uniquePlaces })}
+                      {r.uniquePlaces === 1
+                        ? t("leaderboard.spot")
+                        : t("leaderboard.spots", { n: r.uniquePlaces })}
                     </span>
                     <span className="inline-flex items-center gap-0.5">
                       <Snowflake className="h-3 w-3" />{" "}
-                      {t("leaderboard.winters", { n: r.winters })}
+                      {r.winters === 1
+                        ? t("leaderboard.winter")
+                        : t("leaderboard.winters", { n: r.winters })}
                     </span>
-                    <span>{t("leaderboard.swims", { n: r.sessions })}</span>
+                    <span>
+                      {r.sessions === 1
+                        ? t("leaderboard.swim")
+                        : t("leaderboard.swims", { n: r.sessions })}
+                    </span>
                     {r.bonusPoints > 0 ? (
                       <span className="text-amber-700">
                         {t("leaderboard.bonus_hint", { n: r.bonusPoints })}

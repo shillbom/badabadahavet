@@ -1,30 +1,14 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import {
-  Snowflake,
-  MapPin,
-  Trophy,
-  Flame,
-  CalendarHeart,
-  Compass,
-  Star,
-  Clock,
-  Award,
-  Sparkles,
-} from "lucide-react";
+import { Flame, MapPin, Trophy } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
 import { computeMyStats } from "@/lib/stats";
-import { formatDate } from "@/lib/utils";
-import {
-  ACHIEVEMENTS,
-  ACHIEVEMENTS_BY_ID,
-  evaluateAchievements,
-} from "@/lib/achievements";
-import { monthShort, useT } from "@/lib/i18n";
+import { ACHIEVEMENTS, evaluateAchievements } from "@/lib/achievements";
+import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 
 export default function MapPage() {
@@ -34,21 +18,26 @@ export default function MapPage() {
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
 
+  const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [fitToken, setFitToken] = useState(0);
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
+    );
+  }, []);
+
   const stats = useMemo(() => computeMyStats(mySessions), [mySessions]);
 
-  const achievementCtx = useMemo(
-    () => ({ uid: user?.uid ?? "", mySessions, allSessions }),
-    [user, mySessions, allSessions],
-  );
-  const unlocked = useMemo(
-    () => evaluateAchievements(achievementCtx),
-    [achievementCtx],
-  );
   const bonusPts = useMemo(() => {
+    const ctx = { uid: user?.uid ?? "", mySessions, allSessions };
+    const unlocked = evaluateAchievements(ctx);
     let pts = 0;
     for (const a of ACHIEVEMENTS) if (unlocked.has(a.id)) pts += a.points;
     return pts;
-  }, [unlocked]);
+  }, [user, mySessions, allSessions]);
 
   const sessionsByPlace = useMemo(() => {
     const m = new Map<string, SessionDoc[]>();
@@ -78,11 +67,10 @@ export default function MapPage() {
           : t("map.last.days", { n: stats.daysSinceLast ?? 0 });
 
   return (
-    <div className="px-4 pt-2">
+    <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-2 gap-3">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-3"
       >
         <h2 className="font-display text-2xl font-black text-wave-900">
           {t("map.greeting", { name: greetingName })}
@@ -92,87 +80,39 @@ export default function MapPage() {
 
       <div className="grid grid-cols-3 gap-2">
         <Stat
+          to="/history"
           label={t("map.stat.points")}
           value={totalPoints}
           icon={<Trophy className="h-4 w-4" />}
-          sub={
-            bonusPts > 0 ? t("map.bonus.subtitle", { n: bonusPts }) : undefined
-          }
+          sub={bonusPts > 0 ? t("map.bonus.subtitle", { n: bonusPts }) : undefined}
         />
         <Stat
+          onClick={() => setFitToken((n) => n + 1)}
           label={t("map.stat.spots")}
           value={stats.uniquePlaces}
           icon={<MapPin className="h-4 w-4" />}
         />
         <Stat
-          label={t("map.stat.winter")}
-          value={stats.winterSwims}
-          icon={<Snowflake className="h-4 w-4" />}
+          to="/history?view=streak"
+          label={t("map.stat.streak")}
+          value={stats.currentDayStreak}
+          icon={<Flame className="h-4 w-4" />}
         />
       </div>
 
-      {mySessions.length > 0 ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <Link
-            to="/recap"
-            className="glass flex items-center gap-2 bg-gradient-to-br from-amber-50 via-white to-wave-50 p-3"
-          >
-            <Sparkles className="h-5 w-5 text-amber-500" />
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                {t("map.recap.label")}
-              </div>
-              <div className="font-display text-sm font-bold text-wave-900">
-                {t("map.recap.cta", { year: new Date().getFullYear() })}
-              </div>
-            </div>
-          </Link>
-          <Link
-            to="/achievements"
-            className="glass flex items-center gap-2 p-3"
-          >
-            <Award className="h-5 w-5 text-amber-500" />
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                {t("map.achievements.label")}
-              </div>
-              <div className="font-display text-sm font-bold text-wave-900">
-                {t("map.achievements.count", {
-                  n: unlocked.size,
-                  total: ACHIEVEMENTS.length,
-                })}
-              </div>
-            </div>
-          </Link>
+      <div className="relative flex-1 min-h-0 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
+        <div className="absolute inset-0">
+          <SwimMap
+            places={myPlaces}
+            sessionsByPlace={sessionsByPlace}
+            userLocation={myLocation}
+            fitToken={fitToken}
+          />
         </div>
-      ) : null}
-
-      {unlocked.size > 0 ? (
-        <div className="no-scrollbar mt-3 -mx-4 flex gap-1.5 overflow-x-auto px-4">
-          {[...unlocked]
-            .map((id) => ACHIEVEMENTS_BY_ID[id])
-            .filter(Boolean)
-            .slice(0, 12)
-            .map((a) => (
-              <span
-                key={a.id}
-                className="flex-none rounded-full bg-white/80 px-2.5 py-1 text-base ring-1 ring-amber-200"
-                title={`${t(`achievement.${a.id}.name`)} · +${a.points}`}
-              >
-                {a.emoji}
-              </span>
-            ))}
-        </div>
-      ) : null}
-
-      <div className="mt-4 h-[48vh] overflow-hidden rounded-2xl border border-white/60 shadow-sm">
-        <SwimMap places={myPlaces} sessionsByPlace={sessionsByPlace} />
       </div>
 
-      {mySessions.length > 0 ? <Vibes stats={stats} /> : null}
-
       {mySessions.length === 0 ? (
-        <p className="mt-4 text-center text-xs text-slate-500">
+        <p className="text-center text-xs text-slate-500">
           {t("map.empty.helper")}
         </p>
       ) : null}
@@ -181,25 +121,22 @@ export default function MapPage() {
 }
 
 function Stat({
+  to,
+  onClick,
   label,
   value,
   icon,
   sub,
 }: {
+  to?: string;
+  onClick?: () => void;
   label: string;
   value: number;
   icon: React.ReactNode;
   sub?: string;
 }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 280, damping: 24 }}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.98 }}
-      className="glass flex flex-col items-start gap-1 px-3 py-2.5"
-    >
+  const inner = (
+    <>
       <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-wave-700">
         {icon}
         {label}
@@ -209,148 +146,29 @@ function Stat({
         className="font-display text-2xl font-black text-wave-900"
       />
       {sub ? <div className="text-[10px] text-amber-700">{sub}</div> : null}
+    </>
+  );
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 280, damping: 24 }}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      {to ? (
+        <Link to={to} className="glass flex flex-col items-start gap-1 px-3 py-2.5">
+          {inner}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          onClick={onClick}
+          className="glass flex w-full flex-col items-start gap-1 px-3 py-2.5 text-left"
+        >
+          {inner}
+        </button>
+      )}
     </motion.div>
-  );
-}
-
-function Vibes({ stats }: { stats: ReturnType<typeof computeMyStats> }) {
-  const t = useT();
-  const streakValue =
-    stats.currentWeekStreak === 0
-      ? "—"
-      : stats.currentWeekStreak === 1
-        ? t("vibes.streak.weeks_one")
-        : t("vibes.streak.weeks_many", { n: stats.currentWeekStreak });
-  const streakSub =
-    stats.longestWeekStreak > stats.currentWeekStreak
-      ? t("vibes.streak.best", { n: stats.longestWeekStreak })
-      : t("vibes.streak.on_fire");
-
-  const lastValue =
-    stats.daysSinceLast == null
-      ? "—"
-      : stats.daysSinceLast === 0
-        ? t("vibes.last_swim.today")
-        : t("vibes.last_swim.days_ago", { n: stats.daysSinceLast });
-  const lastSub = t("vibes.last_swim.total", { n: stats.totalSwims });
-
-  return (
-    <div className="mt-4 space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {t("vibes.title")}
-      </h3>
-
-      <div className="grid grid-cols-2 gap-2">
-        <MiniStat
-          icon={<Flame className="h-4 w-4 text-amber-500" />}
-          label={t("vibes.streak")}
-          value={streakValue}
-          sub={streakSub}
-        />
-        <MiniStat
-          icon={<Clock className="h-4 w-4 text-wave-600" />}
-          label={t("vibes.last_swim")}
-          value={lastValue}
-          sub={lastSub}
-        />
-      </div>
-
-      {stats.favouriteSpot ? (
-        <Link
-          to={`/spot/${stats.favouriteSpot.placeId}`}
-          className="glass flex items-center gap-3 p-3"
-        >
-          <Star className="h-5 w-5 text-amber-500" />
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              {t("vibes.fav_spot")}
-            </div>
-            <div className="truncate font-display text-base font-bold text-wave-900">
-              {stats.favouriteSpot.name}
-            </div>
-          </div>
-          <div className="font-display text-xl font-black text-wave-700">
-            {stats.favouriteSpot.count}
-          </div>
-        </Link>
-      ) : null}
-
-      {stats.range ? (
-        <div className="glass flex items-center gap-3 p-3">
-          <Compass className="h-5 w-5 text-wave-600" />
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              {t("vibes.range")}
-            </div>
-            <div className="text-sm text-wave-900">
-              {t("vibes.range.spans", { n: stats.range.km.toFixed(1) })}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {stats.bestMonth ? (
-        <div className="glass flex items-center gap-3 p-3">
-          <CalendarHeart className="h-5 w-5 text-rose-500" />
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-              {t("vibes.best_month")}
-            </div>
-            <div className="text-sm text-wave-900">
-              {t("vibes.best_month.value", {
-                month: monthShort(stats.bestMonth.month),
-                n: stats.bestMonth.points,
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {stats.onThisDay ? (
-        <Link
-          to={`/spot/${stats.onThisDay.placeId}`}
-          className="glass flex items-start gap-3 bg-gradient-to-br from-wave-50 to-white p-3"
-        >
-          <span className="text-2xl">🗓️</span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-wave-700">
-              {t("vibes.on_this_day")}
-            </div>
-            <div className="text-sm text-wave-900">
-              {t("vibes.on_this_day.text", {
-                place: stats.onThisDay.placeName,
-                date: formatDate(stats.onThisDay.date),
-              })}
-              {stats.onThisDay.isWinter ? " ❄️" : ""}
-            </div>
-          </div>
-        </Link>
-      ) : null}
-    </div>
-  );
-}
-
-function MiniStat({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="glass flex flex-col gap-0.5 px-3 py-2.5">
-      <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-        {icon}
-        {label}
-      </div>
-      <div className="font-display text-lg font-black text-wave-900">
-        {value}
-      </div>
-      {sub ? <div className="text-[10px] text-slate-500">{sub}</div> : null}
-    </div>
   );
 }

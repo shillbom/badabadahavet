@@ -60,7 +60,10 @@ service cloud.firestore {
                     && request.resource.data.displayName.size() > 0
                     && request.resource.data.displayName.size() <= 40;
 
-      allow delete: if false;
+      // Account deletion: the owner may wipe their own user doc as part
+      // of the "delete my account" flow. Admins are intentionally not
+      // allowed here — they should moderate via sessions/places.
+      allow delete: if isSelf(uid);
     }
 
     // ============================================================
@@ -116,8 +119,8 @@ service cloud.firestore {
                     && request.resource.data.date >= 946684800000
                     && request.resource.data.date <= request.time.toMillis() + 86400000
                     && request.resource.data.points is number
-                    && request.resource.data.points >= 1
-                    && request.resource.data.points <= 5
+                    && request.resource.data.points >= 0
+                    && request.resource.data.points <= 15
                     && request.resource.data.isUniqueForUser is bool
                     && request.resource.data.isWinter is bool
                     && request.resource.data.displayName is string

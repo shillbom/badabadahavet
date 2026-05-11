@@ -1,13 +1,12 @@
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { LogOut, Map as MapIcon, History, Trophy, Plus } from "lucide-react";
+import { Map as MapIcon, History, Trophy, Plus } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export default function Layout() {
-  const { profile, logout } = useAuth();
+  const { profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const t = useT();
@@ -26,47 +25,46 @@ export default function Layout() {
     location.pathname.startsWith("/recap") ||
     location.pathname.startsWith("/log");
 
+  // The map page is non-scrolling — the map fills available space. Remove
+  // the bottom padding so it doesn't create dead scroll space below the map.
+  const isMapPage = location.pathname === "/";
+
   return (
-    <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
-      <header className="sticky top-0 z-30 flex items-center justify-between bg-gradient-to-b from-white/80 to-transparent px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 backdrop-blur-sm">
-        <motion.div
-          initial={{ opacity: 0, x: -8 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ type: "spring", stiffness: 220, damping: 22 }}
-          className="flex items-center gap-2"
-        >
-          <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <div className="font-display text-base font-bold leading-none text-wave-900">
-                {profile?.displayName ?? t("layout.swimmer")}
-              </div>
-              {profile?.isAdmin ? (
-                <span
-                  className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white shadow"
-                  title={t("admin.label")}
-                >
-                  {t("admin.label")}
-                </span>
-              ) : null}
-            </div>
-            <div className="text-[11px] text-wave-700/70">{groupSubtitle}</div>
-          </div>
-        </motion.div>
-        <div className="flex items-center gap-2">
-          <LanguageSwitcher />
-          <button
-            onClick={() => logout()}
-            className="rounded-full bg-white/70 p-2 text-slate-600 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
-            aria-label={t("layout.log_out")}
-            title={t("layout.log_out")}
+    <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-md flex-col md:border-x md:border-white/60 md:bg-white/30 md:backdrop-blur-sm md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)]">
+      <header className="sticky top-0 z-[1000] flex items-center justify-between bg-gradient-to-b from-white/80 to-transparent px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 backdrop-blur-sm">
+        <Link to="/profile" className="flex items-center gap-2">
+          <motion.div
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ type: "spring", stiffness: 220, damping: 22 }}
+            className="flex items-center gap-2"
           >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+            <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <div className="font-display text-base font-bold leading-none text-wave-900">
+                  {profile?.displayName ?? t("layout.swimmer")}
+                </div>
+                {profile?.isAdmin ? (
+                  <span
+                    className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white shadow"
+                    title={t("admin.label")}
+                  >
+                    {t("admin.label")}
+                  </span>
+                ) : null}
+              </div>
+              <div className="text-[11px] text-wave-700/70">{groupSubtitle}</div>
+            </div>
+          </motion.div>
+        </Link>
+        <div className="w-8" aria-hidden />
       </header>
 
-      <main className="relative flex-1 overflow-y-auto pb-32">
+      <main className={cn(
+        "relative flex flex-1 flex-col",
+        isMapPage ? "overflow-hidden" : "overflow-y-auto pb-32",
+      )}>
         {/* Per-page entrance animations live in each page; we no longer
             wrap the Outlet in AnimatePresence because under StrictMode
             mid-flight exits could leave the next page at opacity 0. */}
@@ -75,6 +73,7 @@ export default function Layout() {
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          className={isMapPage ? "flex min-h-0 flex-1 flex-col" : undefined}
         >
           <Outlet />
         </motion.div>
@@ -82,29 +81,28 @@ export default function Layout() {
 
       <AnimatePresence>
         {!hideChrome ? (
-          <motion.button
-            key="fab"
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 320, damping: 26 }}
-            whileTap={{ scale: 0.92 }}
-            whileHover={{ scale: 1.04 }}
-            onClick={() => navigate("/log")}
-            className={cn(
-              "fixed bottom-[max(env(safe-area-inset-bottom),5.25rem)] left-1/2 z-40 -translate-x-1/2",
-              "flex h-14 w-14 items-center justify-center rounded-full",
-              "bg-gradient-to-br from-wave-500 to-wave-700 text-white shadow-xl shadow-wave-800/40",
-              "ring-4 ring-white/70",
-            )}
-            aria-label={t("layout.log_a_swim")}
+          <div
+            key="fab-shell"
+            className="fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center pointer-events-none"
           >
-            <span
-              aria-hidden
-              className="absolute inset-0 rounded-full bg-wave-400/40 blur-md"
-            />
-            <Plus className="relative h-6 w-6" />
-          </motion.button>
+            <motion.button
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              whileTap={{ scale: 0.92 }}
+              whileHover={{ scale: 1.04 }}
+              onClick={() => navigate("/log")}
+              className={cn(
+                "pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full",
+                "bg-gradient-to-br from-wave-500 to-wave-700 text-white shadow-xl shadow-wave-800/40",
+                "ring-4 ring-white/70",
+              )}
+              aria-label={t("layout.log_a_swim")}
+            >
+              <Plus className="relative h-6 w-6" />
+            </motion.button>
+          </div>
         ) : null}
       </AnimatePresence>
 
@@ -116,7 +114,7 @@ export default function Layout() {
             animate={{ y: 0 }}
             exit={{ y: 80 }}
             transition={{ type: "spring", stiffness: 280, damping: 28 }}
-            className="fixed inset-x-0 bottom-0 z-30 mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur"
+            className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur"
           >
             <NavTab to="/" label={t("nav.map")} icon={<MapIcon className="h-5 w-5" />} />
             <NavTab

@@ -9,6 +9,7 @@ import {
   X,
   ArrowLeft,
   Sparkles,
+  Search,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
@@ -18,7 +19,9 @@ import SwimMap from "@/components/SwimMap";
 import { toast } from "@/components/ui/Toast";
 import { celebrate } from "@/components/Celebration";
 import { createSession, findOrCreatePlace } from "@/lib/data";
-import { isWinterMonth } from "@/lib/scoring";
+import { isChristmasEve, resolveHomeBracket } from "@/lib/scoring";
+import { reverseGeocodeCountry } from "@/lib/geocode";
+import { flagEmoji } from "@/lib/countries";
 import { haversineMeters } from "@/lib/utils";
 import { PLACE_RADIUS_METERS } from "@/lib/scoring";
 import type { SessionDoc } from "@/lib/types";
@@ -43,7 +46,52 @@ export default function LogSessionPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+  const [country, setCountry] = useState<string | null>(null);
+  const [pickedPlaceId, setPickedPlaceId] = useState<string | null>(null);
+  const [searchOrigin, setSearchOrigin] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
   const photoInput = useRef<HTMLInputElement>(null);
+
+  // Geolocate once just for sorting search results by distance — works
+  // even in "pick" mode where coords aren't auto-set from geolocation.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        setSearchOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
+    );
+  }, []);
+
+  // Reverse-geocode whenever coordinates change so we know what country
+  // the swim is in. Falls back silently — scoring handles a null country.
+  useEffect(() => {
+    if (!coords) {
+      setCountry(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    reverseGeocodeCountry(coords.lat, coords.lng, ctrl.signal).then((c) => {
+      if (!ctrl.signal.aborted) setCountry(c);
+    });
+    return () => ctrl.abort();
+  }, [coords]);
+
+  const searchMatches = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [];
+    const origin = coords ?? searchOrigin;
+    const matches = places.filter((p) => p.name.toLowerCase().includes(q));
+    if (origin) {
+      matches.sort(
+        (a, b) => haversineMeters(origin, a) - haversineMeters(origin, b),
+      );
+    }
+    return matches.slice(0, 5);
+  }, [places, search, coords, searchOrigin]);
 
   const suggestion = useMemo(() => {
     if (!coords) return null;
@@ -58,6 +106,8 @@ export default function LogSessionPage() {
 
   useEffect(() => {
     if (mode === "now") {
+      setPickedPlaceId(null);
+      setSearch("");
       if (!navigator.geolocation) {
         toast.error(t("log.geo.unavailable"));
         return;
@@ -99,7 +149,7 @@ export default function LogSessionPage() {
       toast.error(t("log.error.name"));
       return;
     }
-    const ts = new Date(date).getTime();
+    const ts = mode === "now" ? Date.now() : new Date(date).getTime();
     if (Number.isNaN(ts)) {
       toast.error(t("log.error.date"));
       return;
@@ -122,6 +172,8 @@ export default function LogSessionPage() {
         date: ts,
         note,
         photoFile,
+        country,
+        homeCountry: profile.homeCountry ?? null,
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
       navigate("/history");
@@ -132,7 +184,12 @@ export default function LogSessionPage() {
     }
   }
 
-  const isWinter = isWinterMonth(new Date(date));
+  const dateObj = new Date(date);
+  const homeCountry = profile?.homeCountry ?? null;
+  const bracket = resolveHomeBracket(homeCountry, country, dateObj.getMonth());
+  const isHome = bracket.isHome;
+  const xmasBonus =
+    isHome && homeCountry !== "OTHER" && isChristmasEve(dateObj);
   const sessionsByPlace = useMemo(() => {
     const m = new Map<string, SessionDoc[]>();
     for (const s of allSessions) {
@@ -187,18 +244,102 @@ export default function LogSessionPage() {
           exit={{ opacity: 0, y: -6 }}
           className="mt-4 space-y-4"
         >
-          <div className="h-[40vh] overflow-hidden rounded-2xl border border-white/60 shadow-sm">
-            <SwimMap
-              places={places}
-              sessionsByPlace={sessionsByPlace}
-              onPick={
-                mode === "pick"
-                  ? (lat, lng) => setCoords({ lat, lng })
-                  : undefined
-              }
-              pickedAt={coords}
-              linkToSpot={false}
-            />
+          {mode === "pick" ? (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                placeholder={t("log.search.placeholder")}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 shadow-sm"
+              />
+              {searchMatches.length > 0 ? (
+                <ul className="absolute left-0 right-0 top-full z-[700] mt-1 overflow-hidden rounded-xl bg-white/95 shadow-md ring-1 ring-slate-200">
+                  {searchMatches.map((p) => {
+                    const origin = coords ?? searchOrigin;
+                    const dist = origin ? haversineMeters(origin, p) : null;
+                    return (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCoords({ lat: p.lat, lng: p.lng });
+                            setName(p.name);
+                            setPickedPlaceId(p.id);
+                            setSearch("");
+                          }}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-wave-50"
+                        >
+                          <MapPin className="h-3.5 w-3.5 text-wave-600" />
+                          <span className="flex-1 truncate">{p.name}</span>
+                          {dist != null ? (
+                            <span className="text-[10px] text-slate-400">
+                              {formatDistance(dist)}
+                            </span>
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="relative h-[40vh] overflow-hidden rounded-2xl border border-white/60 shadow-sm">
+            <div className="absolute inset-0">
+              <SwimMap
+                places={places}
+                sessionsByPlace={sessionsByPlace}
+                onPick={
+                  mode === "pick"
+                    ? (lat, lng) => {
+                        // Snap to the nearest existing place if the tap
+                        // lands inside its merge radius — otherwise the
+                        // user ends up with two near-identical pins.
+                        let snap: { id: string; lat: number; lng: number; name: string; dist: number } | null = null;
+                        for (const p of places) {
+                          const d = haversineMeters({ lat, lng }, p);
+                          if (d <= PLACE_RADIUS_METERS && (!snap || d < snap.dist)) {
+                            snap = { id: p.id, lat: p.lat, lng: p.lng, name: p.name, dist: d };
+                          }
+                        }
+                        if (snap) {
+                          setCoords({ lat: snap.lat, lng: snap.lng });
+                          setName(snap.name);
+                          setPickedPlaceId(snap.id);
+                        } else {
+                          setCoords({ lat, lng });
+                          setName("");
+                          setPickedPlaceId(null);
+                        }
+                      }
+                    : undefined
+                }
+                onPickExisting={(p) => {
+                  setCoords({ lat: p.lat, lng: p.lng });
+                  setName(p.name);
+                  setPickedPlaceId(p.id);
+                }}
+                pickedAt={coords}
+                linkToSpot={false}
+                activePlaceId={pickedPlaceId}
+                lockPan={mode === "now"}
+                keepCenteredOn={
+                  mode === "now" ? searchOrigin ?? coords : null
+                }
+                canPickExisting={
+                  mode === "now"
+                    ? (p) => {
+                        const origin = searchOrigin ?? coords;
+                        if (!origin) return true;
+                        return haversineMeters(origin, p) <= 1500;
+                      }
+                    : undefined
+                }
+              />
+            </div>
+
           </div>
 
           <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-white/60">
@@ -223,14 +364,33 @@ export default function LogSessionPage() {
 
           <div className="space-y-1.5">
             <Label htmlFor="name">{t("log.field.spot_name")}</Label>
-            <Input
-              id="name"
-              placeholder={
-                suggestion ?? t("log.field.spot_name.placeholder")
-              }
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                id="name"
+                placeholder={
+                  suggestion ?? t("log.field.spot_name.placeholder")
+                }
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={!!pickedPlaceId}
+                readOnly={!!pickedPlaceId}
+                className={pickedPlaceId ? "bg-slate-100 pr-9" : undefined}
+              />
+              {pickedPlaceId ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPickedPlaceId(null);
+                    setName("");
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50"
+                  aria-label={t("log.field.spot_name.unlock")}
+                  title={t("log.field.spot_name.unlock")}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -240,12 +400,43 @@ export default function LogSessionPage() {
               type="datetime-local"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              disabled={mode === "now"}
+              readOnly={mode === "now"}
+              className={mode === "now" ? "bg-slate-100 text-slate-500" : undefined}
             />
-            {isWinter ? (
-              <div className="chip mt-1 bg-sky-100 text-sky-800 ring-sky-200">
-                {t("log.winter_chip")}
+            {mode === "now" ? (
+              <div className="text-[11px] text-slate-500">
+                {t("log.field.when.now_hint")}
               </div>
             ) : null}
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {isHome ? (
+                <div
+                  className={
+                    bracket.category === "D"
+                      ? "chip bg-sky-100 text-sky-800 ring-sky-200"
+                      : bracket.category === "C"
+                        ? "chip bg-indigo-100 text-indigo-800 ring-indigo-200"
+                        : bracket.category === "B"
+                          ? "chip bg-amber-100 text-amber-800 ring-amber-200"
+                          : "chip bg-emerald-100 text-emerald-800 ring-emerald-200"
+                  }
+                >
+                  {t(`log.bracket.${bracket.category}`)} · +
+                  {bracket.basePoints}
+                </div>
+              ) : (
+                <div className="chip bg-slate-100 text-slate-700 ring-slate-200">
+                  {country ? `${flagEmoji(country)} ` : ""}
+                  {t("log.bracket.abroad")}
+                </div>
+              )}
+              {xmasBonus ? (
+                <div className="chip bg-rose-100 text-rose-800 ring-rose-200">
+                  🎄 {t("log.xmas_chip")}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -304,6 +495,11 @@ export default function LogSessionPage() {
       </AnimatePresence>
     </form>
   );
+}
+
+function formatDistance(m: number): string {
+  if (m < 1000) return `${Math.round(m)} m`;
+  return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
 }
 
 function toLocalInput(d: Date) {

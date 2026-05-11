@@ -41,17 +41,21 @@ const groupsCol = collection(db, "groups");
 
 // ---------- Users ----------
 
+/**
+ * Read the user doc, or create a minimal default if missing. Safe to
+ * call from auth-state listeners — will never overwrite existing data.
+ */
 export async function ensureUserDoc(
   uid: string,
-  displayName: string,
+  fallbackDisplayName: string,
 ): Promise<UserDoc> {
   const ref = doc(usersCol, uid);
   const snap = await getDoc(ref);
   if (snap.exists()) return snap.data() as UserDoc;
   const data: UserDoc = {
     uid,
-    displayName,
-    emoji: pickEmoji(displayName),
+    displayName: fallbackDisplayName,
+    emoji: pickEmoji(fallbackDisplayName),
     groups: [],
     createdAt: Date.now(),
   };
@@ -59,8 +63,44 @@ export async function ensureUserDoc(
   return data;
 }
 
+/**
+ * Authoritative setup called only during signup — writes the full
+ * profile in one shot so a racing auth listener can't clobber pieces
+ * of it.
+ */
+export async function setupUserDoc(
+  uid: string,
+  displayName: string,
+  opts: { locale: "sv" | "en"; homeCountry: string },
+): Promise<UserDoc> {
+  const ref = doc(usersCol, uid);
+  const data: UserDoc = {
+    uid,
+    displayName,
+    emoji: pickEmoji(displayName),
+    groups: [],
+    locale: opts.locale,
+    homeCountry: opts.homeCountry,
+    createdAt: Date.now(),
+  };
+  await setDoc(ref, data, { merge: true });
+  return data;
+}
+
+export async function updateUserLocale(uid: string, locale: "sv" | "en") {
+  await updateDoc(doc(usersCol, uid), { locale });
+}
+
+export async function updateUserHomeCountry(uid: string, code: string) {
+  await updateDoc(doc(usersCol, uid), { homeCountry: code });
+}
+
 export async function updateUserDisplayName(uid: string, displayName: string) {
   await updateDoc(doc(usersCol, uid), { displayName });
+}
+
+export async function updateUserEmoji(uid: string, emoji: string) {
+  await updateDoc(doc(usersCol, uid), { emoji });
 }
 
 export async function recordAchievements(uid: string, ids: string[]) {
@@ -145,6 +185,10 @@ export async function createSession(opts: {
   date: number;
   note?: string;
   photoFile?: File | null;
+  /** Pre-resolved country (ISO alpha-2) — passed in so scoring can use it. */
+  country?: string | null;
+  /** Home country of the swimmer, used for bracket scoring. */
+  homeCountry?: string | null;
 }): Promise<SessionDoc> {
   // Has this user swum at this place before?
   const prev = await getDocs(
@@ -156,7 +200,12 @@ export async function createSession(opts: {
     ),
   );
   const isUniqueForUser = prev.empty;
-  const { points, isWinter } = scoreSession({ isUniqueForUser, date: opts.date });
+  const { points, isWinter, isHomeCountry, monthCategory } = scoreSession({
+    isUniqueForUser,
+    date: opts.date,
+    country: opts.country ?? null,
+    homeCountry: opts.homeCountry ?? null,
+  });
 
   let photoUrl: string | undefined;
   let photoPath: string | undefined;
@@ -185,6 +234,9 @@ export async function createSession(opts: {
     photoPath,
     isUniqueForUser,
     isWinter,
+    isHomeCountry,
+    country: opts.country ?? undefined,
+    monthCategory,
     points,
     createdAt: Date.now(),
   };
@@ -204,11 +256,20 @@ export function watchUserSessions(
   );
 }
 
+/**
+ * Subscribe to every swim logged during a calendar year (defaults to the
+ * current year). Personal history and per-place history are *not* time-
+ * bounded — only "global" queries fan out across all users.
+ */
 export function watchAllSessions(
   cb: (sessions: SessionDoc[]) => void,
+  year: number = new Date().getFullYear(),
 ): Unsubscribe {
-  return onSnapshot(sessionsCol, (snap) =>
-    cb(snap.docs.map((d) => d.data() as SessionDoc)),
+  const start = new Date(year, 0, 1).getTime();
+  const end = new Date(year + 1, 0, 1).getTime();
+  return onSnapshot(
+    query(sessionsCol, where("date", ">=", start), where("date", "<", end)),
+    (snap) => cb(snap.docs.map((d) => d.data() as SessionDoc)),
   );
 }
 
@@ -292,6 +353,46 @@ export function watchPlaceSessions(
     query(sessionsCol, where("placeId", "==", placeId), orderBy("date", "desc")),
     (snap) => cb(snap.docs.map((d) => d.data() as SessionDoc)),
   );
+}
+
+// ---------- Account deletion ----------
+
+/**
+ * Tear down everything a user owns: their sessions (and photos), their
+ * group memberships, and the user doc itself. Call before deleting the
+ * Firebase Auth user — once the auth user is gone the client can't
+ * authenticate the deletes.
+ */
+export async function deleteAccountData(uid: string): Promise<void> {
+  // Sessions (with their storage photos) — only the owner's docs.
+  const sessions = await getDocs(
+    query(sessionsCol, where("uid", "==", uid)),
+  );
+  await Promise.all(
+    sessions.docs.map(async (s) => {
+      const data = s.data() as SessionDoc;
+      if (data.photoPath) {
+        try {
+          await deleteObject(storageRef(storage, data.photoPath));
+        } catch {
+          // photo may already be gone — ignore.
+        }
+      }
+      await deleteDoc(s.ref);
+    }),
+  );
+
+  // Drop the user from every group they're a member of.
+  const memberOf = await getDocs(
+    query(groupsCol, where("members", "array-contains", uid)),
+  );
+  await Promise.all(
+    memberOf.docs.map((g) =>
+      updateDoc(g.ref, { members: arrayRemove(uid) }),
+    ),
+  );
+
+  await deleteDoc(doc(usersCol, uid));
 }
 
 // ---------- Admin / moderation ----------
