@@ -1,4 +1,11 @@
-import { MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  Marker,
+  Popup,
+  TileLayer,
+  Tooltip,
+  useMap,
+} from "react-leaflet";
 import L, { type LatLngExpression } from "leaflet";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
@@ -80,6 +87,7 @@ const dropletIcon = L.divIcon({
 // Cache temp-labelled pins keyed by integer °C so we don't rebuild
 // the icon for every marker on every render.
 const tempIconCache = new Map<number, L.DivIcon>();
+
 function tempIcon(temp: number): L.DivIcon {
   const rounded = Math.round(temp);
   const cached = tempIconCache.get(rounded);
@@ -180,6 +188,17 @@ const userLocationIcon = L.divIcon({
   </div>`,
 });
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Returns true only when a place has a numeric temp that is ≤ 7 days old. */
+function hasFreshTemp(
+  p: PlaceDoc,
+): p is PlaceDoc & { waterTemp: number; waterTempAt: number } {
+  if (typeof p.waterTemp !== "number") return false;
+  if (!p.waterTempAt) return false;
+  return Date.now() - p.waterTempAt <= WEEK_MS;
+}
+
 export default function SwimMap({
   places,
   sessionsByPlace,
@@ -211,9 +230,7 @@ export default function SwimMap({
   const mapRef = useRef<L.Map | null>(null);
 
   return (
-    <div
-      className={cn("relative h-full w-full", className)}
-    >
+    <div className={cn("relative h-full w-full", className)}>
       <MapContainer
         center={center ?? fallbackCenter}
         zoom={fallbackZoom}
@@ -253,113 +270,112 @@ export default function SwimMap({
           showCoverageOnHover={false}
           spiderfyOnMaxZoom
         >
-        {places.map((p) => {
-          const isActive = activePlaceId === p.id;
-          const sessions = sessionsByPlace.get(p.id) ?? [];
-          const photos = sessions
-            .filter((s) => s.photoUrl)
-            .slice(0, 6);
-          return (
-            <Marker
-              key={p.id}
-              position={[p.lat, p.lng]}
-              icon={
-                isActive
-                  ? activePlaceIcon
-                  : typeof p.waterTemp === "number"
-                    ? tempIcon(p.waterTemp)
-                    : dropletIcon
-              }
-              eventHandlers={{
-                // Hovering / clicking a pin → kick off a server-side
-                // refresh if the temperature is more than an hour old.
-                // Throttled locally + server-side so it's safe to call.
-                mouseover: () => maybeRefreshPlaceTemp(p),
-                click: () => maybeRefreshPlaceTemp(p),
-              }}
-            >
-              {typeof p.waterTemp === "number" ? (
-                <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
-                  <div className="text-[11px]">
-                    <span className="font-semibold text-wave-900">
-                      💧 {p.waterTemp.toFixed(1)} °C
-                    </span>
-                    {p.waterTempAt ? (
-                      <span className="ml-1 text-slate-500">
-                        · {formatAge(p.waterTempAt, t)}
+          {places.map((p) => {
+            const isActive = activePlaceId === p.id;
+            const sessions = sessionsByPlace.get(p.id) ?? [];
+            const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
+            return (
+              <Marker
+                key={p.id}
+                position={[p.lat, p.lng]}
+                icon={
+                  isActive
+                    ? activePlaceIcon
+                    : hasFreshTemp(p)
+                      ? tempIcon(p.waterTemp)
+                      : dropletIcon
+                }
+                eventHandlers={{
+                  // Hovering / clicking a pin → kick off a server-side
+                  // refresh if the temperature is more than an hour old.
+                  // Throttled locally + server-side so it's safe to call.
+                  mouseover: () => maybeRefreshPlaceTemp(p),
+                  click: () => maybeRefreshPlaceTemp(p),
+                }}
+              >
+                {hasFreshTemp(p) ? (
+                  <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
+                    <div className="text-[11px]">
+                      <span className="font-semibold text-wave-900">
+                        💧 {p.waterTemp.toFixed(1)} °C
                       </span>
-                    ) : null}
-                  </div>
-                </Tooltip>
-              ) : null}
-              <Popup>
-                <div className="text-sm">
-                  <div className="font-semibold text-wave-900">{p.name}</div>
-                  <div className="text-[11px] text-slate-500">
-                    {sessions.length === 1
-                      ? t("map.popup.swims_one")
-                      : sessions.length > 0
-                        ? t("map.popup.swims_many", { n: sessions.length })
-                        : t("map.popup.no_swims_yet")}
-                  </div>
-                  {typeof p.waterTemp === "number" ? (
-                    <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
-                      💧 {p.waterTemp.toFixed(1)} °C
                       {p.waterTempAt ? (
-                        <span className="font-normal text-sky-600">
+                        <span className="ml-1 text-slate-500">
                           · {formatAge(p.waterTempAt, t)}
                         </span>
                       ) : null}
                     </div>
-                  ) : null}
-                  {photos.length ? (
-                    <div className="mt-1.5 flex gap-1 overflow-x-auto">
-                      {photos.map((s) => (
-                        <img
-                          key={s.id}
-                          src={s.photoUrl}
-                          alt=""
-                          loading="lazy"
-                          className="h-12 w-12 flex-none rounded-md object-cover ring-1 ring-slate-200"
-                        />
-                      ))}
+                  </Tooltip>
+                ) : null}
+                <Popup>
+                  <div className="text-sm">
+                    <div className="font-semibold text-wave-900">{p.name}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {sessions.length === 1
+                        ? t("map.popup.swims_one")
+                        : sessions.length > 0
+                          ? t("map.popup.swims_many", { n: sessions.length })
+                          : t("map.popup.no_swims_yet")}
                     </div>
-                  ) : null}
-                  <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
-                    {sessions.slice(0, 5).map((s) => (
-                      <li key={s.id} className="text-[11px]">
-                        {formatDate(s.date)} — {s.displayName}
-                        {s.isWinter ? " ❄️" : ""}
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-1.5 flex flex-wrap gap-2">
-                    {onPickExisting && (!canPickExisting || canPickExisting(p)) ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          mapRef.current?.closePopup();
-                          onPickExisting(p);
-                        }}
-                        className="rounded-full bg-wave-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-wave-700"
-                      >
-                        {t("map.popup.use_this_spot")}
-                      </button>
+                    {hasFreshTemp(p) ? (
+                      <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                        💧 {p.waterTemp.toFixed(1)} °C
+                        {p.waterTempAt ? (
+                          <span className="font-normal text-sky-600">
+                            · {formatAge(p.waterTempAt, t)}
+                          </span>
+                        ) : null}
+                      </div>
                     ) : null}
-                    {linkToSpot ? (
-                      <Link
-                        to={`/spot/${p.id}`}
-                        className="text-[11px] font-semibold text-wave-700 hover:underline"
-                      >
-                        {t("map.popup.see_full_history")}
-                      </Link>
+                    {photos.length ? (
+                      <div className="mt-1.5 flex gap-1 overflow-x-auto">
+                        {photos.map((s) => (
+                          <img
+                            key={s.id}
+                            src={s.photoUrl}
+                            alt=""
+                            loading="lazy"
+                            className="h-12 w-12 flex-none rounded-md object-cover ring-1 ring-slate-200"
+                          />
+                        ))}
+                      </div>
                     ) : null}
+                    <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                      {sessions.slice(0, 5).map((s) => (
+                        <li key={s.id} className="text-[11px]">
+                          {formatDate(s.date)} — {s.displayName}
+                          {s.isWinter ? " ❄️" : ""}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      {onPickExisting &&
+                      (!canPickExisting || canPickExisting(p)) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            mapRef.current?.closePopup();
+                            onPickExisting(p);
+                          }}
+                          className="rounded-full bg-wave-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-wave-700"
+                        >
+                          {t("map.popup.use_this_spot")}
+                        </button>
+                      ) : null}
+                      {linkToSpot ? (
+                        <Link
+                          to={`/spot/${p.id}`}
+                          className="text-[11px] font-semibold text-wave-700 hover:underline"
+                        >
+                          {t("map.popup.see_full_history")}
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
+                </Popup>
+              </Marker>
+            );
+          })}
         </MarkerClusterGroup>
         {pickedAt && !activePlaceId ? (
           <Marker position={[pickedAt.lat, pickedAt.lng]} icon={newSwimIcon} />
@@ -371,7 +387,10 @@ export default function SwimMap({
           type="button"
           onClick={() => {
             const map = mapRef.current;
-            if (map) map.setView([userLocation.lat, userLocation.lng], 13, { animate: true });
+            if (map)
+              map.setView([userLocation.lat, userLocation.lng], 13, {
+                animate: true,
+              });
           }}
           className="absolute right-3 top-[3rem] z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition active:scale-95 hover:bg-white"
           aria-label={t("map.center_on_me")}
@@ -413,11 +432,7 @@ export default function SwimMap({
   );
 }
 
-function KeepCentered({
-  target,
-}: {
-  target: { lat: number; lng: number };
-}) {
+function KeepCentered({ target }: { target: { lat: number; lng: number } }) {
   const map = useMap();
   useEffect(() => {
     const recenter = () => {
@@ -467,7 +482,10 @@ function FitToPlaces({
   return null;
 }
 
-function formatAge(ts: number, t: (k: string, vars?: Record<string, string | number>) => string): string {
+function formatAge(
+  ts: number,
+  t: (k: string, vars?: Record<string, string | number>) => string,
+): string {
   const diff = Date.now() - ts;
   const mins = Math.round(diff / 60_000);
   if (mins < 60) return t("map.popup.age.mins", { n: Math.max(0, mins) });

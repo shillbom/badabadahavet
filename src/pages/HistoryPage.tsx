@@ -41,7 +41,13 @@ export default function HistoryPage() {
     if (view !== "spots") return [];
     const m = new Map<
       string,
-      { placeId: string; placeName: string; count: number; lastDate: number; photoUrl?: string }
+      {
+        placeId: string;
+        placeName: string;
+        count: number;
+        lastDate: number;
+        photoUrl?: string;
+      }
     >();
     for (const s of sessions) {
       const cur = m.get(s.placeId);
@@ -61,7 +67,9 @@ export default function HistoryPage() {
         });
       }
     }
-    return [...m.values()].sort((a, b) => b.count - a.count || b.lastDate - a.lastDate);
+    return [...m.values()].sort(
+      (a, b) => b.count - a.count || b.lastDate - a.lastDate,
+    );
   }, [sessions, view]);
 
   const title =
@@ -125,7 +133,9 @@ export default function HistoryPage() {
   return (
     <div className="px-4 pt-2">
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-display text-2xl font-black text-wave-900">{title}</h2>
+        <h2 className="font-display text-2xl font-black text-wave-900">
+          {title}
+        </h2>
         {view ? (
           <Link
             to="/history"
@@ -196,7 +206,7 @@ export default function HistoryPage() {
                   <img
                     src={s.photoUrl}
                     alt=""
-                    className="h-20 w-20 flex-none object-cover"
+                    className="h-20 w-20 m-2 rounded-lg flex-none object-cover"
                   />
                 ) : (
                   <div className="flex h-20 w-20 flex-none items-center justify-center bg-wave-100 text-3xl">
@@ -228,12 +238,14 @@ export default function HistoryPage() {
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {s.isUniqueForUser ? (
                       <span className="chip">
-                        <Sparkles className="h-3 w-3" /> {t("history.chip.new_spot")}
+                        <Sparkles className="h-3 w-3" />{" "}
+                        {t("history.chip.new_spot")}
                       </span>
                     ) : null}
                     {s.isWinter ? (
                       <span className="chip bg-sky-100 text-sky-800 ring-sky-200">
-                        <Snowflake className="h-3 w-3" /> {t("history.chip.winter")}
+                        <Snowflake className="h-3 w-3" />{" "}
+                        {t("history.chip.winter")}
                       </span>
                     ) : null}
                     <span className="chip">

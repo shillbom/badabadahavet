@@ -78,7 +78,12 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
 
   const sortedDesc = [...sessions].sort((a, b) => b.date - a.date);
   const lastDate = sortedDesc[0].date;
-  const daysSinceLast = Math.floor((Date.now() - lastDate) / DAY_MS);
+
+  // Difference in *calendar days* (round, not floor) so "yesterday at 14:00"
+  // read at "today 09:00" reports 1, not 0. Also dodges DST hour jumps.
+  const daysSinceLast = Math.round(
+    (dayStartMs(Date.now()) - dayStartMs(lastDate)) / DAY_MS,
+  );
 
   // Day streak: consecutive calendar days (today or yesterday counts as active).
   const daysWithSwim = new Set<number>(sessions.map((s) => dayStartMs(s.date)));
@@ -194,4 +199,3 @@ function haversineKm(
     Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
   return 2 * R * Math.asin(Math.sqrt(h));
 }
-
