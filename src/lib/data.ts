@@ -104,6 +104,14 @@ export async function updateUserEmoji(uid: string, emoji: string) {
   await updateDoc(doc(usersCol, uid), { emoji });
 }
 
+export async function updateUserLastLocation(
+  uid: string,
+  lat: number,
+  lng: number,
+) {
+  await updateDoc(doc(usersCol, uid), { lastLocation: { lat, lng } });
+}
+
 export async function recordAchievements(uid: string, ids: string[]) {
   if (ids.length === 0) return;
   const updates: Record<string, number> = {};

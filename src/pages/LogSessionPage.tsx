@@ -18,7 +18,7 @@ import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
 import { toast } from "@/components/ui/Toast";
 import { celebrate } from "@/components/Celebration";
-import { createSession, findOrCreatePlace } from "@/lib/data";
+import { createSession, findOrCreatePlace, updateUserLastLocation } from "@/lib/data";
 import { isChristmasEve, resolveHomeBracket } from "@/lib/scoring";
 import { reverseGeocodeCountry } from "@/lib/geocode";
 import { flagEmoji } from "@/lib/countries";
@@ -69,9 +69,10 @@ export default function LogSessionPage() {
   const [searchOrigin, setSearchOrigin] = useState<{
     lat: number;
     lng: number;
-  } | null>(null);
+  } | null>(profile?.lastLocation ?? { lat: 57.3298, lng: 12.1393 });
   const photoInput = useRef<HTMLInputElement>(null);
   const swimMapRef = useRef<import("leaflet").Map | null>(null);
+  const hasFlownToUserRef = useRef(false);
   // Tracks whether we've already done the "auto-attach to nearest place"
   // check for the current "now" mode entry. Reset each time the user
   // re-enters now mode so we run once per session.
@@ -79,18 +80,27 @@ export default function LogSessionPage() {
 
   // Geolocate once just for sorting search results by distance — works
   // even in "pick" mode where coords aren't auto-set from geolocation.
+  // Initialised above with a fallback; here we override with the real position.
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        setSearchOrigin({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        }),
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setSearchOrigin(loc);
+        if (user) void updateUserLastLocation(user.uid, loc.lat, loc.lng);
+      },
       () => {},
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
     );
   }, []);
+
+  // Once we know the user's location, fly the map there at a close zoom
+  // (runs once per page load — subsequent changes are handled by keepCenteredOn).
+  useEffect(() => {
+    if (!searchOrigin || hasFlownToUserRef.current || preselectedPlace) return;
+    hasFlownToUserRef.current = true;
+    swimMapRef.current?.flyTo([searchOrigin.lat, searchOrigin.lng], 13, { duration: 0.8 });
+  }, [searchOrigin, preselectedPlace]);
 
   // Reverse-geocode whenever coordinates change so we know what country
   // the swim is in. Falls back silently — scoring handles a null country.
@@ -352,10 +362,12 @@ export default function LogSessionPage() {
                 center={
                   preselectedPlace
                     ? [preselectedPlace.lat, preselectedPlace.lng]
-                    : undefined
+                    : searchOrigin
+                      ? [searchOrigin.lat, searchOrigin.lng]
+                      : [57.3298, 12.1393]
                 }
-                zoom={preselectedPlace ? 14 : undefined}
-                skipInitialFit={!!preselectedPlace}
+                zoom={preselectedPlace ? 14 : 13}
+                skipInitialFit
                 onPick={
                   mode === "pick"
                     ? (lat, lng) => {

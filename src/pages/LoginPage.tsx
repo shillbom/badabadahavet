@@ -1,6 +1,16 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Globe, Lock, Mail, Sparkles, User, X } from "lucide-react";
+import {
+  Globe,
+  Info,
+  Lock,
+  Mail,
+  Sparkles,
+  User,
+  WavesArrowDown,
+  X,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
@@ -17,6 +27,7 @@ import { reverseGeocodeCountry } from "@/lib/geocode";
 
 export default function LoginPage() {
   const { login, signup, resetPassword } = useAuth();
+  const navigate = useNavigate();
   const t = useT();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -117,7 +128,15 @@ export default function LoginPage() {
   return (
     <div className="relative flex min-h-[100dvh] flex-col items-center justify-center px-5 py-10">
       <Ripples />
-      <div className="absolute right-3 top-[max(env(safe-area-inset-top),0.75rem)] z-10">
+      <div className="absolute right-3 top-[max(env(safe-area-inset-top),0.75rem)] z-10 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => navigate("/about")}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-wave-700 ring-1 ring-wave-200 backdrop-blur-sm hover:bg-white"
+          aria-label={t("nav.about")}
+        >
+          <Info className="h-4 w-4" />
+        </button>
         <LanguageSwitcher />
       </div>
       <motion.div
@@ -143,7 +162,12 @@ export default function LoginPage() {
         onSubmit={submit}
         initial={{ y: 24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.05, type: "spring", stiffness: 200, damping: 22 }}
+        transition={{
+          delay: 0.05,
+          type: "spring",
+          stiffness: 200,
+          damping: 22,
+        }}
         className="z-10 mt-8 w-full max-w-sm space-y-4 glass p-5"
       >
         <div className="flex rounded-full bg-slate-100 p-1">
@@ -270,7 +294,11 @@ export default function LoginPage() {
           disabled={mode === "signup" && !acceptedTerms}
         >
           {mode === "signup" ? t("auth.create_account") : t("auth.dive_in")}
-          <Sparkles className="h-4 w-4" />
+          {mode === "signup" ? (
+            <Sparkles className="h-4 w-4" />
+          ) : (
+            <WavesArrowDown className="h-4 w-4" />
+          )}
         </Button>
 
         {mode === "login" ? (

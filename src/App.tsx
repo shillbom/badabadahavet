@@ -9,10 +9,7 @@ import {
   watchUserGroups,
   watchUserSessions,
 } from "@/lib/data";
-import {
-  ACHIEVEMENTS_BY_ID,
-  evaluateAchievements,
-} from "@/lib/achievements";
+import { ACHIEVEMENTS_BY_ID, evaluateAchievements } from "@/lib/achievements";
 import LoginPage from "@/pages/LoginPage";
 import Layout from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toast";
@@ -111,12 +108,13 @@ export default function App() {
     <>
       <Toaster />
       <CelebrationOverlay />
-      {!user ? (
-        <Routes>
-          <Route path="*" element={<LoginPage />} />
-        </Routes>
-      ) : (
-        <Suspense fallback={<FullSplash />}>
+      <Suspense fallback={<FullSplash />}>
+        {!user ? (
+          <Routes>
+            <Route path="about" element={<AboutPage />} />
+            <Route path="*" element={<LoginPage />} />
+          </Routes>
+        ) : (
           <Routes>
             <Route element={<Layout />}>
               <Route index element={<MapPage />} />
@@ -132,8 +130,8 @@ export default function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
-        </Suspense>
-      )}
+        )}
+      </Suspense>
     </>
   );
 }

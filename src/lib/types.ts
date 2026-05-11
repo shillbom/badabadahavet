@@ -14,6 +14,8 @@ export type UserDoc = {
   /** Set only via direct Firestore write (e.g. `firebase firestore:write`
    *  or the console). Rules forbid the user from toggling this themselves. */
   isAdmin?: boolean;
+  /** Last known geolocation — used as the map starting point. */
+  lastLocation?: { lat: number; lng: number };
 };
 
 export type PlaceDoc = {

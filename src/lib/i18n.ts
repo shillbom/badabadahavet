@@ -103,7 +103,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "auth.name": "Användarnamn",
     "auth.email": "E-post",
     "auth.password": "Lösenord",
-    "auth.dive_in": "Plums i",
+    "auth.dive_in": "Hoppa i",
     "auth.create_account": "Skapa konto",
     "auth.welcome": "Välkommen, {name}!",
     "auth.hello_again": "Hej igen!",
