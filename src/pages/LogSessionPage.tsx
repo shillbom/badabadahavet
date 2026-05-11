@@ -53,6 +53,10 @@ export default function LogSessionPage() {
     null,
   );
   const photoInput = useRef<HTMLInputElement>(null);
+  // Tracks whether we've already done the "auto-attach to nearest place"
+  // check for the current "now" mode entry. Reset each time the user
+  // re-enters now mode so we run once per session.
+  const autoPickedNowRef = useRef(false);
 
   // Geolocate once just for sorting search results by distance — works
   // even in "pick" mode where coords aren't auto-set from geolocation.
@@ -79,6 +83,28 @@ export default function LogSessionPage() {
     });
     return () => ctrl.abort();
   }, [coords]);
+
+  // When entering "now" mode, auto-attach to the nearest existing place
+  // within 150 m. Runs at most once per now-mode entry, so the user can
+  // still clear the lock without it snapping back.
+  useEffect(() => {
+    if (mode !== "now") return;
+    if (!coords) return;
+    if (places.length === 0) return;
+    if (autoPickedNowRef.current) return;
+    if (pickedPlaceId) return;
+    autoPickedNowRef.current = true;
+    let best: { p: (typeof places)[number]; dist: number } | null = null;
+    for (const p of places) {
+      const d = haversineMeters(coords, p);
+      if (d <= 150 && (!best || d < best.dist)) best = { p, dist: d };
+    }
+    if (best) {
+      setCoords({ lat: best.p.lat, lng: best.p.lng });
+      setName(best.p.name);
+      setPickedPlaceId(best.p.id);
+    }
+  }, [mode, coords, places, pickedPlaceId]);
 
   const searchMatches = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -108,6 +134,7 @@ export default function LogSessionPage() {
     if (mode === "now") {
       setPickedPlaceId(null);
       setSearch("");
+      autoPickedNowRef.current = false;
       if (!navigator.geolocation) {
         toast.error(t("log.geo.unavailable"));
         return;

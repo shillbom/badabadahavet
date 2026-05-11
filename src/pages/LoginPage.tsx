@@ -38,10 +38,10 @@ export default function LoginPage() {
     setLocale(code === "SE" ? "sv" : "en");
   }
 
-  // If the user grants geolocation we can offer an even better default
-  // than browser locale alone — fetch the actual country once.
+  // Ask for geolocation immediately on mount (not just in signup mode)
+  // so we can flip the UI to the user's likely language before they've
+  // even touched the form. Manual changes still win.
   useEffect(() => {
-    if (mode !== "signup" || homeCountryTouched) return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     let cancelled = false;
     navigator.geolocation.getCurrentPosition(
@@ -61,7 +61,7 @@ export default function LoginPage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

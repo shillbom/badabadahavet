@@ -67,7 +67,7 @@ export default function MapPage() {
           : t("map.last.days", { n: stats.daysSinceLast ?? 0 });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-2 gap-3">
+    <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+6rem)] gap-3">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}

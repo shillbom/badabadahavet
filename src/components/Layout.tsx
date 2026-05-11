@@ -63,7 +63,11 @@ export default function Layout() {
 
       <main className={cn(
         "relative flex flex-1 flex-col",
-        isMapPage ? "overflow-hidden" : "overflow-y-auto pb-32",
+        isMapPage
+          ? "overflow-hidden"
+          : hideChrome
+            ? "overflow-y-auto pb-4"
+            : "overflow-y-auto pb-32",
       )}>
         {/* Per-page entrance animations live in each page; we no longer
             wrap the Outlet in AnimatePresence because under StrictMode
