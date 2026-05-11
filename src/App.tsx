@@ -11,9 +11,12 @@ import {
 } from "@/lib/data";
 import { ACHIEVEMENTS_BY_ID, evaluateAchievements } from "@/lib/achievements";
 import { Pages, preloadAllPages } from "@/lib/pages";
+import { useRegisterSW } from "virtual:pwa-register/react";
 import LoginPage from "@/pages/LoginPage";
 import Layout from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/Toast";
+import { t } from "@/lib/i18n";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
 import { FullSplash } from "@/components/Splash";
 
@@ -29,6 +32,15 @@ export default function App() {
   const setGroups = useStore((s) => s.setGroups);
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
+
+  // When the service worker has activated a new version, show a brief
+  // toast then reload so the fresh assets are used.
+  const { updateServiceWorker } = useRegisterSW({
+    onNeedRefresh() {
+      toast.info(t("update.ready"));
+      setTimeout(() => updateServiceWorker(true), 1200);
+    },
+  });
 
   // Track achievements we've already shown a celebration for (across reloads
   // we don't celebrate ones already persisted before this session loaded).

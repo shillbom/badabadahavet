@@ -1,6 +1,25 @@
 import { lazy } from "react";
 
 /**
+ * If a lazy chunk import fails (e.g. old hash no longer on the CDN after
+ * a redeploy), reload once to pick up the new SW-cached assets.
+ */
+function withStaleReload<T>(load: () => Promise<T>): () => Promise<T> {
+  return async () => {
+    try {
+      return await load();
+    } catch {
+      // Guard against infinite reload loops.
+      if (!sessionStorage.getItem("chunk-reload")) {
+        sessionStorage.setItem("chunk-reload", "1");
+        window.location.reload();
+      }
+      return load();
+    }
+  };
+}
+
+/**
  * Route-level code splitting + post-login preload config.
  *
  * Each page is registered once below. The order matters: it controls
@@ -8,16 +27,16 @@ import { lazy } from "react";
  * it's already shown, Recap last because it's the heaviest chunk).
  */
 const PAGES = [
-  { key: "Map", load: () => import("@/pages/MapPage") },
-  { key: "History", load: () => import("@/pages/HistoryPage") },
-  { key: "Leaderboard", load: () => import("@/pages/LeaderboardPage") },
-  { key: "Log", load: () => import("@/pages/LogSessionPage") },
-  { key: "Groups", load: () => import("@/pages/GroupsPage") },
-  { key: "Spot", load: () => import("@/pages/SpotPage") },
-  { key: "Achievements", load: () => import("@/pages/AchievementsPage") },
-  { key: "Profile", load: () => import("@/pages/ProfilePage") },
-  { key: "About", load: () => import("@/pages/AboutPage") },
-  { key: "Recap", load: () => import("@/pages/RecapPage") },
+  { key: "Map", load: withStaleReload(() => import("@/pages/MapPage")) },
+  { key: "History", load: withStaleReload(() => import("@/pages/HistoryPage")) },
+  { key: "Leaderboard", load: withStaleReload(() => import("@/pages/LeaderboardPage")) },
+  { key: "Log", load: withStaleReload(() => import("@/pages/LogSessionPage")) },
+  { key: "Groups", load: withStaleReload(() => import("@/pages/GroupsPage")) },
+  { key: "Spot", load: withStaleReload(() => import("@/pages/SpotPage")) },
+  { key: "Achievements", load: withStaleReload(() => import("@/pages/AchievementsPage")) },
+  { key: "Profile", load: withStaleReload(() => import("@/pages/ProfilePage")) },
+  { key: "About", load: withStaleReload(() => import("@/pages/AboutPage")) },
+  { key: "Recap", load: withStaleReload(() => import("@/pages/RecapPage")) },
 ] as const;
 
 type PageKey = (typeof PAGES)[number]["key"];
