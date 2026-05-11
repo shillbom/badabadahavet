@@ -18,7 +18,11 @@ import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
 import { toast } from "@/components/ui/Toast";
 import { celebrate } from "@/components/Celebration";
-import { createSession, findOrCreatePlace, updateUserLastLocation } from "@/lib/data";
+import {
+  createSession,
+  findOrCreatePlace,
+  updateUserLastLocation,
+} from "@/lib/data";
 import { isChristmasEve, resolveHomeBracket } from "@/lib/scoring";
 import { reverseGeocodeCountry } from "@/lib/geocode";
 import { flagEmoji } from "@/lib/countries";
@@ -99,7 +103,9 @@ export default function LogSessionPage() {
   useEffect(() => {
     if (!searchOrigin || hasFlownToUserRef.current || preselectedPlace) return;
     hasFlownToUserRef.current = true;
-    swimMapRef.current?.flyTo([searchOrigin.lat, searchOrigin.lng], 13, { duration: 0.8 });
+    swimMapRef.current?.flyTo([searchOrigin.lat, searchOrigin.lng], 13, {
+      duration: 0.8,
+    });
   }, [searchOrigin, preselectedPlace]);
 
   // Reverse-geocode whenever coordinates change so we know what country
@@ -144,18 +150,27 @@ export default function LogSessionPage() {
     return () => clearTimeout(id);
   }, [search]);
 
+  // Pre-compute lowercased names once when places change — avoids calling
+  // .toLowerCase() on every place for every search keystroke.
+  const placesWithKey = useMemo(
+    () => places.map((p) => ({ p, key: p.name.toLowerCase() })),
+    [places],
+  );
+
   const searchMatches = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     if (!q) return [];
     const origin = coords ?? searchOrigin;
-    const matches = places.filter((p) => p.name.toLowerCase().includes(q));
+    const matches = placesWithKey
+      .filter(({ key }) => key.includes(q))
+      .map(({ p }) => p);
     if (origin) {
       matches.sort(
         (a, b) => haversineMeters(origin, a) - haversineMeters(origin, b),
       );
     }
     return matches.slice(0, 5);
-  }, [places, debouncedSearch, coords, searchOrigin]);
+  }, [placesWithKey, debouncedSearch, coords, searchOrigin]);
 
   const suggestion = useMemo(() => {
     if (!coords) return null;

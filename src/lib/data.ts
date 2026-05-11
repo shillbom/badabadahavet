@@ -25,12 +25,7 @@ import {
   deleteObject,
 } from "firebase/storage";
 import { db, storage } from "@/firebase";
-import {
-  GroupDoc,
-  PlaceDoc,
-  SessionDoc,
-  UserDoc,
-} from "./types";
+import { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS, scoreSession } from "./scoring";
 import { compressImage } from "./image";
@@ -314,7 +309,9 @@ export async function joinGroupByCode(opts: {
   uid: string;
 }): Promise<GroupDoc | null> {
   const code = opts.code.trim().toUpperCase();
-  const found = await getDocs(query(groupsCol, where("code", "==", code), limit(1)));
+  const found = await getDocs(
+    query(groupsCol, where("code", "==", code), limit(1)),
+  );
   if (found.empty) return null;
   const groupRef = found.docs[0].ref;
   const data = found.docs[0].data() as GroupDoc;
@@ -360,7 +357,11 @@ export function watchPlaceSessions(
   cb: (sessions: SessionDoc[]) => void,
 ): Unsubscribe {
   return onSnapshot(
-    query(sessionsCol, where("placeId", "==", placeId), orderBy("date", "desc")),
+    query(
+      sessionsCol,
+      where("placeId", "==", placeId),
+      orderBy("date", "desc"),
+    ),
     (snap) => cb(snap.docs.map((d) => d.data() as SessionDoc)),
   );
 }
@@ -375,9 +376,7 @@ export function watchPlaceSessions(
  */
 export async function deleteAccountData(uid: string): Promise<void> {
   // Sessions (with their storage photos) — only the owner's docs.
-  const sessions = await getDocs(
-    query(sessionsCol, where("uid", "==", uid)),
-  );
+  const sessions = await getDocs(query(sessionsCol, where("uid", "==", uid)));
   await Promise.all(
     sessions.docs.map(async (s) => {
       const data = s.data() as SessionDoc;
@@ -397,9 +396,7 @@ export async function deleteAccountData(uid: string): Promise<void> {
     query(groupsCol, where("members", "array-contains", uid)),
   );
   await Promise.all(
-    memberOf.docs.map((g) =>
-      updateDoc(g.ref, { members: arrayRemove(uid) }),
-    ),
+    memberOf.docs.map((g) => updateDoc(g.ref, { members: arrayRemove(uid) })),
   );
 
   await deleteDoc(doc(usersCol, uid));
@@ -464,8 +461,6 @@ export async function adminDeletePlace(placeId: string) {
   const sessions = await getDocs(
     query(sessionsCol, where("placeId", "==", placeId)),
   );
-  await Promise.all(
-    sessions.docs.map((s) => adminDeleteSession(s.id)),
-  );
+  await Promise.all(sessions.docs.map((s) => adminDeleteSession(s.id)));
   await deleteDoc(doc(placesCol, placeId));
 }
