@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Flame, MapPin, Trophy } from "lucide-react";
@@ -8,7 +8,7 @@ import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
 import { computeMyStats } from "@/lib/stats";
 import { ACHIEVEMENTS, evaluateAchievements } from "@/lib/achievements";
-import { useT } from "@/lib/i18n";
+import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 
 export default function MapPage() {
@@ -57,7 +57,17 @@ export default function MapPage() {
 
   const totalPoints = stats.totalPoints + bonusPts;
 
+  // Stable random seed picked once per mount — prevents re-roll on every render.
+  const greetingSeed = useRef(Math.floor(Math.random() * 1000));
+  // Re-derive greeting when locale or profile name changes.
+  const locale = useLocale((s) => s.locale);
   const greetingName = profile?.displayName ?? t("layout.swimmer");
+  const greeting = useMemo(
+    () => getTimeGreeting(greetingName, greetingSeed.current),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [greetingName, locale],
+  );
+
   const subtitle =
     mySessions.length === 0
       ? t("map.empty.subtitle")
@@ -74,7 +84,7 @@ export default function MapPage() {
         animate={{ opacity: 1, y: 0 }}
       >
         <h2 className="font-display text-2xl font-black text-wave-900">
-          {t("map.greeting", { name: greetingName })}
+          {greeting}
         </h2>
         <p className="text-sm text-slate-500">{subtitle}</p>
       </motion.div>

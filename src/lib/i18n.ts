@@ -58,6 +58,75 @@ export function useT(): (key: string, vars?: Vars) => string {
     format(MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key, vars);
 }
 
+type TimeSlot = "morning" | "midday" | "afternoon";
+
+function timeSlot(hour: number): TimeSlot {
+  if (hour >= 5 && hour < 12) return "morning";
+  if (hour >= 12 && hour < 16) return "midday";
+  return "afternoon";
+}
+
+const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
+  sv: {
+    morning: [
+      "Morgondopp, {name}? 🌅",
+      "God morgon, {name}! Vattnet väntar 🌊",
+      "Rise and swim, {name} ☀️",
+      "Ny dag, nytt dopp, {name}! 🏊",
+      "Tidigt upp, tidigt i, {name}! 🌤️",
+    ],
+    midday: [
+      "Lunchdopp, {name}? 🌞",
+      "Perfekt badväder, {name}! ☀️",
+      "Hej {name} — dags att hoppa i! 🌊",
+      "Middagsbad, {name}? 🏖️",
+      "Solen är uppe, {name}! Häng inte! 💦",
+    ],
+    afternoon: [
+      "Kvällsdopp, {name}? 🌅",
+      "Avsluta dagen med ett bad, {name}! 🌊",
+      "Gyllene timmen för ett dopp, {name} 🌇",
+      "Solnedgångsbad, {name}? 🌅",
+      "Svalka av dig, {name}! 💦",
+    ],
+  },
+  en: {
+    morning: [
+      "Morning dip, {name}? 🌅",
+      "Good morning, {name}! The water's waiting 🌊",
+      "Rise and swim, {name}! ☀️",
+      "New day, new dip, {name}! 🏊",
+      "Early bird gets the wave, {name}! 🌤️",
+    ],
+    midday: [
+      "Lunch swim, {name}? 🌞",
+      "Perfect swim weather, {name}! ☀️",
+      "Hey {name} — time to get in! 🌊",
+      "Midday dip, {name}? 🏖️",
+      "The sun's out, {name} — don't waste it! 💦",
+    ],
+    afternoon: [
+      "Evening dip, {name}? 🌅",
+      "End the day right, {name}! 🌊",
+      "Golden hour swim, {name}? 🌇",
+      "Sunset swim, {name}? 🌅",
+      "Cool down time, {name}! 💦",
+    ],
+  },
+};
+
+/**
+ * Returns a time-appropriate, randomly-selected greeting with {name} substituted.
+ * Pass a stable `seed` (e.g. from useRef) so it doesn't re-randomise on every render.
+ */
+export function getTimeGreeting(name: string, seed: number): string {
+  const locale = useLocale.getState().locale;
+  const slot = timeSlot(new Date().getHours());
+  const variants = GREETINGS[locale][slot];
+  const template = variants[seed % variants.length];
+  return template.replace("{name}", name);
+}
+
 export function plural(n: number, sv: [string, string], en: [string, string]) {
   const locale = useLocale.getState().locale;
   const pair = locale === "sv" ? sv : en;

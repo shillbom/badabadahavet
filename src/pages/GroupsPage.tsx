@@ -13,6 +13,7 @@ import {
   Waves,
   Pencil,
   Check,
+  Merge,
 } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
@@ -84,7 +85,10 @@ export default function GroupsPage() {
     if (!user || !pendingJoin) return;
     setBusy(true);
     try {
-      const g = await joinGroupByCode({ code: pendingJoin.code, uid: user.uid });
+      const g = await joinGroupByCode({
+        code: pendingJoin.code,
+        uid: user.uid,
+      });
       if (!g) toast.error(t("groups.join.not_found"));
       else {
         toast.success(t("groups.join.success", { name: g.name }));
@@ -220,14 +224,8 @@ export default function GroupsPage() {
             maxLength={8}
             className="font-mono tracking-[0.3em]"
           />
-          <Button
-            type="submit"
-            variant="secondary"
-            size="md"
-            loading={busy}
-            className="px-4"
-          >
-            {t("groups.join.button")}
+          <Button type="submit" size="md" loading={busy} className="px-4">
+            <Merge className="h-4 w-4" />
           </Button>
         </div>
       </motion.form>
