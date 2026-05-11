@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Map as MapIcon, History, Trophy, Plus } from "lucide-react";
 import { Suspense } from "react";
 import { useAuth } from "@/auth/AuthContext";
+import { useStore } from "@/store/sessions";
 import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
@@ -18,7 +19,7 @@ export default function Layout() {
   const location = useLocation();
   const t = useT();
 
-  const groupCount = profile?.groups.length ?? 0;
+  const groupCount = useStore((s) => s.groups.length);
   const groupSubtitle =
     groupCount === 0
       ? t("layout.solo_swimmer")

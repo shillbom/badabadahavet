@@ -195,11 +195,7 @@ export const joinGroupByCode = onCall(
       return { id: groupRef.id, ...data };
     }
 
-    const userRef = db.collection("users").doc(uid);
-    const batch = db.batch();
-    batch.update(groupRef, { members: FieldValue.arrayUnion(uid) });
-    batch.update(userRef, { groups: FieldValue.arrayUnion(groupRef.id) });
-    await batch.commit();
+    await groupRef.update({ members: FieldValue.arrayUnion(uid) });
 
     return {
       id: groupRef.id,

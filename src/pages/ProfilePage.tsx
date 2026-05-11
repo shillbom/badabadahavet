@@ -33,11 +33,7 @@ import {
 import { useLocale } from "@/lib/i18n";
 import { COUNTRIES, flagEmoji } from "@/lib/countries";
 import { computeMyStats } from "@/lib/stats";
-import {
-  ACHIEVEMENTS,
-  ACHIEVEMENTS_BY_ID,
-  evaluateAchievements,
-} from "@/lib/achievements";
+import { ACHIEVEMENTS, evaluateAchievements } from "@/lib/achievements";
 import { formatDate, cn } from "@/lib/utils";
 import { monthShort, useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";

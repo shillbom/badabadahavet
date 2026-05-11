@@ -4,7 +4,6 @@ export type UserDoc = {
   uid: string;
   displayName: string;
   emoji?: string;
-  groups: string[];
   achievements?: Record<string, number>; // id -> unlocked timestamp
   locale?: "sv" | "en";
   /** ISO 3166-1 alpha-2 (e.g. "SE"). Used to award home-country bracket

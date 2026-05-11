@@ -13,7 +13,6 @@ import {
   onSnapshot,
   serverTimestamp,
   arrayRemove,
-  arrayUnion,
   limit,
   writeBatch,
   Unsubscribe,
@@ -53,7 +52,6 @@ export async function ensureUserDoc(
     uid,
     displayName: fallbackDisplayName,
     emoji: pickEmoji(fallbackDisplayName),
-    groups: [],
     createdAt: Date.now(),
   };
   await setDoc(ref, data);
@@ -75,7 +73,6 @@ export async function setupUserDoc(
     uid,
     displayName,
     emoji: pickEmoji(displayName),
-    groups: [],
     locale: opts.locale,
     homeCountry: opts.homeCountry,
     createdAt: Date.now(),
@@ -301,7 +298,6 @@ export async function createGroup(opts: {
     createdAt: Date.now(),
   };
   await setDoc(ref, data);
-  await updateDoc(doc(usersCol, opts.uid), { groups: arrayUnion(ref.id) });
   return data;
 }
 
@@ -344,9 +340,6 @@ export async function leaveGroup(opts: {
   await updateDoc(doc(groupsCol, opts.groupId), {
     members: arrayRemove(opts.uid),
   });
-  await updateDoc(doc(usersCol, opts.uid), {
-    groups: arrayRemove(opts.groupId),
-  });
 }
 
 /** Group creator updates name and/or emoji. */
@@ -368,9 +361,6 @@ export async function kickGroupMember(opts: {
 }): Promise<void> {
   await updateDoc(doc(groupsCol, opts.groupId), {
     members: arrayRemove(opts.memberUid),
-  });
-  await updateDoc(doc(usersCol, opts.memberUid), {
-    groups: arrayRemove(opts.groupId),
   });
 }
 

@@ -43,8 +43,6 @@ service cloud.firestore {
                     && request.resource.data.displayName is string
                     && request.resource.data.displayName.size() > 0
                     && request.resource.data.displayName.size() <= 40
-                    && request.resource.data.groups is list
-                    && request.resource.data.groups.size() == 0
                     && request.resource.data.createdAt is number
                     && (
                       !('isAdmin' in request.resource.data)
