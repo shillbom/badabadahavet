@@ -10,7 +10,7 @@ import L, { type LatLngExpression } from "leaflet";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import MarkerClusterGroup from "react-leaflet-cluster";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { LocateFixed } from "lucide-react";
 import { MAP_THEMES } from "@/lib/mapThemes";
@@ -174,6 +174,9 @@ export type SwimMapProps = {
   /** When true, suppresses the initial auto-fit-to-all-places so the
    *  map stays on the explicitly provided center/zoom. */
   skipInitialFit?: boolean;
+  /** Optional ref that will be populated with the Leaflet Map instance,
+   *  allowing the parent to call flyTo / setView imperatively. */
+  mapRef?: RefObject<L.Map | null>;
 };
 
 const userLocationIcon = L.divIcon({
@@ -219,6 +222,7 @@ export default function SwimMap({
   keepCenteredOn,
   canPickExisting,
   skipInitialFit,
+  mapRef: externalMapRef,
 }: SwimMapProps) {
   const t = useT();
   // Theme picker is currently disabled — the calm "Soft" (Voyager) tiles
@@ -247,6 +251,9 @@ export default function SwimMap({
         className="h-full w-full rounded-2xl"
         ref={(m) => {
           mapRef.current = m;
+          if (externalMapRef)
+            (externalMapRef as React.MutableRefObject<L.Map | null>).current =
+              m;
         }}
       >
         <TileLayer

@@ -71,6 +71,7 @@ export default function LogSessionPage() {
     lng: number;
   } | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
+  const swimMapRef = useRef<import("leaflet").Map | null>(null);
   // Tracks whether we've already done the "auto-attach to nearest place"
   // check for the current "now" mode entry. Reset each time the user
   // re-enters now mode so we run once per session.
@@ -127,8 +128,14 @@ export default function LogSessionPage() {
     }
   }, [mode, coords, places, pickedPlaceId]);
 
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(search), 200);
+    return () => clearTimeout(id);
+  }, [search]);
+
   const searchMatches = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     if (!q) return [];
     const origin = coords ?? searchOrigin;
     const matches = places.filter((p) => p.name.toLowerCase().includes(q));
@@ -138,7 +145,7 @@ export default function LogSessionPage() {
       );
     }
     return matches.slice(0, 5);
-  }, [places, search, coords, searchOrigin]);
+  }, [places, debouncedSearch, coords, searchOrigin]);
 
   const suggestion = useMemo(() => {
     if (!coords) return null;
@@ -302,7 +309,7 @@ export default function LogSessionPage() {
                 className="pl-9 shadow-sm"
               />
               {searchMatches.length > 0 ? (
-                <ul className="absolute left-0 right-0 top-full z-[700] mt-1 overflow-hidden rounded-xl bg-white/95 shadow-md ring-1 ring-slate-200">
+                <ul className="absolute left-0 right-0 top-full z-[1100] mt-1 overflow-hidden rounded-xl bg-white/95 shadow-md ring-1 ring-slate-200">
                   {searchMatches.map((p) => {
                     const origin = coords ?? searchOrigin;
                     const dist = origin ? haversineMeters(origin, p) : null;
@@ -315,6 +322,9 @@ export default function LogSessionPage() {
                             setName(p.name);
                             setPickedPlaceId(p.id);
                             setSearch("");
+                            swimMapRef.current?.flyTo([p.lat, p.lng], 14, {
+                              duration: 0.8,
+                            });
                           }}
                           className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-wave-50"
                         >
@@ -390,6 +400,9 @@ export default function LogSessionPage() {
                   setCoords({ lat: p.lat, lng: p.lng });
                   setName(p.name);
                   setPickedPlaceId(p.id);
+                  swimMapRef.current?.flyTo([p.lat, p.lng], 14, {
+                    duration: 0.8,
+                  });
                 }}
                 pickedAt={coords}
                 linkToSpot={false}
@@ -407,6 +420,7 @@ export default function LogSessionPage() {
                       }
                     : undefined
                 }
+                mapRef={swimMapRef}
               />
             </div>
           </div>
