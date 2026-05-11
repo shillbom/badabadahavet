@@ -99,7 +99,11 @@ export default function App() {
     seenAchievements.current = persisted;
   }, [profile]);
 
-  if (loading) {
+  // While the user doc is still hydrating after login we'd otherwise
+  // render Layout with an empty profile (fallback emoji + "Badare" name,
+  // empty groups list etc.). Wait until both Firebase Auth and the
+  // Firestore user doc are ready before showing the authed UI.
+  if (loading || (user && !profile)) {
     return <FullSplash />;
   }
 
