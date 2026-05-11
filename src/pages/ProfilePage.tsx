@@ -45,8 +45,22 @@ import { Input } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
 
 const EMOJI_POOL = [
-  "🐬", "🦭", "🐟", "🦦", "🐳", "🪼", "🐠", "🦑", "🐢", "🦞",
-  "🐙", "🦈", "🐧", "🦆", "🦀", "🪴",
+  "🐬",
+  "🦭",
+  "🐟",
+  "🦦",
+  "🐳",
+  "🪼",
+  "🐠",
+  "🦑",
+  "🐢",
+  "🦞",
+  "🐙",
+  "🦈",
+  "🐧",
+  "🦆",
+  "🦀",
+  "🪴",
 ];
 
 export default function ProfilePage() {
@@ -338,7 +352,10 @@ export default function ProfilePage() {
               </div>
             </div>
           </Link>
-          <Link to="/achievements" className="glass flex items-center gap-2 p-3">
+          <Link
+            to="/achievements"
+            className="glass flex items-center gap-2 p-3"
+          >
             <Award className="h-5 w-5 text-amber-500" />
             <div className="min-w-0 flex-1">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
@@ -356,7 +373,7 @@ export default function ProfilePage() {
       ) : null}
 
       {/* Achievement chips */}
-      {unlocked.size > 0 ? (
+      {/* {unlocked.size > 0 ? (
         <div className="no-scrollbar -mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4">
           {[...unlocked]
             .map((id) => ACHIEVEMENTS_BY_ID[id])
@@ -365,14 +382,14 @@ export default function ProfilePage() {
             .map((a) => (
               <span
                 key={a.id}
-                className="flex-none rounded-full bg-white/80 px-2.5 py-1 text-base ring-1 ring-amber-200"
+                className="flex-none rounded-full bg-white/80 px-2.5 py-2 my-1 text-base ring-1 ring-amber-200"
                 title={`${t(`achievement.${a.id}.name`)} · +${a.points}`}
               >
                 {a.emoji}
               </span>
             ))}
         </div>
-      ) : null}
+      ) : null} */}
 
       {/* Vibes */}
       {mySessions.length > 0 ? <Vibes stats={stats} /> : null}
@@ -600,7 +617,9 @@ function VibesMini({
         {icon}
         {label}
       </div>
-      <div className="font-display text-lg font-black text-wave-900">{value}</div>
+      <div className="font-display text-lg font-black text-wave-900">
+        {value}
+      </div>
       {sub ? <div className="text-[10px] text-slate-500">{sub}</div> : null}
     </div>
   );
