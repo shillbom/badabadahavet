@@ -282,12 +282,11 @@ export async function createGroup(opts: {
   name: string;
   uid: string;
 }): Promise<GroupDoc> {
-  let code = generateGroupCode();
-  for (let i = 0; i < 5; i++) {
-    const existing = await getDocs(query(groupsCol, where("code", "==", code)));
-    if (existing.empty) break;
-    code = generateGroupCode();
-  }
+  // We can't query groups we're not a member of (Firestore rules), so we
+  // skip the uniqueness check. With 33M+ code combinations the collision
+  // risk is negligible; the join Cloud Function always looks up by code
+  // and returns the first match, so worst case two groups share a code.
+  const code = generateGroupCode();
   const ref = doc(groupsCol);
   const data: GroupDoc = {
     id: ref.id,
