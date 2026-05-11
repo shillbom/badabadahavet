@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { lazy, Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import {
@@ -10,25 +10,15 @@ import {
   watchUserSessions,
 } from "@/lib/data";
 import { ACHIEVEMENTS_BY_ID, evaluateAchievements } from "@/lib/achievements";
+import { Pages, preloadAllPages } from "@/lib/pages";
 import LoginPage from "@/pages/LoginPage";
 import Layout from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toast";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
 import { FullSplash } from "@/components/Splash";
 
-// Route-level code splitting: Leaflet, clustering, framer-motion-heavy
-// pages and the recap stay out of the initial JS bundle until the user
-// navigates to them.
-const MapPage = lazy(() => import("@/pages/MapPage"));
-const HistoryPage = lazy(() => import("@/pages/HistoryPage"));
-const LeaderboardPage = lazy(() => import("@/pages/LeaderboardPage"));
-const LogSessionPage = lazy(() => import("@/pages/LogSessionPage"));
-const GroupsPage = lazy(() => import("@/pages/GroupsPage"));
-const SpotPage = lazy(() => import("@/pages/SpotPage"));
-const AchievementsPage = lazy(() => import("@/pages/AchievementsPage"));
-const RecapPage = lazy(() => import("@/pages/RecapPage"));
-const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
-const AboutPage = lazy(() => import("@/pages/AboutPage"));
+// Route-level code splitting + post-login preload config lives in
+// `lib/pages.ts` so the route table here stays focused on layout.
 
 export default function App() {
   const { user, profile, loading } = useAuth();
@@ -58,6 +48,12 @@ export default function App() {
     ];
     return () => unsubs.forEach((u) => u());
   }, [user, setMyUid, setMySessions, setAllSessions, setPlaces, setGroups]);
+
+  // Preload remaining page chunks once the user is logged in.
+  useEffect(() => {
+    if (!user) return;
+    return preloadAllPages();
+  }, [user]);
 
   // Persist newly-unlocked achievements when sessions change.
   useEffect(() => {
@@ -111,23 +107,23 @@ export default function App() {
       {!user ? (
         <Suspense fallback={<FullSplash />}>
           <Routes>
-            <Route path="about" element={<AboutPage />} />
+            <Route path="about" element={<Pages.About />} />
             <Route path="*" element={<LoginPage />} />
           </Routes>
         </Suspense>
       ) : (
         <Routes>
           <Route element={<Layout />}>
-            <Route index element={<MapPage />} />
-            <Route path="history" element={<HistoryPage />} />
-            <Route path="leaderboard" element={<LeaderboardPage />} />
-            <Route path="groups" element={<GroupsPage />} />
-            <Route path="log" element={<LogSessionPage />} />
-            <Route path="spot/:placeId" element={<SpotPage />} />
-            <Route path="achievements" element={<AchievementsPage />} />
-            <Route path="recap" element={<RecapPage />} />
-            <Route path="profile" element={<ProfilePage />} />
-            <Route path="about" element={<AboutPage />} />
+            <Route index element={<Pages.Map />} />
+            <Route path="history" element={<Pages.History />} />
+            <Route path="leaderboard" element={<Pages.Leaderboard />} />
+            <Route path="groups" element={<Pages.Groups />} />
+            <Route path="log" element={<Pages.Log />} />
+            <Route path="spot/:placeId" element={<Pages.Spot />} />
+            <Route path="achievements" element={<Pages.Achievements />} />
+            <Route path="recap" element={<Pages.Recap />} />
+            <Route path="profile" element={<Pages.Profile />} />
+            <Route path="about" element={<Pages.About />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

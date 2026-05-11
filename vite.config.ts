@@ -35,6 +35,9 @@ export default defineConfig({
           if (id.includes("framer-motion")) {
             return "motion";
           }
+          if (id.includes("lucide")) {
+            return "lucide";
+          }
           if (
             id.includes("/react/") ||
             id.includes("/react-dom/") ||

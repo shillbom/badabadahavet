@@ -23,7 +23,7 @@ export function FullSplash() {
           alt="Badligan"
           animate={{ y: [0, -6, 0] }}
           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute inset-0 h-full w-full rounded-2xl object-cover"
+          className="absolute inset-0 h-full w-full rounded-full object-cover"
         />
       </div>
       <motion.div
