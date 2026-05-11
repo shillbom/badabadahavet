@@ -28,13 +28,25 @@ function withStaleReload<T>(load: () => Promise<T>): () => Promise<T> {
  */
 const PAGES = [
   { key: "Map", load: withStaleReload(() => import("@/pages/MapPage")) },
-  { key: "History", load: withStaleReload(() => import("@/pages/HistoryPage")) },
-  { key: "Leaderboard", load: withStaleReload(() => import("@/pages/LeaderboardPage")) },
+  {
+    key: "History",
+    load: withStaleReload(() => import("@/pages/HistoryPage")),
+  },
+  {
+    key: "Leaderboard",
+    load: withStaleReload(() => import("@/pages/LeaderboardPage")),
+  },
   { key: "Log", load: withStaleReload(() => import("@/pages/LogSessionPage")) },
   { key: "Groups", load: withStaleReload(() => import("@/pages/GroupsPage")) },
   { key: "Spot", load: withStaleReload(() => import("@/pages/SpotPage")) },
-  { key: "Achievements", load: withStaleReload(() => import("@/pages/AchievementsPage")) },
-  { key: "Profile", load: withStaleReload(() => import("@/pages/ProfilePage")) },
+  {
+    key: "Achievements",
+    load: withStaleReload(() => import("@/pages/AchievementsPage")),
+  },
+  {
+    key: "Profile",
+    load: withStaleReload(() => import("@/pages/ProfilePage")),
+  },
   { key: "About", load: withStaleReload(() => import("@/pages/AboutPage")) },
   { key: "Recap", load: withStaleReload(() => import("@/pages/RecapPage")) },
 ] as const;
