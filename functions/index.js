@@ -62,10 +62,7 @@ export const refreshPlaceTemp = onCall(
         `Too many refresh requests — please wait a bit.`,
       );
     }
-    await usageRef.set(
-      { calls: [...recentCalls, now] },
-      { merge: true },
-    );
+    await usageRef.set({ calls: [...recentCalls, now] }, { merge: true });
 
     const placeRef = db.collection("places").doc(placeId);
     const placeSnap = await placeRef.get();
@@ -102,10 +99,7 @@ export const refreshPlaceTemp = onCall(
           data?.celsius;
         const temp = typeof raw === "string" ? Number(raw) : raw;
         const stampRaw =
-          data?.sampleDate ??
-          data?.date ??
-          data?.timestamp ??
-          data?.measuredAt;
+          data?.sampleDate ?? data?.date ?? data?.timestamp ?? data?.measuredAt;
         const stamp =
           typeof stampRaw === "number" ? stampRaw : Date.parse(stampRaw ?? "");
         if (
@@ -125,7 +119,9 @@ export const refreshPlaceTemp = onCall(
 
     if (!reading) {
       // Still record the attempt so we don't hammer immediately again.
-      await placeRef.update({ waterTempCheckedAt: FieldValue.serverTimestamp() });
+      await placeRef.update({
+        waterTempCheckedAt: FieldValue.serverTimestamp(),
+      });
       return { status: "no-data" };
     }
 
@@ -144,6 +140,71 @@ export const refreshPlaceTemp = onCall(
       status: "updated",
       waterTemp: reading.temp,
       waterTempAt: reading.stamp,
+    };
+  },
+);
+
+/**
+ * Callable: join a group by its share code.
+ *
+ *   data: { code: string }
+ *   returns: { id, name, emoji?, code, members: string[], createdBy, createdAt }
+ *
+ * Group docs are no longer client-readable unless you're already a
+ * member, so the only way to look up a group by code is via this
+ * function (which uses the Admin SDK and bypasses rules). Adds the
+ * caller to `group.members` and to the user's `groups` array atomically.
+ */
+export const joinGroupByCode = onCall(
+  {
+    region: PROJECT_REGION,
+    maxInstances: 5,
+    memory: "256MiB",
+    timeoutSeconds: 15,
+  },
+  async (req) => {
+    if (!req.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const raw = req.data?.code;
+    if (typeof raw !== "string") {
+      throw new HttpsError("invalid-argument", "code is required.");
+    }
+    const code = raw.trim().toUpperCase();
+    if (code.length < 3 || code.length > 12) {
+      throw new HttpsError("invalid-argument", "code looks invalid.");
+    }
+
+    const db = getFirestore();
+    const matches = await db
+      .collection("groups")
+      .where("code", "==", code)
+      .limit(1)
+      .get();
+
+    if (matches.empty) {
+      throw new HttpsError("not-found", "No group with that code.");
+    }
+
+    const groupRef = matches.docs[0].ref;
+    const data = matches.docs[0].data();
+    const uid = req.auth.uid;
+
+    if (Array.isArray(data.members) && data.members.includes(uid)) {
+      // Already a member — just return the doc so the client can refresh state.
+      return { id: groupRef.id, ...data };
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    const batch = db.batch();
+    batch.update(groupRef, { members: FieldValue.arrayUnion(uid) });
+    batch.update(userRef, { groups: FieldValue.arrayUnion(groupRef.id) });
+    await batch.commit();
+
+    return {
+      id: groupRef.id,
+      ...data,
+      members: [...(data.members ?? []), uid],
     };
   },
 );

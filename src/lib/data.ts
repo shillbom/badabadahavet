@@ -24,7 +24,8 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { db, storage } from "@/firebase";
+import { db, functions, storage } from "@/firebase";
+import { httpsCallable } from "firebase/functions";
 import { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS, scoreSession } from "./scoring";
@@ -308,19 +309,22 @@ export async function joinGroupByCode(opts: {
   code: string;
   uid: string;
 }): Promise<GroupDoc | null> {
-  const code = opts.code.trim().toUpperCase();
-  const found = await getDocs(
-    query(groupsCol, where("code", "==", code), limit(1)),
+  // Group docs are not client-readable for non-members, so we go through
+  // a Cloud Function (Admin SDK) which validates the code and atomically
+  // adds the caller to the group.
+  void opts.uid; // uid comes from auth context server-side; kept for callsite compat
+  const callable = httpsCallable<{ code: string }, GroupDoc>(
+    functions,
+    "joinGroupByCode",
   );
-  if (found.empty) return null;
-  const groupRef = found.docs[0].ref;
-  const data = found.docs[0].data() as GroupDoc;
-  if (!data.members.includes(opts.uid)) {
-    await updateDoc(groupRef, { members: arrayUnion(opts.uid) });
-    await updateDoc(doc(usersCol, opts.uid), { groups: arrayUnion(data.id) });
-    data.members = [...data.members, opts.uid];
+  try {
+    const res = await callable({ code: opts.code });
+    return res.data ?? null;
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code;
+    if (code === "functions/not-found") return null;
+    throw err;
   }
-  return data;
 }
 
 export function watchUserGroups(
