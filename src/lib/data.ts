@@ -282,11 +282,19 @@ export async function createGroup(opts: {
   name: string;
   uid: string;
 }): Promise<GroupDoc> {
-  // We can't query groups we're not a member of (Firestore rules), so we
-  // skip the uniqueness check. With 33M+ code combinations the collision
-  // risk is negligible; the join Cloud Function always looks up by code
-  // and returns the first match, so worst case two groups share a code.
-  const code = generateGroupCode();
+  // Check uniqueness via the lookup Cloud Function (Admin SDK bypasses the
+  // Firestore rules that prevent non-members from reading group docs).
+  // Fails open after 5 attempts or if the function isn't reachable.
+  let code = generateGroupCode();
+  for (let i = 0; i < 5; i++) {
+    try {
+      const taken = await lookupGroupByCode(code);
+      if (!taken) break; // code is free
+      code = generateGroupCode(); // collision — try another
+    } catch {
+      break; // function unreachable — use current code
+    }
+  }
   const ref = doc(groupsCol);
   const data: GroupDoc = {
     id: ref.id,
@@ -303,7 +311,12 @@ export async function createGroup(opts: {
 /** Preview a group without joining — returns name/emoji/memberCount or null. */
 export async function lookupGroupByCode(
   code: string,
-): Promise<{ id: string; name: string; emoji: string | null; memberCount: number } | null> {
+): Promise<{
+  id: string;
+  name: string;
+  emoji: string | null;
+  memberCount: number;
+} | null> {
   const callable = httpsCallable<
     { code: string },
     { id: string; name: string; emoji: string | null; memberCount: number }
