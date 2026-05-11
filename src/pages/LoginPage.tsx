@@ -326,6 +326,7 @@ export default function LoginPage() {
                   <li>{t("terms.cookies")}</li>
                   <li>{t("terms.email")}</li>
                   <li>{t("terms.storage")}</li>
+                  <li>{t("terms.data")}</li>
                   <li>{t("terms.content")}</li>
                   <li>{t("terms.safety")}</li>
                   <li>{t("terms.delete")}</li>

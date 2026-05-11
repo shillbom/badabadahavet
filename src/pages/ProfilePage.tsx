@@ -9,6 +9,7 @@ import {
   Clock,
   Compass,
   Flame,
+  Info,
   LogOut,
   MapPin,
   Pencil,
@@ -376,8 +377,15 @@ export default function ProfilePage() {
       {/* Vibes */}
       {mySessions.length > 0 ? <Vibes stats={stats} /> : null}
 
-      {/* Sign out */}
-      <div className="mt-8">
+      {/* About + sign out */}
+      <div className="mt-8 space-y-2">
+        <Link
+          to="/about"
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white"
+        >
+          <Info className="h-4 w-4" />
+          {t("about.title")}
+        </Link>
         <button
           type="button"
           onClick={() => logout()}

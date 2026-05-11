@@ -168,8 +168,20 @@ export default function SpotPage() {
           </h2>
           <div className="flex items-center gap-1 text-[11px] text-slate-500">
             <MapPin className="h-3 w-3" />
-            {place.lat.toFixed(4)}, {place.lng.toFixed(4)} ·{" "}
-            {t("spot.first_dipped", { date: formatDate(place.firstSwumAt) })}
+            {place.lat.toFixed(4)}, {place.lng.toFixed(4)}
+            {sessions.length > 0 ? (
+              <>
+                {" · "}
+                {t("spot.first_dipped", {
+                  date: formatDate(
+                    sessions.reduce(
+                      (min, s) => (s.date < min ? s.date : min),
+                      sessions[0].date,
+                    ),
+                  ),
+                })}
+              </>
+            ) : null}
           </div>
         </div>
       </div>

@@ -23,6 +23,16 @@ export type PlaceDoc = {
   lng: number;
   createdBy: string;
   firstSwumAt: number;
+  /** True for places imported from an external dataset (e.g. badplatsen). */
+  seeded?: boolean;
+  /** Free-form source label, e.g. "havochvatten.se". */
+  source?: string;
+  /** External provider's identifier (e.g. badplatsen nutsCode). */
+  externalId?: string;
+  /** Latest measured water temperature in °C (if known). */
+  waterTemp?: number;
+  /** Epoch ms — when waterTemp was sampled. */
+  waterTempAt?: number;
 };
 
 export type SessionDoc = {

@@ -20,6 +20,7 @@ export default function MapPage() {
 
   const [myLocation, setMyLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [fitToken, setFitToken] = useState(0);
+  const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -103,12 +104,19 @@ export default function MapPage() {
       <div className="relative flex-1 min-h-0 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
         <div className="absolute inset-0">
           <SwimMap
-            places={myPlaces}
+            places={showAll ? places : myPlaces}
             sessionsByPlace={sessionsByPlace}
             userLocation={myLocation}
             fitToken={fitToken}
           />
         </div>
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="absolute right-3 top-3 z-[600] flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-wave-700 shadow-md ring-1 ring-slate-200 transition active:scale-95 hover:bg-white"
+        >
+          {showAll ? t("map.show.mine") : t("map.show.all")}
+        </button>
       </div>
 
       {mySessions.length === 0 ? (

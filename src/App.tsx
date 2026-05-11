@@ -24,6 +24,7 @@ import SpotPage from "@/pages/SpotPage";
 import AchievementsPage from "@/pages/AchievementsPage";
 import RecapPage from "@/pages/RecapPage";
 import ProfilePage from "@/pages/ProfilePage";
+import AboutPage from "@/pages/AboutPage";
 import { Toaster } from "@/components/ui/Toast";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
 import { FullSplash } from "@/components/Splash";
@@ -118,6 +119,7 @@ export default function App() {
             <Route path="achievements" element={<AchievementsPage />} />
             <Route path="recap" element={<RecapPage />} />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="about" element={<AboutPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

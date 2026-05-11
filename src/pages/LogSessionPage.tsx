@@ -25,7 +25,7 @@ import { flagEmoji } from "@/lib/countries";
 import { haversineMeters } from "@/lib/utils";
 import { PLACE_RADIUS_METERS } from "@/lib/scoring";
 import type { SessionDoc } from "@/lib/types";
-import { useT } from "@/lib/i18n";
+import { useLocale, useT } from "@/lib/i18n";
 
 type Mode = "now" | "pick";
 
@@ -33,6 +33,12 @@ export default function LogSessionPage() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const t = useT();
+  // The native datetime-local picker formats date + 12h/24h time from
+  // the input's own `lang`, not from <html lang>. en-GB → 24h with sane
+  // day-first format, sv-SE → Swedish month names + 24h. Safari obeys
+  // this where it ignores the page locale entirely.
+  const locale = useLocale((s) => s.locale);
+  const inputLang = locale === "sv" ? "sv-SE" : "en-GB";
   const places = useStore((s) => s.places);
   const allSessions = useStore((s) => s.allSessions);
 
@@ -425,6 +431,7 @@ export default function LogSessionPage() {
             <Input
               id="date"
               type="datetime-local"
+              lang={inputLang}
               value={date}
               onChange={(e) => setDate(e.target.value)}
               disabled={mode === "now"}

@@ -1,5 +1,8 @@
-import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import L, { type LatLngExpression } from "leaflet";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import { useEffect, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { LocateFixed } from "lucide-react";
@@ -18,66 +21,119 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
+// All pins share the same shape: a coloured circle with a small
+// triangle tail. The tail's tip sits at the bottom-center of the icon
+// box (iconAnchor = [w/2, h]) so it always lands exactly on the
+// lat/lng — no off-by-anchor rotation tricks.
+function pinHtml(opts: {
+  size: number;
+  bg: string;
+  tail: string;
+  shadow: string;
+  border: number;
+  content?: string;
+  tailHeight?: number;
+}): string {
+  const tailH = opts.tailHeight ?? 12;
+  const total = opts.size + tailH;
+  return `<div style="position:relative;width:${opts.size}px;height:${total}px;">
+    <div style="
+      position:absolute;left:0;top:0;
+      width:${opts.size}px;height:${opts.size}px;
+      border-radius:50%;
+      background:${opts.bg};
+      border:${opts.border}px solid white;
+      box-shadow:0 4px 12px ${opts.shadow};
+      display:flex;align-items:center;justify-content:center;
+      color:white;font-weight:900;font-size:${Math.round(opts.size * 0.55)}px;line-height:1;
+    ">${opts.content ?? ""}</div>
+    <div style="
+      position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+      width:0;height:0;
+      border-left:${Math.round(tailH * 0.45)}px solid transparent;
+      border-right:${Math.round(tailH * 0.45)}px solid transparent;
+      border-top:${tailH}px solid ${opts.tail};
+      filter:drop-shadow(0 2px 3px ${opts.shadow});
+    "></div>
+  </div>`;
+}
+
+const PIN_SIZE = 28;
+const PIN_TAIL = 12;
+const PIN_TOTAL = PIN_SIZE + PIN_TAIL;
+
 const dropletIcon = L.divIcon({
   className: "swim-pin",
-  iconSize: [28, 28],
-  iconAnchor: [14, 28],
-  popupAnchor: [0, -24],
-  html: `<div style="
-    transform: translateY(-4px);
-    width: 28px; height: 28px;
-    border-radius: 14px 14px 14px 2px;
-    background: linear-gradient(135deg,#019eea,#065684);
-    box-shadow: 0 4px 12px rgba(2,100,160,0.45);
-    border: 2px solid white;
-    transform-origin: bottom left;
-    transform: rotate(-45deg) translateY(-4px);
-  "></div>`,
+  iconSize: [PIN_SIZE, PIN_TOTAL],
+  iconAnchor: [PIN_SIZE / 2, PIN_TOTAL],
+  popupAnchor: [0, -PIN_SIZE],
+  html: pinHtml({
+    size: PIN_SIZE,
+    bg: "linear-gradient(135deg,#019eea,#065684)",
+    tail: "#065684",
+    shadow: "rgba(2,100,160,0.45)",
+    border: 2,
+  }),
 });
+
+// Cache temp-labelled pins keyed by integer °C so we don't rebuild
+// the icon for every marker on every render.
+const tempIconCache = new Map<number, L.DivIcon>();
+function tempIcon(temp: number): L.DivIcon {
+  const rounded = Math.round(temp);
+  const cached = tempIconCache.get(rounded);
+  if (cached) return cached;
+  const icon = L.divIcon({
+    className: "swim-pin-temp",
+    iconSize: [PIN_SIZE, PIN_TOTAL],
+    iconAnchor: [PIN_SIZE / 2, PIN_TOTAL],
+    popupAnchor: [0, -PIN_SIZE],
+    html: pinHtml({
+      size: PIN_SIZE,
+      bg: "linear-gradient(135deg,#0284c7,#075985)",
+      tail: "#075985",
+      shadow: "rgba(2,100,160,0.45)",
+      border: 2,
+      content: `<span style="font-size:11px;line-height:1;">${rounded}°</span>`,
+    }),
+  });
+  tempIconCache.set(rounded, icon);
+  return icon;
+}
+
+const ACTIVE_SIZE = 32;
+const ACTIVE_TAIL = 14;
+const ACTIVE_TOTAL = ACTIVE_SIZE + ACTIVE_TAIL;
 
 const activePlaceIcon = L.divIcon({
   className: "swim-pin-active",
-  iconSize: [32, 32],
-  iconAnchor: [16, 32],
-  popupAnchor: [0, -28],
-  html: `<div style="
-    transform: translateY(-4px);
-    width: 32px; height: 32px;
-    border-radius: 16px 16px 16px 2px;
-    background: linear-gradient(135deg,#fbbf24,#f97316);
-    box-shadow: 0 4px 14px rgba(249,115,22,0.55);
-    border: 3px solid white;
-    transform-origin: bottom left;
-    transform: rotate(-45deg) translateY(-4px);
-  "></div>`,
+  iconSize: [ACTIVE_SIZE, ACTIVE_TOTAL],
+  iconAnchor: [ACTIVE_SIZE / 2, ACTIVE_TOTAL],
+  popupAnchor: [0, -ACTIVE_SIZE],
+  html: pinHtml({
+    size: ACTIVE_SIZE,
+    bg: "linear-gradient(135deg,#fbbf24,#f97316)",
+    tail: "#f97316",
+    shadow: "rgba(249,115,22,0.55)",
+    border: 3,
+    tailHeight: ACTIVE_TAIL,
+  }),
 });
 
 const newSwimIcon = L.divIcon({
   className: "swim-pin-new",
-  iconSize: [34, 44],
-  iconAnchor: [17, 40],
-  popupAnchor: [0, -36],
-  html: `<div style="
-    position: relative; width: 34px; height: 44px;
-  ">
-    <div style="
-      position: absolute; left: 50%; top: 0; transform: translateX(-50%);
-      width: 30px; height: 30px; border-radius: 50%;
-      background: linear-gradient(135deg,#fbbf24,#f97316);
-      border: 3px solid white;
-      box-shadow: 0 4px 14px rgba(249,115,22,0.55);
-      display: flex; align-items: center; justify-content: center;
-      color: white; font-weight: 900; font-size: 18px; line-height: 1;
-    ">+</div>
-    <div style="
-      position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
-      width: 0; height: 0;
-      border-left: 6px solid transparent;
-      border-right: 6px solid transparent;
-      border-top: 14px solid #f97316;
-      filter: drop-shadow(0 2px 4px rgba(249,115,22,0.4));
-    "></div>
-  </div>`,
+  iconSize: [ACTIVE_SIZE, ACTIVE_TOTAL],
+  iconAnchor: [ACTIVE_SIZE / 2, ACTIVE_TOTAL],
+  popupAnchor: [0, -ACTIVE_SIZE],
+  html: pinHtml({
+    size: ACTIVE_SIZE,
+    bg: "linear-gradient(135deg,#fbbf24,#f97316)",
+    tail: "#f97316",
+    shadow: "rgba(249,115,22,0.55)",
+    border: 3,
+    content: "+",
+    tailHeight: ACTIVE_TAIL,
+  }),
 });
 
 export type SwimMapProps = {
@@ -190,6 +246,12 @@ export default function SwimMap({
             icon={userLocationIcon}
           />
         ) : null}
+        <MarkerClusterGroup
+          chunkedLoading
+          maxClusterRadius={50}
+          showCoverageOnHover={false}
+          spiderfyOnMaxZoom
+        >
         {places.map((p) => {
           const isActive = activePlaceId === p.id;
           const sessions = sessionsByPlace.get(p.id) ?? [];
@@ -200,16 +262,48 @@ export default function SwimMap({
             <Marker
               key={p.id}
               position={[p.lat, p.lng]}
-              icon={isActive ? activePlaceIcon : dropletIcon}
+              icon={
+                isActive
+                  ? activePlaceIcon
+                  : typeof p.waterTemp === "number"
+                    ? tempIcon(p.waterTemp)
+                    : dropletIcon
+              }
             >
+              {typeof p.waterTemp === "number" ? (
+                <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
+                  <div className="text-[11px]">
+                    <span className="font-semibold text-wave-900">
+                      💧 {p.waterTemp.toFixed(1)} °C
+                    </span>
+                    {p.waterTempAt ? (
+                      <span className="ml-1 text-slate-500">
+                        · {formatAge(p.waterTempAt, t)}
+                      </span>
+                    ) : null}
+                  </div>
+                </Tooltip>
+              ) : null}
               <Popup>
                 <div className="text-sm">
                   <div className="font-semibold text-wave-900">{p.name}</div>
                   <div className="text-[11px] text-slate-500">
                     {sessions.length === 1
                       ? t("map.popup.swims_one")
-                      : t("map.popup.swims_many", { n: sessions.length })}
+                      : sessions.length > 0
+                        ? t("map.popup.swims_many", { n: sessions.length })
+                        : t("map.popup.no_swims_yet")}
                   </div>
+                  {typeof p.waterTemp === "number" ? (
+                    <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                      💧 {p.waterTemp.toFixed(1)} °C
+                      {p.waterTempAt ? (
+                        <span className="font-normal text-sky-600">
+                          · {formatAge(p.waterTempAt, t)}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {photos.length ? (
                     <div className="mt-1.5 flex gap-1 overflow-x-auto">
                       {photos.map((s) => (
@@ -258,6 +352,7 @@ export default function SwimMap({
             </Marker>
           );
         })}
+        </MarkerClusterGroup>
         {pickedAt && !activePlaceId ? (
           <Marker position={[pickedAt.lat, pickedAt.lng]} icon={newSwimIcon} />
         ) : null}
@@ -270,7 +365,7 @@ export default function SwimMap({
             const map = mapRef.current;
             if (map) map.setView([userLocation.lat, userLocation.lng], 13, { animate: true });
           }}
-          className="absolute right-3 top-3 z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition active:scale-95 hover:bg-white"
+          className="absolute right-3 top-[3rem] z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition active:scale-95 hover:bg-white"
           aria-label={t("map.center_on_me")}
           title={t("map.center_on_me")}
         >
@@ -339,17 +434,39 @@ function FitToPlaces({
   fitToken?: number;
 }) {
   const map = useMap();
+  const hasInitialFit = useRef(false);
+  const lastFitToken = useRef(fitToken);
+
   useEffect(() => {
+    // Only auto-fit on the very first render with usable data, or when
+    // fitToken explicitly bumps. Otherwise toggling "show all" would
+    // zoom back out to fit hundreds of spots, which is jarring.
+    const tokenChanged = fitToken !== lastFitToken.current;
+    lastFitToken.current = fitToken;
+    if (hasInitialFit.current && !tokenChanged) return;
+
     if (places.length) {
       const pts: [number, number][] = places.map((p) => [p.lat, p.lng]);
       if (userLocation) pts.push([userLocation.lat, userLocation.lng]);
       const bounds = L.latLngBounds(pts);
       map.fitBounds(bounds.pad(0.25), { animate: true, maxZoom: 12 });
+      hasInitialFit.current = true;
     } else if (userLocation) {
       map.setView([userLocation.lat, userLocation.lng], 12, { animate: true });
+      hasInitialFit.current = true;
     }
   }, [places, userLocation, map, fitToken]);
   return null;
+}
+
+function formatAge(ts: number, t: (k: string, vars?: Record<string, string | number>) => string): string {
+  const diff = Date.now() - ts;
+  const mins = Math.round(diff / 60_000);
+  if (mins < 60) return t("map.popup.age.mins", { n: Math.max(0, mins) });
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return t("map.popup.age.hrs", { n: hrs });
+  const days = Math.round(hrs / 24);
+  return t("map.popup.age.days", { n: days });
 }
 
 function ClickToPick({

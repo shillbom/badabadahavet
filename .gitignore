@@ -13,3 +13,8 @@ firestore-debug.log
 ui-debug.log
 firebase-debug.log
 emulator-data/
+
+# Service-account credentials — never commit these.
+*-firebase-adminsdk-*.json
+*.serviceaccount.json
+service-account*.json

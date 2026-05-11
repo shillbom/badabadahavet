@@ -8,18 +8,23 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -b --noEmit",
-    "emulators": "firebase emulators:start"
+    "emulators": "firebase emulators:start",
+    "seed:badplatser": "node scripts/seed-badplatser.mjs",
+    "update:temperatures": "node scripts/update-temperatures.mjs"
   },
   "dependencies": {
+    "@types/leaflet.markercluster": "^1.5.6",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "firebase": "^10.13.2",
     "framer-motion": "^11.5.4",
     "leaflet": "^1.9.4",
+    "leaflet.markercluster": "^1.5.3",
     "lucide-react": "^0.441.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-leaflet": "^4.2.1",
+    "react-leaflet-cluster": "^4.1.3",
     "react-router-dom": "^6.26.2",
     "tailwind-merge": "^2.5.2",
     "zustand": "^4.5.5"
@@ -30,6 +35,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.20",
+    "firebase-admin": "^13.9.0",
     "postcss": "^8.4.45",
     "tailwindcss": "^3.4.10",
     "typescript": "^5.5.4",
