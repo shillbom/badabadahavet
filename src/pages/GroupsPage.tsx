@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy,
@@ -269,6 +270,11 @@ function GroupDetailSheet({
 
   // Emoji picker state
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [pickerPos, setPickerPos] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
 
   const GROUP_EMOJIS = [
     "👥",
@@ -407,59 +413,77 @@ function GroupDetailSheet({
             {/* Group emoji / picker trigger */}
             <div className="relative flex-none">
               <button
+                ref={emojiTriggerRef}
                 disabled={!isLeader}
-                onClick={() => isLeader && setEmojiPickerOpen((v) => !v)}
+                onClick={() => {
+                  if (!isLeader) return;
+                  if (!emojiPickerOpen && emojiTriggerRef.current) {
+                    const r = emojiTriggerRef.current.getBoundingClientRect();
+                    setPickerPos({
+                      top: r.bottom + 8,
+                      left: r.left + r.width / 2,
+                    });
+                  }
+                  setEmojiPickerOpen((v) => !v);
+                }}
                 className="flex h-12 w-12 items-center justify-center rounded-full bg-wave-100 text-2xl ring-1 ring-wave-200 transition hover:bg-wave-200 disabled:cursor-default"
                 title={isLeader ? t("groups.detail.emoji.pick") : undefined}
               >
                 {groupIcon}
               </button>
-              <AnimatePresence>
-                {emojiPickerOpen && (
-                  <>
-                    {/* Click-away backdrop, scoped within the sheet */}
-                    <button
-                      type="button"
-                      aria-label="close"
-                      onClick={() => setEmojiPickerOpen(false)}
-                      className="fixed inset-0 z-[1300] cursor-default"
-                    />
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9, y: -4 }}
-                      animate={{ opacity: 1, scale: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.9, y: -4 }}
-                      transition={{
-                        type: "spring",
-                        stiffness: 380,
-                        damping: 28,
-                      }}
-                      className="absolute left-1/2 top-full z-[1310] mt-2 -translate-x-1/2 rounded-2xl bg-white p-2 shadow-xl ring-1 ring-slate-200"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {/* Triangle pointer */}
-                      <div className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-white ring-1 ring-slate-200" />
-                      <div className="relative grid grid-cols-5 gap-1">
-                        {GROUP_EMOJIS.map((e) => {
-                          const active = e === groupIcon;
-                          return (
-                            <button
-                              key={e}
-                              onClick={() => saveEmoji(e)}
-                              className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl transition active:scale-95 ${
-                                active
-                                  ? "bg-wave-100 ring-2 ring-wave-500"
-                                  : "hover:bg-wave-50"
-                              }`}
-                            >
-                              {e}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+              {createPortal(
+                <AnimatePresence>
+                  {emojiPickerOpen && pickerPos && (
+                    <>
+                      {/* Click-away backdrop */}
+                      <button
+                        type="button"
+                        aria-label="close"
+                        onClick={() => setEmojiPickerOpen(false)}
+                        className="fixed inset-0 z-[1300] cursor-default bg-transparent"
+                      />
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: -4 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: -4 }}
+                        transition={{
+                          type: "spring",
+                          stiffness: 380,
+                          damping: 28,
+                        }}
+                        style={{
+                          position: "fixed",
+                          top: pickerPos.top,
+                          left: pickerPos.left,
+                          transform: "translateX(-50%)",
+                        }}
+                        className="z-[1310] w-[14.5rem] rounded-2xl bg-white p-2 shadow-xl ring-1 ring-slate-200"
+                      >
+                        {/* Triangle pointer */}
+                        <div className="relative grid grid-cols-5 gap-1">
+                          {GROUP_EMOJIS.map((e) => {
+                            const active = e === groupIcon;
+                            return (
+                              <button
+                                key={e}
+                                onClick={() => saveEmoji(e)}
+                                className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl transition active:scale-95 ${
+                                  active
+                                    ? "bg-wave-100 ring-2 ring-wave-500"
+                                    : "hover:bg-wave-50"
+                                }`}
+                              >
+                                {e}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>,
+                document.body,
+              )}
             </div>
             {/* Name / rename */}
             <div className="min-w-0 flex-1">
