@@ -286,15 +286,13 @@ export async function createGroup(opts: {
   // Firestore rules that prevent non-members from reading group docs).
   // Fails open after 5 attempts or if the function isn't reachable.
   let code = generateGroupCode();
+  let codeFound = false;
   for (let i = 0; i < 5; i++) {
-    try {
-      const taken = await lookupGroupByCode(code);
-      if (!taken) break; // code is free
-      code = generateGroupCode(); // collision — try another
-    } catch {
-      break; // function unreachable — use current code
-    }
+    const taken = await lookupGroupByCode(code);
+    if (!taken) { codeFound = true; break; }
+    code = generateGroupCode();
   }
+  if (!codeFound) throw new Error("Could not generate a unique group code.");
   const ref = doc(groupsCol);
   const data: GroupDoc = {
     id: ref.id,
