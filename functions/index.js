@@ -145,6 +145,57 @@ export const refreshPlaceTemp = onCall(
 );
 
 /**
+ * Callable: preview a group by its share code — no side effects.
+ *
+ *   data: { code: string }
+ *   returns: { id, name, emoji?, memberCount } | null (not-found → null)
+ *
+ * Used to show a "Do you want to join X?" confirmation before the user
+ * commits. Group docs are not client-readable for non-members so we need
+ * the Admin SDK here as well.
+ */
+export const lookupGroupByCode = onCall(
+  {
+    region: PROJECT_REGION,
+    maxInstances: 5,
+    memory: "256MiB",
+    timeoutSeconds: 10,
+  },
+  async (req) => {
+    if (!req.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const raw = req.data?.code;
+    if (typeof raw !== "string") {
+      throw new HttpsError("invalid-argument", "code is required.");
+    }
+    const code = raw.trim().toUpperCase();
+    if (code.length < 3 || code.length > 12) {
+      throw new HttpsError("invalid-argument", "code looks invalid.");
+    }
+
+    const db = getFirestore();
+    const matches = await db
+      .collection("groups")
+      .where("code", "==", code)
+      .limit(1)
+      .get();
+
+    if (matches.empty) {
+      throw new HttpsError("not-found", "No group with that code.");
+    }
+
+    const data = matches.docs[0].data();
+    return {
+      id: matches.docs[0].id,
+      name: data.name,
+      emoji: data.emoji ?? null,
+      memberCount: Array.isArray(data.members) ? data.members.length : 0,
+    };
+  },
+);
+
+/**
  * Callable: join a group by its share code.
  *
  *   data: { code: string }

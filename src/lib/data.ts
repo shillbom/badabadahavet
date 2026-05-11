@@ -301,6 +301,24 @@ export async function createGroup(opts: {
   return data;
 }
 
+/** Preview a group without joining — returns name/emoji/memberCount or null. */
+export async function lookupGroupByCode(
+  code: string,
+): Promise<{ id: string; name: string; emoji: string | null; memberCount: number } | null> {
+  const callable = httpsCallable<
+    { code: string },
+    { id: string; name: string; emoji: string | null; memberCount: number }
+  >(functions, "lookupGroupByCode");
+  try {
+    const res = await callable({ code });
+    return res.data ?? null;
+  } catch (err: unknown) {
+    const errCode = (err as { code?: string })?.code;
+    if (errCode === "functions/not-found") return null;
+    throw err;
+  }
+}
+
 export async function joinGroupByCode(opts: {
   code: string;
   uid: string;

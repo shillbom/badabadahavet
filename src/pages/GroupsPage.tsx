@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy,
   LogOut,
   Plus,
+  Share2,
   X,
   UserMinus,
   MapPin,
@@ -23,6 +25,7 @@ import {
   kickGroupMember,
   leaveGroup,
   fetchUsers,
+  lookupGroupByCode,
   updateGroupMeta,
 } from "@/lib/data";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
@@ -39,6 +42,73 @@ export default function GroupsPage() {
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [openGroup, setOpenGroup] = useState<GroupDoc | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Pending join confirmation: the group preview returned by lookupGroupByCode.
+  const [pendingJoin, setPendingJoin] = useState<{
+    id: string;
+    name: string;
+    emoji: string | null;
+    memberCount: number;
+    code: string;
+  } | null>(null);
+
+  // Trigger a group lookup, then show the confirmation dialog.
+  async function lookupAndConfirm(code: string) {
+    if (code.trim().length < 3) {
+      toast.error(t("groups.join.too_short"));
+      return;
+    }
+    setBusy(true);
+    try {
+      const preview = await lookupGroupByCode(code.trim());
+      if (!preview) {
+        toast.error(t("groups.join.not_found"));
+        return;
+      }
+      // Already a member? Tell them immediately without showing the dialog.
+      if (groups.some((g) => g.id === preview.id)) {
+        toast.info(t("groups.join.already_member"));
+        return;
+      }
+      setPendingJoin({ ...preview, code: code.trim().toUpperCase() });
+    } catch {
+      toast.error(t("groups.join.error.generic"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Actually join after the user confirmed in the dialog.
+  async function confirmJoin() {
+    if (!user || !pendingJoin) return;
+    setBusy(true);
+    try {
+      const g = await joinGroupByCode({ code: pendingJoin.code, uid: user.uid });
+      if (!g) toast.error(t("groups.join.not_found"));
+      else {
+        toast.success(t("groups.join.success", { name: g.name }));
+        setJoinCode("");
+        setPendingJoin(null);
+      }
+    } catch {
+      toast.error(t("groups.join.error.generic"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Auto-trigger confirmation from ?join=CODE deep-link on mount.
+  useEffect(() => {
+    const code = searchParams.get("join");
+    if (code) {
+      setSearchParams({}, { replace: true });
+      // Small delay so the page is fully rendered before the dialog appears.
+      setTimeout(() => lookupAndConfirm(code), 350);
+    }
+    // Only run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -62,23 +132,7 @@ export default function GroupsPage() {
   async function onJoin(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
-    if (joinCode.trim().length < 3) {
-      toast.error(t("groups.join.too_short"));
-      return;
-    }
-    setBusy(true);
-    try {
-      const g = await joinGroupByCode({ code: joinCode, uid: user.uid });
-      if (!g) toast.error(t("groups.join.not_found"));
-      else {
-        toast.success(t("groups.join.success", { name: g.name }));
-        setJoinCode("");
-      }
-    } catch {
-      toast.error(t("groups.join.error.generic"));
-    } finally {
-      setBusy(false);
-    }
+    await lookupAndConfirm(joinCode);
   }
 
   function copyCode(code: string) {
@@ -86,6 +140,26 @@ export default function GroupsPage() {
       () => toast.success(t("groups.code_copied")),
       () => toast.error(t("groups.copy_failed")),
     );
+  }
+
+  function shareInviteLink(group: GroupDoc) {
+    const url = `${window.location.origin}/groups?join=${group.code}`;
+    if (navigator.share) {
+      navigator
+        .share({
+          title: t("groups.share_title", { name: group.name }),
+          text: t("groups.share_text", { code: group.code }),
+          url,
+        })
+        .catch(() => {
+          // User dismissed the share sheet — no toast needed.
+        });
+    } else {
+      navigator.clipboard.writeText(url).then(
+        () => toast.success(t("groups.link_copied")),
+        () => toast.error(t("groups.copy_failed")),
+      );
+    }
   }
 
   async function onLeave(groupId: string, name: string) {
@@ -212,6 +286,17 @@ export default function GroupsPage() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    shareInviteLink(g);
+                  }}
+                  className="rounded-full bg-white/70 p-2 text-wave-600 ring-1 ring-wave-200 hover:bg-wave-50 hover:text-wave-700"
+                  aria-label={t("groups.share_link")}
+                  title={t("groups.share_link")}
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
                     onLeave(g.id, g.name);
                   }}
                   className="rounded-full bg-white/70 p-2 text-slate-500 ring-1 ring-slate-200 hover:bg-rose-50 hover:text-rose-600"
@@ -238,6 +323,72 @@ export default function GroupsPage() {
           />
         ) : null}
       </AnimatePresence>
+
+      {/* Join confirmation dialog */}
+      <AnimatePresence>
+        {pendingJoin ? (
+          <>
+            <motion.div
+              key="join-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !busy && setPendingJoin(null)}
+              className="fixed inset-0 z-[1100] bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              key="join-dialog"
+              initial={{ opacity: 0, scale: 0.93, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.93, y: 12 }}
+              transition={{ type: "spring", stiffness: 340, damping: 28 }}
+              className="fixed inset-x-0 bottom-0 z-[1200] mx-auto max-w-md rounded-t-3xl bg-white/95 p-6 shadow-2xl backdrop-blur-sm"
+            >
+              {/* Handle */}
+              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200" />
+
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-wave-100 text-4xl ring-1 ring-wave-200">
+                  {pendingJoin.emoji ?? "👥"}
+                </div>
+                <div>
+                  <p className="text-sm text-slate-500">
+                    {t("groups.join.confirm.body")}
+                  </p>
+                  <h3 className="mt-0.5 font-display text-2xl font-black text-wave-900">
+                    {pendingJoin.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {pendingJoin.memberCount === 1
+                      ? t("groups.join.confirm.member_one")
+                      : t("groups.join.confirm.members", {
+                          n: pendingJoin.memberCount,
+                        })}
+                  </p>
+                </div>
+
+                <div className="mt-2 flex w-full gap-3">
+                  <Button
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => setPendingJoin(null)}
+                    disabled={busy}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    loading={busy}
+                    onClick={confirmJoin}
+                  >
+                    {t("groups.join.confirm.button")}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
@@ -258,6 +409,24 @@ function GroupDetailSheet({
   onLeave: () => void;
 }) {
   const t = useT();
+
+  function shareInviteLink() {
+    const url = `${window.location.origin}/groups?join=${group.code}`;
+    if (navigator.share) {
+      navigator
+        .share({
+          title: t("groups.share_title", { name: group.name }),
+          text: t("groups.share_text", { code: group.code }),
+          url,
+        })
+        .catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url).then(
+        () => toast.success(t("groups.link_copied")),
+        () => toast.error(t("groups.copy_failed")),
+      );
+    }
+  }
   const isLeader = group.createdBy === myUid;
   const [profiles, setProfiles] = useState<UserDoc[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
@@ -532,12 +701,20 @@ function GroupDetailSheet({
                   )}
                 </div>
               )}
-              <p className="text-[11px] text-slate-500">
+              <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
                 {group.members.length === 1
                   ? t("groups.member_one")
                   : t("groups.member_many", { n: group.members.length })}
                 {" · "}
                 <span className="font-mono tracking-wider">{group.code}</span>
+                <button
+                  onClick={shareInviteLink}
+                  className="inline-flex items-center gap-0.5 rounded-full bg-wave-50 px-2 py-0.5 text-[10px] font-medium text-wave-600 ring-1 ring-wave-200 hover:bg-wave-100"
+                  title={t("groups.share_link")}
+                >
+                  <Share2 className="h-2.5 w-2.5" />
+                  {t("groups.share_link")}
+                </button>
               </p>
             </div>
           </div>
