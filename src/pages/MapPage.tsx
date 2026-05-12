@@ -23,7 +23,15 @@ export default function MapPage() {
     lng: number;
   } | null>(null);
   const [fitToken, setFitToken] = useState(0);
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(true);
+  // Re-fit whenever the toggle changes so switching to "my places" zooms
+  // in to fit them, and switching to "all" re-centres on user position.
+  const prevShowAll = useRef(showAll);
+  useEffect(() => {
+    if (showAll === prevShowAll.current) return;
+    prevShowAll.current = showAll;
+    setFitToken((n) => n + 1);
+  }, [showAll]);
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
@@ -121,6 +129,7 @@ export default function MapPage() {
             sessionsByPlace={sessionsByPlace}
             userLocation={myLocation}
             fitToken={fitToken}
+            fitBoundsToPlaces={!showAll}
           />
         </div>
         <button

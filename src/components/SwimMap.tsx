@@ -174,6 +174,10 @@ export type SwimMapProps = {
   /** When true, suppresses the initial auto-fit-to-all-places so the
    *  map stays on the explicitly provided center/zoom. */
   skipInitialFit?: boolean;
+  /** When true, fitBounds to the supplied places on load / fitToken bump.
+   *  When false (default), the map centres on userLocation at a preset zoom
+   *  instead of zooming out to fit all places. */
+  fitBoundsToPlaces?: boolean;
   /** Optional ref that will be populated with the Leaflet Map instance,
    *  allowing the parent to call flyTo / setView imperatively. */
   mapRef?: RefObject<L.Map | null>;
@@ -222,6 +226,7 @@ export default function SwimMap({
   keepCenteredOn,
   canPickExisting,
   skipInitialFit,
+  fitBoundsToPlaces = false,
   mapRef: externalMapRef,
 }: SwimMapProps) {
   const t = useT();
@@ -279,6 +284,7 @@ export default function SwimMap({
           userLocation={userLocation ?? null}
           fitToken={fitToken}
           skipInitialFit={skipInitialFit}
+          fitBoundsToPlaces={fitBoundsToPlaces}
         />
         {keepCenteredOn ? <KeepCentered target={keepCenteredOn} /> : null}
         {userLocation ? (
@@ -293,8 +299,7 @@ export default function SwimMap({
           showCoverageOnHover={false}
           spiderfyOnMaxZoom
         >
-          {places.map((p) => {
-            const isActive = activePlaceId === p.id;
+          {places.filter((p) => p.id !== activePlaceId).map((p) => {
             const sessions = sessionsByPlace.get(p.id) ?? [];
             const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
             // When logging a swim, clicking a pickable pin selects it
@@ -306,13 +311,7 @@ export default function SwimMap({
               <Marker
                 key={p.id}
                 position={[p.lat, p.lng]}
-                icon={
-                  isActive
-                    ? activePlaceIcon
-                    : hasFreshTemp(p)
-                      ? tempIcon(p.waterTemp)
-                      : dropletIcon
-                }
+                icon={hasFreshTemp(p) ? tempIcon(p.waterTemp) : dropletIcon}
                 eventHandlers={{
                   mouseover: () => maybeRefreshPlaceTemp(p),
                   click: () => {
@@ -399,6 +398,112 @@ export default function SwimMap({
             );
           })}
         </MarkerClusterGroup>
+        {/* Active place is rendered outside the cluster group so it is never
+            merged into a cluster bubble regardless of zoom level. */}
+        {activePlaceId
+          ? places
+              .filter((p) => p.id === activePlaceId)
+              .map((p) => {
+                const sessions = sessionsByPlace.get(p.id) ?? [];
+                const photos = sessions
+                  .filter((s) => s.photoUrl)
+                  .slice(0, 6);
+                const isPickable =
+                  !!onPickExisting &&
+                  (!canPickExisting || canPickExisting(p));
+                return (
+                  <Marker
+                    key={`active-${p.id}`}
+                    position={[p.lat, p.lng]}
+                    icon={activePlaceIcon}
+                    eventHandlers={{
+                      mouseover: () => maybeRefreshPlaceTemp(p),
+                      click: () => {
+                        maybeRefreshPlaceTemp(p);
+                        if (isPickable) {
+                          mapRef.current?.closePopup();
+                          onPickExisting(p);
+                        }
+                      },
+                    }}
+                  >
+                    {hasFreshTemp(p) ? (
+                      <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
+                        <div className="text-[11px]">
+                          <span className="font-semibold text-wave-900">
+                            💧 {p.waterTemp.toFixed(1)} °C
+                          </span>
+                          {p.waterTempAt ? (
+                            <span className="ml-1 text-slate-500">
+                              · {formatAge(p.waterTempAt, t)}
+                            </span>
+                          ) : null}
+                        </div>
+                      </Tooltip>
+                    ) : null}
+                    {!isPickable ? (
+                      <Popup>
+                        <div className="text-sm">
+                          <div className="font-semibold text-wave-900">
+                            {p.name}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {sessions.length === 1
+                              ? t("map.popup.swims_one")
+                              : sessions.length > 0
+                                ? t("map.popup.swims_many", {
+                                    n: sessions.length,
+                                  })
+                                : t("map.popup.no_swims_yet")}
+                          </div>
+                          {hasFreshTemp(p) ? (
+                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                              💧 {p.waterTemp.toFixed(1)} °C
+                              {p.waterTempAt ? (
+                                <span className="font-normal text-sky-600">
+                                  · {formatAge(p.waterTempAt, t)}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {photos.length ? (
+                            <div className="mt-1.5 flex gap-1 overflow-x-auto">
+                              {photos.map((s) => (
+                                <img
+                                  key={s.id}
+                                  src={s.photoUrl}
+                                  alt=""
+                                  loading="lazy"
+                                  className="h-12 w-12 flex-none rounded-md object-cover ring-1 ring-slate-200"
+                                />
+                              ))}
+                            </div>
+                          ) : null}
+                          <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                            {sessions.slice(0, 5).map((s) => (
+                              <li key={s.id} className="text-[11px]">
+                                {formatDate(s.date)} — {s.displayName}
+                                {s.isWinter ? " ❄️" : ""}
+                              </li>
+                            ))}
+                          </ul>
+                          {linkToSpot ? (
+                            <div className="mt-1.5">
+                              <Link
+                                to={`/spot/${p.id}`}
+                                className="text-[11px] font-semibold text-wave-700 hover:underline"
+                              >
+                                {t("map.popup.see_full_history")}
+                              </Link>
+                            </div>
+                          ) : null}
+                        </div>
+                      </Popup>
+                    ) : null}
+                  </Marker>
+                );
+              })
+          : null}
         {pickedAt && !activePlaceId ? (
           <Marker position={[pickedAt.lat, pickedAt.lng]} icon={newSwimIcon} />
         ) : null}
@@ -483,11 +588,13 @@ function FitToPlaces({
   userLocation,
   fitToken,
   skipInitialFit,
+  fitBoundsToPlaces = false,
 }: {
   places: PlaceDoc[];
   userLocation: { lat: number; lng: number } | null;
   fitToken?: number;
   skipInitialFit?: boolean;
+  fitBoundsToPlaces?: boolean;
 }) {
   const map = useMap();
   const hasInitialFit = useRef(false);
@@ -505,14 +612,19 @@ function FitToPlaces({
       return;
     }
 
-    if (places.length) {
+    if (fitBoundsToPlaces && places.length) {
       const pts: [number, number][] = places.map((p) => [p.lat, p.lng]);
       if (userLocation) pts.push([userLocation.lat, userLocation.lng]);
       const bounds = L.latLngBounds(pts);
-      map.fitBounds(bounds.pad(0.25), { animate: true, maxZoom: 12 });
+      map.fitBounds(bounds.pad(0.25), { animate: true, maxZoom: 13 });
       hasInitialFit.current = true;
     } else if (userLocation) {
-      map.setView([userLocation.lat, userLocation.lng], 12, { animate: true });
+      map.setView([userLocation.lat, userLocation.lng], 11, { animate: true });
+      hasInitialFit.current = true;
+    } else if (places.length) {
+      const pts: [number, number][] = places.map((p) => [p.lat, p.lng]);
+      const bounds = L.latLngBounds(pts);
+      map.fitBounds(bounds.pad(0.25), { animate: true, maxZoom: 12 });
       hasInitialFit.current = true;
     }
   }, [places, userLocation, map, fitToken]);
