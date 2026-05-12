@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -32,8 +32,8 @@ import {
 } from "@/lib/data";
 import { useLocale } from "@/lib/i18n";
 import { COUNTRIES, flagEmoji } from "@/lib/countries";
-import { computeMyStats } from "@/lib/stats";
-import { ACHIEVEMENTS, evaluateAchievements } from "@/lib/achievements";
+import { ACHIEVEMENTS } from "@/lib/achievements";
+import type { MyStats } from "@/lib/stats";
 import { formatDate, cn } from "@/lib/utils";
 import { monthShort, useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
@@ -63,8 +63,9 @@ export default function ProfilePage() {
   const { user, profile, deleteAccount, logout } = useAuth();
   const navigate = useNavigate();
   const t = useT();
-  const mySessions = useStore((s) => s.mySessions);
-  const allSessions = useStore((s) => s.allSessions);
+  const myStats = useStore((s) => s.myStats);
+  const unlockedAchievements = useStore((s) => s.unlockedAchievements);
+  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(profile?.displayName ?? "");
@@ -112,21 +113,6 @@ export default function ProfilePage() {
       toast.error(t("profile.save_error"));
     }
   }
-
-  const stats = useMemo(() => computeMyStats(mySessions), [mySessions]);
-  const achievementCtx = useMemo(
-    () => ({ uid: user?.uid ?? "", mySessions, allSessions }),
-    [user, mySessions, allSessions],
-  );
-  const unlocked = useMemo(
-    () => evaluateAchievements(achievementCtx),
-    [achievementCtx],
-  );
-  const bonusPts = useMemo(() => {
-    let pts = 0;
-    for (const a of ACHIEVEMENTS) if (unlocked.has(a.id)) pts += a.points;
-    return pts;
-  }, [unlocked]);
 
   async function saveName(e: React.FormEvent) {
     e.preventDefault();
@@ -312,27 +298,27 @@ export default function ProfilePage() {
         <MiniCard
           icon={<Trophy className="h-3.5 w-3.5" />}
           label={t("map.stat.points")}
-          value={stats.totalPoints + bonusPts}
+          value={myStats.totalPoints + achievementBonusPoints}
         />
         <MiniCard
           icon={<Flame className="h-3.5 w-3.5" />}
           label={t("profile.stat.swims")}
-          value={stats.totalSwims}
+          value={myStats.totalSwims}
         />
         <MiniCard
           icon={<MapPin className="h-3.5 w-3.5" />}
           label={t("map.stat.spots")}
-          value={stats.uniquePlaces}
+          value={myStats.uniquePlaces}
         />
         <MiniCard
           icon={<Snowflake className="h-3.5 w-3.5" />}
           label={t("profile.stat.winter")}
-          value={stats.winterSwims}
+          value={myStats.winterSwims}
         />
       </div>
 
       {/* Shortcuts */}
-      {mySessions.length > 0 ? (
+      {myStats.totalSwims > 0 ? (
         <div className="mb-4 grid grid-cols-2 gap-2">
           <Link
             to="/recap"
@@ -359,7 +345,7 @@ export default function ProfilePage() {
               </div>
               <div className="font-display text-sm font-bold text-wave-900">
                 {t("map.achievements.count", {
-                  n: unlocked.size,
+                  n: unlockedAchievements.size,
                   total: ACHIEVEMENTS.length,
                 })}
               </div>
@@ -369,9 +355,9 @@ export default function ProfilePage() {
       ) : null}
 
       {/* Achievement chips */}
-      {/* {unlocked.size > 0 ? (
+      {/* {unlockedAchievements.size > 0 ? (
         <div className="no-scrollbar -mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4">
-          {[...unlocked]
+          {[...unlockedAchievements]
             .map((id) => ACHIEVEMENTS_BY_ID[id])
             .filter(Boolean)
             .slice(0, 12)
@@ -388,7 +374,7 @@ export default function ProfilePage() {
       ) : null} */}
 
       {/* Vibes */}
-      {mySessions.length > 0 ? <Vibes stats={stats} /> : null}
+      {myStats.totalSwims > 0 ? <Vibes stats={myStats} /> : null}
 
       {/* About + sign out */}
       <div className="mt-8 space-y-2">
@@ -478,7 +464,7 @@ function MiniCard({
   );
 }
 
-function Vibes({ stats }: { stats: ReturnType<typeof computeMyStats> }) {
+function Vibes({ stats }: { stats: MyStats }) {
   const t = useT();
 
   const streakValue =

@@ -5,18 +5,17 @@ import { Flame, MapPin, Trophy } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
-import type { SessionDoc } from "@/lib/types";
-import { computeMyStats } from "@/lib/stats";
-import { ACHIEVEMENTS, evaluateAchievements } from "@/lib/achievements";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 
 export default function MapPage() {
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const t = useT();
   const places = useStore((s) => s.places);
-  const mySessions = useStore((s) => s.mySessions);
-  const allSessions = useStore((s) => s.allSessions);
+  const myPlaces = useStore((s) => s.myPlaces);
+  const sessionsByPlace = useStore((s) => s.sessionsByPlace);
+  const myStats = useStore((s) => s.myStats);
+  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
 
   const [myLocation, setMyLocation] = useState<{
     lat: number;
@@ -42,32 +41,7 @@ export default function MapPage() {
     );
   }, []);
 
-  const stats = useMemo(() => computeMyStats(mySessions), [mySessions]);
-
-  const bonusPts = useMemo(() => {
-    const ctx = { uid: user?.uid ?? "", mySessions, allSessions };
-    const unlocked = evaluateAchievements(ctx);
-    let pts = 0;
-    for (const a of ACHIEVEMENTS) if (unlocked.has(a.id)) pts += a.points;
-    return pts;
-  }, [user, mySessions, allSessions]);
-
-  const sessionsByPlace = useMemo(() => {
-    const m = new Map<string, SessionDoc[]>();
-    for (const s of mySessions) {
-      const arr = m.get(s.placeId) ?? [];
-      arr.push(s);
-      m.set(s.placeId, arr);
-    }
-    return m;
-  }, [mySessions]);
-
-  const myPlaces = useMemo(
-    () => places.filter((p) => sessionsByPlace.has(p.id)),
-    [places, sessionsByPlace],
-  );
-
-  const totalPoints = stats.totalPoints + bonusPts;
+  const totalPoints = myStats.totalPoints + achievementBonusPoints;
 
   // Stable random seed picked once per mount — prevents re-roll on every render.
   const greetingSeed = useRef(Math.floor(Math.random() * 1000));
@@ -81,13 +55,13 @@ export default function MapPage() {
   );
 
   const subtitle =
-    mySessions.length === 0
+    myStats.totalSwims === 0
       ? t("map.empty.subtitle")
-      : stats.daysSinceLast === 0
+      : myStats.daysSinceLast === 0
         ? t("map.last.today")
-        : stats.daysSinceLast === 1
+        : myStats.daysSinceLast === 1
           ? t("map.last.yesterday")
-          : t("map.last.days", { n: stats.daysSinceLast ?? 0 });
+          : t("map.last.days", { n: myStats.daysSinceLast ?? 0 });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+6rem)] gap-3">
@@ -105,19 +79,21 @@ export default function MapPage() {
           value={totalPoints}
           icon={<Trophy className="h-4 w-4" />}
           sub={
-            bonusPts > 0 ? t("map.bonus.subtitle", { n: bonusPts }) : undefined
+            achievementBonusPoints > 0
+              ? t("map.bonus.subtitle", { n: achievementBonusPoints })
+              : undefined
           }
         />
         <Stat
           onClick={() => setFitToken((n) => n + 1)}
           label={t("map.stat.spots")}
-          value={stats.uniquePlaces}
+          value={myStats.uniquePlaces}
           icon={<MapPin className="h-4 w-4" />}
         />
         <Stat
           to="/history?view=streak"
           label={t("map.stat.streak")}
-          value={stats.currentDayStreak}
+          value={myStats.currentDayStreak}
           icon={<Flame className="h-4 w-4" />}
         />
       </div>
@@ -141,7 +117,7 @@ export default function MapPage() {
         </button>
       </div>
 
-      {mySessions.length === 0 ? (
+      {myStats.totalSwims === 0 ? (
         <p className="text-center text-xs text-slate-500">
           {t("map.empty.helper")}
         </p>

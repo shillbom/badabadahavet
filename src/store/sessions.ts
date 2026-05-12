@@ -21,7 +21,12 @@ import {
   watchUserGroups,
   watchUserSessions,
 } from "@/lib/data";
-import { evaluateAchievements } from "@/lib/achievements";
+import {
+  bonusPointsFor,
+  evaluateAchievements,
+  type AchievementContext,
+} from "@/lib/achievements";
+import { computeMyStats, type MyStats } from "@/lib/stats";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useLocale } from "@/lib/i18n";
 
@@ -29,18 +34,47 @@ import { useLocale } from "@/lib/i18n";
 // doesn't race to create a half-baked user doc in parallel.
 let signupInFlight = false;
 
+const EMPTY_STATS: MyStats = {
+  totalSwims: 0,
+  totalPoints: 0,
+  uniquePlaces: 0,
+  winterSwims: 0,
+  currentDayStreak: 0,
+  daysSinceLast: null,
+  currentWeekStreak: 0,
+  longestWeekStreak: 0,
+  favouriteSpot: null,
+  bestMonth: null,
+  range: null,
+  onThisDay: null,
+};
+
 type State = {
   // ── Auth ─────────────────────────────────────────────────────────────
   user: User | null;
   profile: UserDoc | null;
   loading: boolean;
 
-  // ── Data ─────────────────────────────────────────────────────────────
+  // ── Raw data ──────────────────────────────────────────────────────────
   myUid: string | null;
   mySessions: SessionDoc[];
   allSessions: SessionDoc[];
   places: PlaceDoc[];
   groups: GroupDoc[];
+
+  // ── Derived / pre-computed ────────────────────────────────────────────
+  /** Stats computed from the current user's sessions. */
+  myStats: MyStats;
+  /** Current user's sessions indexed by place id. */
+  sessionsByPlace: Map<string, SessionDoc[]>;
+  /** Places the current user has logged a swim at. */
+  myPlaces: PlaceDoc[];
+  /** Context object for achievement evaluation (uid + both session arrays). */
+  achievementCtx: AchievementContext;
+  /** Set of achievement ids the current user has unlocked. */
+  unlockedAchievements: Set<string>;
+  /** Total bonus points from unlocked achievements. */
+  achievementBonusPoints: number;
 
   // ── Auth actions ──────────────────────────────────────────────────────
   login: (email: string, password: string) => Promise<void>;
@@ -69,12 +103,17 @@ export const useStore = create<State>((set, get) => ({
   allSessions: [],
   places: [],
   groups: [],
+  myStats: EMPTY_STATS,
+  sessionsByPlace: new Map(),
+  myPlaces: [],
+  achievementCtx: { uid: "", mySessions: [], allSessions: [] },
+  unlockedAchievements: new Set(),
+  achievementBonusPoints: 0,
 
   // ── Auth actions ──────────────────────────────────────────────────────
-  login: (email, password) =>
-    signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password).then(
-      () => {},
-    ),
+  login: async (email, password) => {
+    await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+  },
 
   signup: async (email, password, displayName, homeCountry) => {
     signupInFlight = true;
@@ -94,10 +133,10 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  logout: () => signOut(auth),
+  logout: async () => await signOut(auth),
 
-  resetPassword: (email) =>
-    sendPasswordResetEmail(auth, email.trim().toLowerCase()),
+  resetPassword: async (email) =>
+    await sendPasswordResetEmail(auth, email.trim().toLowerCase()),
 
   deleteAccount: async () => {
     const current = auth.currentUser;
@@ -130,6 +169,12 @@ export const useStore = create<State>((set, get) => ({
           allSessions: [],
           places: [],
           groups: [],
+          myStats: EMPTY_STATS,
+          sessionsByPlace: new Map(),
+          myPlaces: [],
+          achievementCtx: { uid: "", mySessions: [], allSessions: [] },
+          unlockedAchievements: new Set(),
+          achievementBonusPoints: 0,
         });
         return;
       }
@@ -144,7 +189,7 @@ export const useStore = create<State>((set, get) => ({
       if (profile.locale) useLocale.getState().setLocale(profile.locale);
 
       dataUnsubs = [
-        // User profile — kept here so locale/display name changes propagate.
+        // User profile — so locale/display-name changes propagate live.
         onSnapshot(doc(db, "users", u.uid), (snap) => {
           if (snap.exists()) {
             const data = snap.data() as UserDoc;
@@ -156,16 +201,21 @@ export const useStore = create<State>((set, get) => ({
         }),
 
         watchUserSessions(u.uid, (mySessions) => {
-          set({ mySessions });
+          const { allSessions, places } = get();
+          set({ mySessions, ...derive(u.uid, mySessions, allSessions, places) });
           persistNewAchievements(get);
         }),
 
         watchAllSessions((allSessions) => {
-          set({ allSessions });
+          const { myUid, mySessions, places } = get();
+          set({ allSessions, ...derive(myUid ?? "", mySessions, allSessions, places) });
           persistNewAchievements(get);
         }),
 
-        watchPlaces((places) => set({ places })),
+        watchPlaces((places) => {
+          const { myUid, mySessions, allSessions } = get();
+          set({ places, ...derive(myUid ?? "", mySessions, allSessions, places) });
+        }),
 
         watchUserGroups(u.uid, (groups) => set({ groups })),
       ];
@@ -179,6 +229,41 @@ export const useStore = create<State>((set, get) => ({
 }));
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+/**
+ * Compute all derived state from raw data in one pass.
+ * Called whenever sessions or places change so every component reads
+ * pre-computed values instead of recomputing in useMemo.
+ */
+function derive(
+  uid: string,
+  mySessions: SessionDoc[],
+  allSessions: SessionDoc[],
+  places: PlaceDoc[],
+) {
+  const myStats = computeMyStats(mySessions);
+
+  const sessionsByPlace = new Map<string, SessionDoc[]>();
+  for (const s of mySessions) {
+    const arr = sessionsByPlace.get(s.placeId) ?? [];
+    arr.push(s);
+    sessionsByPlace.set(s.placeId, arr);
+  }
+
+  const myPlaces = places.filter((p) => sessionsByPlace.has(p.id));
+  const achievementCtx: AchievementContext = { uid, mySessions, allSessions };
+  const unlockedAchievements = evaluateAchievements(achievementCtx);
+  const achievementBonusPoints = bonusPointsFor(achievementCtx);
+
+  return {
+    myStats,
+    sessionsByPlace,
+    myPlaces,
+    achievementCtx,
+    unlockedAchievements,
+    achievementBonusPoints,
+  };
+}
 
 /** Persist any newly-unlocked achievements that aren't already in the profile. */
 function persistNewAchievements(get: () => State) {

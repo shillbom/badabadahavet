@@ -6,7 +6,6 @@ import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import {
   ACHIEVEMENTS,
-  evaluateAchievements,
   type Achievement,
   type AchievementContext,
 } from "@/lib/achievements";
@@ -15,37 +14,20 @@ import { useT } from "@/lib/i18n";
 
 export default function AchievementsPage() {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const t = useT();
-  const mySessions = useStore((s) => s.mySessions);
-  const allSessions = useStore((s) => s.allSessions);
-
-  const ctx = useMemo(
-    () => ({
-      uid: user?.uid ?? "",
-      mySessions,
-      allSessions,
-    }),
-    [user, mySessions, allSessions],
-  );
-
-  const unlocked = useMemo(() => evaluateAchievements(ctx), [ctx]);
+  const achievementCtx = useStore((s) => s.achievementCtx);
+  const unlockedAchievements = useStore((s) => s.unlockedAchievements);
+  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
 
   const items = useMemo(() => {
-    const sorted = [...ACHIEVEMENTS].sort((a, b) => {
-      const ua = unlocked.has(a.id);
-      const ub = unlocked.has(b.id);
+    return [...ACHIEVEMENTS].sort((a, b) => {
+      const ua = unlockedAchievements.has(a.id);
+      const ub = unlockedAchievements.has(b.id);
       if (ua !== ub) return ua ? -1 : 1;
       return a.tier - b.tier;
     });
-    return sorted;
-  }, [unlocked]);
-
-  const totalBonus = useMemo(() => {
-    let pts = 0;
-    for (const a of ACHIEVEMENTS) if (unlocked.has(a.id)) pts += a.points;
-    return pts;
-  }, [unlocked]);
+  }, [unlockedAchievements]);
 
   return (
     <div className="px-4 pb-12 pt-2">
@@ -63,9 +45,9 @@ export default function AchievementsPage() {
           </h2>
           <p className="text-xs text-slate-500">
             {t("achievements.summary", {
-              n: unlocked.size,
+              n: unlockedAchievements.size,
               total: ACHIEVEMENTS.length,
-              pts: totalBonus,
+              pts: achievementBonusPoints,
             })}
           </p>
         </div>
@@ -76,9 +58,9 @@ export default function AchievementsPage() {
           <Row
             key={a.id}
             achievement={a}
-            unlocked={unlocked.has(a.id)}
+            unlocked={unlockedAchievements.has(a.id)}
             unlockedAt={profile?.achievements?.[a.id]}
-            ctx={ctx}
+            ctx={achievementCtx}
             index={i}
           />
         ))}
