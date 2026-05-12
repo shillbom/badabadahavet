@@ -81,6 +81,10 @@ export default function LogSessionPage() {
   // check for the current "now" mode entry. Reset each time the user
   // re-enters now mode so we run once per session.
   const autoPickedNowRef = useRef(false);
+  // Set when the user explicitly clicks the "now" tab — suppresses the
+  // auto-fallback to "pick" mode when no nearby place is found so the
+  // user's intentional choice is respected.
+  const intentionalNowRef = useRef(false);
 
   // Geolocate once just for sorting search results by distance — works
   // even in "pick" mode where coords aren't auto-set from geolocation.
@@ -141,9 +145,10 @@ export default function LogSessionPage() {
       setCoords({ lat: best.p.lat, lng: best.p.lng });
       setName(best.p.name);
       setPickedPlaceId(best.p.id);
-    } else if (places.length > 0) {
+    } else if (places.length > 0 && !intentionalNowRef.current) {
       // Nothing within 200 m — switch to pick-on-map so the user can
-      // drop a pin at their actual location.
+      // drop a pin at their actual location. Skip when the user explicitly
+      // chose "now" mode so their intentional choice is respected.
       setMode("pick");
     }
   }, [mode, coords, places, pickedPlaceId]);
@@ -310,7 +315,7 @@ export default function LogSessionPage() {
         <button
           type="button"
           data-active={mode === "now"}
-          onClick={() => setMode("now")}
+          onClick={() => { intentionalNowRef.current = true; setMode("now"); }}
           className="pill-tab"
         >
           <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
@@ -318,7 +323,7 @@ export default function LogSessionPage() {
         <button
           type="button"
           data-active={mode === "pick"}
-          onClick={() => setMode("pick")}
+          onClick={() => { intentionalNowRef.current = false; setMode("pick"); }}
           className="pill-tab"
         >
           <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
