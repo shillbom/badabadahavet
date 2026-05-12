@@ -12,7 +12,8 @@
     "format:check": "prettier --check .",
     "emulators": "firebase emulators:start",
     "seed:badplatser": "node scripts/seed-badplatser.mjs",
-    "update:temperatures": "node scripts/update-temperatures.mjs"
+    "update:temperatures": "node scripts/update-temperatures.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -38,11 +39,17 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "firebase-admin": "^13.9.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.4",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.12",
     "vite-plugin-pwa": "^1.3.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,json,css}": "prettier --check",
+    "*.{ts,tsx}": "bash -c 'tsc -b --noEmit'"
   }
 }
