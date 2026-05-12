@@ -668,11 +668,6 @@ function FitToPlaces({
     } else if (userLocation) {
       map.setView([userLocation.lat, userLocation.lng], 11, { animate: true });
       fittedMaps.add(container);
-    } else if (places.length) {
-      const pts: [number, number][] = places.map((p) => [p.lat, p.lng]);
-      const bounds = L.latLngBounds(pts);
-      map.fitBounds(bounds.pad(0.25), { animate: true, maxZoom: 12 });
-      fittedMaps.add(container);
     }
   }, [places, userLocation, map, fitToken]);
   return null;
