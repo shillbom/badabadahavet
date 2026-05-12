@@ -48,7 +48,7 @@ export default function LeaderboardPage() {
         <span className="chip">{t("leaderboard.year_only", { year })}</span>
       </div>
 
-      <div className="no-scrollbar -mx-4 py-1 mb-3 flex gap-2 overflow-x-auto px-4">
+      <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 py-1">
         <ScopeChip
           label={t("leaderboard.scope.global")}
           active={scope === "global"}
@@ -106,7 +106,7 @@ export default function LeaderboardPage() {
                   <div className="truncate font-semibold text-wave-900">
                     {r.displayName}
                     {isMe ? (
-                      <span className="ml-2 rounded-full bg-wave-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-wave-700">
+                      <span className="ml-2 rounded-full bg-wave-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-wave-700 uppercase">
                         {t("common.you")}
                       </span>
                     ) : null}

@@ -1,12 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  Award,
-} from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Award } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { startOfYear, endOfYear } from "@/lib/scoring";
@@ -59,10 +54,7 @@ export default function RecapPage() {
     }),
     [user, yearSessions, allSessions, startTs, endTs],
   );
-  const unlockedYear = useMemo(
-    () => evaluateAchievements(ctxYear),
-    [ctxYear],
-  );
+  const unlockedYear = useMemo(() => evaluateAchievements(ctxYear), [ctxYear]);
 
   const yearBonus = useMemo(() => {
     let pts = 0;
@@ -167,7 +159,9 @@ export default function RecapPage() {
       {
         kind: "achievements",
         title: t("recap.achievements.title"),
-        subtitle: t("recap.achievements.subtitle", { n: earnedThisYear.length }),
+        subtitle: t("recap.achievements.subtitle", {
+          n: earnedThisYear.length,
+        }),
         accent: "🏅",
         ids: earnedThisYear,
       },
@@ -191,7 +185,7 @@ export default function RecapPage() {
   };
 
   return (
-    <div className="relative min-h-[calc(100dvh-4rem)] overflow-hidden px-4 pb-12 pt-2">
+    <div className="relative min-h-[calc(100dvh-4rem)] overflow-hidden px-4 pt-2 pb-12">
       <ConfettiBackdrop />
       <div className="relative z-10 mb-3 flex items-center gap-2">
         <button
@@ -304,12 +298,17 @@ function SlideCard({ slide }: { slide: Slide }) {
       <motion.div
         initial={{ scale: 0.6, rotate: -10 }}
         animate={{ scale: 1, rotate: 0 }}
-        transition={{ type: "spring", stiffness: 300, damping: 16, delay: 0.05 }}
+        transition={{
+          type: "spring",
+          stiffness: 300,
+          damping: 16,
+          delay: 0.05,
+        }}
         className="text-7xl drop-shadow"
       >
         {slide.accent}
       </motion.div>
-      <div className="text-[11px] font-semibold uppercase tracking-widest text-wave-700">
+      <div className="text-[11px] font-semibold tracking-widest text-wave-700 uppercase">
         {slide.title}
       </div>
 
@@ -422,7 +421,7 @@ function ConfettiBackdrop() {
             repeat: Infinity,
             ease: "linear",
           }}
-          className="absolute select-none text-lg"
+          className="absolute text-lg select-none"
           style={{ left: `${left}%` }}
         >
           {emojis[key % emojis.length]}

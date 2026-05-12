@@ -128,7 +128,7 @@ export default function LoginPage() {
   return (
     <div className="relative flex min-h-[100dvh] flex-col items-center justify-center px-5 py-10">
       <Ripples />
-      <div className="absolute right-3 top-[max(env(safe-area-inset-top),0.75rem)] z-10 flex items-center gap-2">
+      <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 z-10 flex items-center gap-2">
         <button
           type="button"
           onClick={() => navigate("/about")}
@@ -150,7 +150,7 @@ export default function LoginPage() {
           alt="Badligan"
           width="80"
           height="80"
-          className="mb-3 h-20 w-20 rounded-2xl shadow-lg shadow-wave-700/30 animate-bob"
+          className="mb-3 h-20 w-20 animate-bob rounded-2xl shadow-lg shadow-wave-700/30"
         />
         <h1 className="font-display text-4xl font-black text-wave-900">
           {t("app.name")}
@@ -168,7 +168,7 @@ export default function LoginPage() {
           stiffness: 200,
           damping: 22,
         }}
-        className="z-10 mt-8 w-full max-w-sm space-y-4 glass p-5"
+        className="glass z-10 mt-8 w-full max-w-sm space-y-4 p-5"
       >
         <div className="flex rounded-full bg-slate-100 p-1">
           <button
@@ -231,7 +231,7 @@ export default function LoginPage() {
                 id="home-country"
                 value={homeCountry}
                 onChange={(e) => setHomeCountry(e.target.value, true)}
-                className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-wave-400 focus:outline-none focus:ring-2 focus:ring-wave-200"
+                className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"
               >
                 {COUNTRIES.map((c) => (
                   <option key={c.code} value={c.code}>
@@ -324,7 +324,7 @@ export default function LoginPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setTermsOpen(false)}
-            className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm px-4"
+            className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm"
           >
             <motion.div
               key="terms-modal"
@@ -350,7 +350,7 @@ export default function LoginPage() {
               </div>
               <div className="max-h-[60vh] overflow-y-auto px-4 py-3 text-sm leading-relaxed text-slate-700">
                 <p className="mb-3">{t("terms.intro")}</p>
-                <ul className="space-y-2 list-disc pl-5">
+                <ul className="list-disc space-y-2 pl-5">
                   <li>{t("terms.cookies")}</li>
                   <li>{t("terms.email")}</li>
                   <li>{t("terms.storage")}</li>
@@ -397,7 +397,7 @@ function Ripples() {
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="absolute left-1/2 top-1/3 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-wave-300/60 animate-ripple"
+          className="absolute top-1/3 left-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 animate-ripple rounded-full border border-wave-300/60"
           style={{ animationDelay: `${i * 0.6}s` }}
         />
       ))}

@@ -64,7 +64,7 @@ export default function MapPage() {
           : t("map.last.days", { n: myStats.daysSinceLast ?? 0 });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+6rem)] gap-3">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+6rem)]">
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <h2 className="font-display text-2xl font-black text-wave-900">
           {greeting}
@@ -98,7 +98,7 @@ export default function MapPage() {
         />
       </div>
 
-      <div className="relative flex-1 min-h-0 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
         <div className="absolute inset-0">
           <SwimMap
             places={showAll ? places : myPlaces}
@@ -111,7 +111,7 @@ export default function MapPage() {
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
-          className="absolute right-3 top-3 z-[600] flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-wave-700 shadow-md ring-1 ring-slate-200 transition active:scale-95 hover:bg-white"
+          className="absolute top-3 right-3 z-[600] flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
         >
           {showAll ? t("map.show.mine") : t("map.show.all")}
         </button>
@@ -143,7 +143,7 @@ function Stat({
 }) {
   const inner = (
     <>
-      <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-wave-700">
+      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-wave-700 uppercase">
         {icon}
         {label}
       </div>

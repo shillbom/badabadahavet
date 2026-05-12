@@ -20,5 +20,14 @@ export function useAuth() {
   const logout = useStore((s) => s.logout);
   const resetPassword = useStore((s) => s.resetPassword);
   const deleteAccount = useStore((s) => s.deleteAccount);
-  return { user, profile, loading, login, signup, logout, resetPassword, deleteAccount };
+  return {
+    user,
+    profile,
+    loading,
+    login,
+    signup,
+    logout,
+    resetPassword,
+    deleteAccount,
+  };
 }

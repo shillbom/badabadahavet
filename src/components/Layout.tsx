@@ -38,7 +38,7 @@ export default function Layout() {
   const isMapPage = location.pathname === "/";
 
   return (
-    <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:backdrop-blur-sm md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)]">
+    <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm">
       <header className="sticky top-0 z-[1000] flex items-center justify-between bg-gradient-to-b from-white/80 to-transparent px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 backdrop-blur-sm">
         <Link to="/profile" className="flex items-center gap-2">
           <motion.div
@@ -50,12 +50,12 @@ export default function Layout() {
             <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
             <div>
               <div className="flex items-center gap-1.5">
-                <div className="font-display text-base font-bold leading-none text-wave-900">
+                <div className="font-display text-base leading-none font-bold text-wave-900">
                   {profile?.displayName ?? t("layout.swimmer")}
                 </div>
                 {profile?.isAdmin ? (
                   <span
-                    className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white shadow"
+                    className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-white uppercase shadow"
                     title={t("admin.label")}
                   >
                     {t("admin.label")}
@@ -107,7 +107,7 @@ export default function Layout() {
         {!hideChrome ? (
           <div
             key="fab-shell"
-            className="fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center pointer-events-none"
+            className="pointer-events-none fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center"
           >
             <motion.button
               initial={{ y: 80, opacity: 0 }}
@@ -138,7 +138,7 @@ export default function Layout() {
             animate={{ y: 0 }}
             exit={{ y: 80 }}
             transition={{ type: "spring", stiffness: 280, damping: 28 }}
-            className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur"
+            className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] backdrop-blur"
           >
             <NavTab
               to="/"

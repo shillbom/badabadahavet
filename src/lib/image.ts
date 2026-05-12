@@ -36,7 +36,11 @@ export async function compressImage(
   try {
     const bitmap = await loadBitmap(file);
     const { width, height } = scaleToFit(bitmap.width, bitmap.height, maxEdge);
-    if (width >= bitmap.width && height >= bitmap.height && file.size <= 1.5 * 1024 * 1024) {
+    if (
+      width >= bitmap.width &&
+      height >= bitmap.height &&
+      file.size <= 1.5 * 1024 * 1024
+    ) {
       // Already within bounds and not enormous — don't bother re-encoding.
       if ("close" in bitmap) bitmap.close();
       return file;

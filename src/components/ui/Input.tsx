@@ -10,7 +10,7 @@ export const Input = React.forwardRef<
     className={cn(
       "h-11 w-full rounded-xl border border-slate-200 bg-white/90 px-3.5 text-sm shadow-sm",
       "placeholder:text-slate-400",
-      "focus:border-wave-500 focus:outline-none focus:ring-2 focus:ring-wave-200",
+      "focus:border-wave-500 focus:ring-2 focus:ring-wave-200 focus:outline-none",
       "disabled:cursor-not-allowed disabled:opacity-60",
       className,
     )}
@@ -28,7 +28,7 @@ export const Textarea = React.forwardRef<
     className={cn(
       "w-full rounded-xl border border-slate-200 bg-white/90 px-3.5 py-2.5 text-sm shadow-sm",
       "placeholder:text-slate-400",
-      "focus:border-wave-500 focus:outline-none focus:ring-2 focus:ring-wave-200",
+      "focus:border-wave-500 focus:ring-2 focus:ring-wave-200 focus:outline-none",
       className,
     )}
     {...props}
@@ -44,7 +44,7 @@ export function Label({
   return (
     <label
       className={cn(
-        "text-xs font-medium uppercase tracking-wide text-slate-500",
+        "text-xs font-medium tracking-wide text-slate-500 uppercase",
         className,
       )}
       {...props}

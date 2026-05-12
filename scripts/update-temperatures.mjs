@@ -65,7 +65,12 @@ async function fetchTemp(nutsCode) {
       data?.temperature ??
       data?.celsius;
     const temp = typeof raw === "string" ? Number(raw) : raw;
-    if (typeof temp !== "number" || Number.isNaN(temp) || temp < -5 || temp > 40) {
+    if (
+      typeof temp !== "number" ||
+      Number.isNaN(temp) ||
+      temp < -5 ||
+      temp > 40
+    ) {
       return null;
     }
     const stampRaw =
@@ -90,10 +95,7 @@ async function main() {
   console.log(`→ mode:    ${WRITE ? "WRITE" : "dry-run (no writes)"}`);
 
   console.log("→ loading seeded places…");
-  const snap = await db
-    .collection("places")
-    .where("seeded", "==", true)
-    .get();
+  const snap = await db.collection("places").where("seeded", "==", true).get();
   const seeded = snap.docs.filter((d) => d.data().externalId);
   console.log(`→ ${seeded.length} seeded places with externalId`);
 
@@ -129,10 +131,7 @@ async function main() {
       continue;
     }
     // Skip if the stored reading is already the same and recent.
-    if (
-      data.waterTemp === reading.temp &&
-      data.waterTempAt === reading.stamp
-    ) {
+    if (data.waterTemp === reading.temp && data.waterTempAt === reading.stamp) {
       skipped++;
       writeProgress();
       await sleep(REQUEST_DELAY_MS);

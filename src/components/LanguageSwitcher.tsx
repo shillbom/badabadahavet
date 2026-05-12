@@ -7,7 +7,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex rounded-full bg-white/80 p-0.5 text-[11px] font-bold uppercase tracking-wide shadow-sm ring-1 ring-white/70",
+        "flex rounded-full bg-white/80 p-0.5 text-[11px] font-bold tracking-wide uppercase shadow-sm ring-1 ring-white/70",
         className,
       )}
       role="group"

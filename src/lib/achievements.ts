@@ -272,8 +272,7 @@ export const ACHIEVEMENTS: Achievement[] = [
     points: 3,
     tier: 2,
     test: (c) => countByHour(c.mySessions, (h) => h >= 20) >= 3,
-    progress: (c) =>
-      Math.min(1, countByHour(c.mySessions, (h) => h >= 20) / 3),
+    progress: (c) => Math.min(1, countByHour(c.mySessions, (h) => h >= 20) / 3),
   }),
   ach({
     id: "ALL_SEASONS",

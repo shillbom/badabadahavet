@@ -206,7 +206,7 @@ export default function HistoryPage() {
                   <img
                     src={s.photoUrl}
                     alt=""
-                    className="h-20 w-20 m-2 rounded-lg flex-none object-cover"
+                    className="m-2 h-20 w-20 flex-none rounded-lg object-cover"
                   />
                 ) : (
                   <div className="flex h-20 w-20 flex-none items-center justify-center bg-wave-100 text-3xl">

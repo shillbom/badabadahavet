@@ -234,7 +234,10 @@ export const leaveGroup = onCall(
       const uid = req.auth.uid;
 
       if (!Array.isArray(data.members) || !data.members.includes(uid)) {
-        throw new HttpsError("permission-denied", "Not a member of this group.");
+        throw new HttpsError(
+          "permission-denied",
+          "Not a member of this group.",
+        );
       }
 
       const remaining = data.members.filter((m) => m !== uid);

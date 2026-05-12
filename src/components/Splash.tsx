@@ -30,7 +30,7 @@ export function FullSplash() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="font-display text-sm font-bold uppercase tracking-widest text-wave-700"
+        className="font-display text-sm font-bold tracking-widest text-wave-700 uppercase"
       >
         Badligan
       </motion.div>

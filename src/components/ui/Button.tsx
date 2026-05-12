@@ -20,8 +20,7 @@ const sizeStyles: Record<Size, string> = {
   icon: "h-10 w-10 p-0",
 };
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
   loading?: boolean;
@@ -45,7 +44,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       disabled={disabled || loading}
       className={cn(
         "inline-flex items-center justify-center gap-2 rounded-full font-medium transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wave-500 focus-visible:ring-offset-2",
+        "focus-visible:ring-2 focus-visible:ring-wave-500 focus-visible:ring-offset-2 focus-visible:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-60",
         variantStyles[variant],
         sizeStyles[size],

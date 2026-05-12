@@ -295,7 +295,7 @@ export default function LogSessionPage() {
   }, [allSessions]);
 
   return (
-    <form onSubmit={submit} className="px-4 pb-10 pt-2">
+    <form onSubmit={submit} className="px-4 pt-2 pb-10">
       <div className="mb-3 flex items-center justify-between">
         <button
           type="button"
@@ -315,7 +315,10 @@ export default function LogSessionPage() {
         <button
           type="button"
           data-active={mode === "now"}
-          onClick={() => { intentionalNowRef.current = true; setMode("now"); }}
+          onClick={() => {
+            intentionalNowRef.current = true;
+            setMode("now");
+          }}
           className="pill-tab"
         >
           <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
@@ -323,7 +326,10 @@ export default function LogSessionPage() {
         <button
           type="button"
           data-active={mode === "pick"}
-          onClick={() => { intentionalNowRef.current = false; setMode("pick"); }}
+          onClick={() => {
+            intentionalNowRef.current = false;
+            setMode("pick");
+          }}
           className="pill-tab"
         >
           <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
@@ -340,7 +346,7 @@ export default function LogSessionPage() {
         >
           {mode === "pick" ? (
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 placeholder={t("log.search.placeholder")}
                 value={search}
@@ -348,7 +354,7 @@ export default function LogSessionPage() {
                 className="pl-9 shadow-sm"
               />
               {searchMatches.length > 0 ? (
-                <ul className="absolute left-0 right-0 top-full z-[1100] mt-1 overflow-hidden rounded-xl bg-white/95 shadow-md ring-1 ring-slate-200">
+                <ul className="absolute top-full right-0 left-0 z-[1100] mt-1 overflow-hidden rounded-xl bg-white/95 shadow-md ring-1 ring-slate-200">
                   {searchMatches.map((p) => {
                     const origin = coords ?? searchOrigin;
                     const dist = origin ? haversineMeters(origin, p) : null;
@@ -505,7 +511,7 @@ export default function LogSessionPage() {
                     setPickedPlaceId(null);
                     setName("");
                   }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50"
+                  className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50"
                   aria-label={t("log.field.spot_name.unlock")}
                   title={t("log.field.spot_name.unlock")}
                 >
@@ -586,7 +592,7 @@ export default function LogSessionPage() {
                 <button
                   type="button"
                   onClick={clearPhoto}
-                  className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-white"
+                  className="absolute top-2 right-2 rounded-full bg-black/60 p-1 text-white"
                   aria-label={t("log.remove_photo")}
                 >
                   <X className="h-3.5 w-3.5" />

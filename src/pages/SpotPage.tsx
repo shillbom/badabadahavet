@@ -153,7 +153,7 @@ export default function SpotPage() {
   }
 
   return (
-    <div className="px-4 pb-12 pt-2">
+    <div className="px-4 pt-2 pb-12">
       <div className="mb-3 flex items-center gap-2">
         <button
           onClick={() => navigate(-1)}
@@ -198,7 +198,7 @@ export default function SpotPage() {
 
       {isAdmin ? (
         <div className="mt-3 flex flex-wrap gap-2 rounded-2xl bg-amber-50/80 p-2 ring-1 ring-amber-200">
-          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-white">
+          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold tracking-widest text-white uppercase">
             {t("admin.label")}
           </span>
           <button
@@ -261,7 +261,7 @@ export default function SpotPage() {
                     e.stopPropagation();
                     onAdminRemovePhoto(s.id);
                   }}
-                  className="absolute right-1 top-1 rounded-full bg-rose-600/90 p-1 text-white shadow ring-1 ring-white/30"
+                  className="absolute top-1 right-1 rounded-full bg-rose-600/90 p-1 text-white shadow ring-1 ring-white/30"
                   aria-label={t("admin.remove_photo")}
                   title={t("admin.remove_photo")}
                 >
@@ -288,7 +288,7 @@ export default function SpotPage() {
       </div>
 
       {stats.topSwimmer ? (
-        <div className="mt-3 glass flex items-center gap-3 p-3">
+        <div className="glass mt-3 flex items-center gap-3 p-3">
           <Sparkles className="h-4 w-4 text-amber-500" />
           <div className="text-sm text-wave-900">
             {t("spot.top_swimmer", {
@@ -299,7 +299,7 @@ export default function SpotPage() {
         </div>
       ) : null}
 
-      <h3 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <h3 className="mt-5 mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
         {scope === "all" ? t("spot.recent_dips") : t("spot.group_dips")}
       </h3>
       <ul className="space-y-2">
@@ -431,7 +431,7 @@ function Lightbox({
         >
           <button
             onClick={onClose}
-            className="absolute right-4 top-[max(env(safe-area-inset-top),1rem)] rounded-full bg-white/10 p-2 text-white"
+            className="absolute top-[max(env(safe-area-inset-top),1rem)] right-4 rounded-full bg-white/10 p-2 text-white"
             aria-label={t("common.close")}
           >
             <X className="h-4 w-4" />
@@ -470,7 +470,7 @@ function Stat({
 }) {
   return (
     <div className="glass flex flex-col items-start gap-0.5 px-3 py-2">
-      <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-wave-700">
+      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-wave-700 uppercase">
         {icon}
         {label}
       </div>

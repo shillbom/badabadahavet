@@ -231,7 +231,7 @@ export default function GroupsPage() {
       </motion.form>
 
       <div className="mb-2 flex items-baseline justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
           {t("groups.your_groups")}
         </h3>
         <span className="text-[11px] text-slate-400">
@@ -252,7 +252,7 @@ export default function GroupsPage() {
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4, scale: 0.97 }}
-                className="glass flex items-center gap-3 p-3 cursor-pointer hover:bg-white/60 transition-colors"
+                className="glass flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-white/60"
                 onClick={() => setOpenGroup(g)}
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-wave-100 text-xl">
@@ -575,8 +575,8 @@ function GroupDetailSheet({
           <div className="h-1 w-10 rounded-full bg-slate-300" />
         </div>
         {/* Header */}
-        <div className="flex items-start justify-between px-5 pb-3 pt-1 gap-3">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3 px-5 pt-1 pb-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             {/* Group emoji / picker trigger */}
             <div className="relative flex-none">
               <button
@@ -726,7 +726,7 @@ function GroupDetailSheet({
 
         {/* Member list */}
         <div className="overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),1.5rem)]">
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
             {t("groups.detail.members")}
           </h4>
           {loadingProfiles ? (
@@ -751,13 +751,13 @@ function GroupDetailSheet({
                     <div className="relative flex h-8 w-8 flex-none items-center justify-center rounded-full bg-wave-100 text-lg">
                       {member.emoji ?? "🌊"}
                       {i === 0 && (
-                        <span className="absolute -right-1 -top-1 text-[10px]">
+                        <span className="absolute -top-1 -right-1 text-[10px]">
                           🥇
                         </span>
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 truncate font-semibold text-wave-900 text-sm">
+                      <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-wave-900">
                         {member.displayName}
                         {isMe && (
                           <span className="text-[10px] text-wave-500">
@@ -765,7 +765,7 @@ function GroupDetailSheet({
                           </span>
                         )}
                         {member.uid === group.createdBy && (
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-700">
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-700 uppercase">
                             {t("groups.founder")}
                           </span>
                         )}
@@ -892,7 +892,7 @@ function MemberMapSheet({
         <div className="flex justify-center pt-3 pb-1">
           <div className="h-1 w-10 rounded-full bg-slate-300" />
         </div>
-        <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-1">
+        <div className="flex items-center justify-between gap-3 px-5 pt-1 pb-3">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-wave-100 text-xl">
               {member.emoji ?? "🌊"}

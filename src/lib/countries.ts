@@ -17,7 +17,14 @@ export const COUNTRIES: { code: string; name: string }[] = [
 
 /** Countries cold enough for the B/C/D winter brackets to apply. */
 export const COLD_CLIMATE_COUNTRIES = new Set([
-  "SE", "NO", "DK", "FI", "IS", "EE", "LV", "LT",
+  "SE",
+  "NO",
+  "DK",
+  "FI",
+  "IS",
+  "EE",
+  "LV",
+  "LT",
 ]);
 
 /** Convert a 2-letter country code to its flag emoji (regional indicators). */
@@ -27,13 +34,17 @@ export function flagEmoji(code: string): string {
   const A = 0x1f1e6;
   const a = "A".charCodeAt(0);
   const cc = code.toUpperCase();
-  return String.fromCodePoint(A + (cc.charCodeAt(0) - a)) +
-    String.fromCodePoint(A + (cc.charCodeAt(1) - a));
+  return (
+    String.fromCodePoint(A + (cc.charCodeAt(0) - a)) +
+    String.fromCodePoint(A + (cc.charCodeAt(1) - a))
+  );
 }
 
 export function detectBrowserCountry(): string | null {
   if (typeof navigator === "undefined") return null;
-  const langs = navigator.languages?.length ? navigator.languages : [navigator.language];
+  const langs = navigator.languages?.length
+    ? navigator.languages
+    : [navigator.language];
   for (const l of langs) {
     const m = /[-_]([A-Za-z]{2})$/.exec(l ?? "");
     if (m) return m[1].toUpperCase();

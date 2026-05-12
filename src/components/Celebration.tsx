@@ -5,15 +5,17 @@ import type { Achievement } from "@/lib/achievements";
 import { Sparkles } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
-type Splash = {
-  kind: "swim";
-  points: number;
-  isNewSpot: boolean;
-  isWinter: boolean;
-} | {
-  kind: "achievement";
-  achievement: Achievement;
-};
+type Splash =
+  | {
+      kind: "swim";
+      points: number;
+      isNewSpot: boolean;
+      isWinter: boolean;
+    }
+  | {
+      kind: "achievement";
+      achievement: Achievement;
+    };
 
 type State = {
   queue: Splash[];
@@ -29,7 +31,9 @@ export const useCelebration = create<State>((set) => ({
 
 export const celebrate = {
   swim: (points: number, isNewSpot: boolean, isWinter: boolean) =>
-    useCelebration.getState().show({ kind: "swim", points, isNewSpot, isWinter }),
+    useCelebration
+      .getState()
+      .show({ kind: "swim", points, isNewSpot, isWinter }),
   achievement: (achievement: Achievement) =>
     useCelebration.getState().show({ kind: "achievement", achievement }),
 };
@@ -77,11 +81,7 @@ function emojiFor(s: Splash): string {
   return "💧";
 }
 
-function SwimSplash({
-  data,
-}: {
-  data: Extract<Splash, { kind: "swim" }>;
-}) {
+function SwimSplash({ data }: { data: Extract<Splash, { kind: "swim" }> }) {
   const t = useT();
   return (
     <motion.div
@@ -143,13 +143,18 @@ function AchievementSplash({
       className="pointer-events-auto relative max-w-xs"
     >
       <div className="relative flex flex-col items-center rounded-3xl bg-gradient-to-br from-amber-200 via-white to-wave-200 p-6 shadow-2xl ring-1 ring-amber-300/60">
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white shadow">
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-3 py-1 text-[10px] font-bold tracking-widest text-white uppercase shadow">
           {t("achievements.unlocked_label")}
         </div>
         <motion.div
           initial={{ y: 14, scale: 0.7, rotate: -6 }}
           animate={{ y: 0, scale: 1, rotate: 0 }}
-          transition={{ type: "spring", stiffness: 240, damping: 14, delay: 0.1 }}
+          transition={{
+            type: "spring",
+            stiffness: 240,
+            damping: 14,
+            delay: 0.1,
+          }}
           className="mt-2 flex h-24 w-24 items-center justify-center rounded-full bg-white text-5xl shadow-inner ring-4 ring-amber-300/70"
         >
           {data.achievement.emoji}
@@ -184,7 +189,7 @@ function Particles({ emoji }: { emoji: string }) {
             initial={{ x: 0, y: 0, opacity: 0, scale: 0.6 }}
             animate={{ x, y, opacity: [0, 1, 0], scale: [0.6, 1.1, 0.6] }}
             transition={{ duration: 1.4, delay: i * 0.02, ease: "easeOut" }}
-            className="absolute left-1/2 top-1/2 select-none text-2xl"
+            className="absolute top-1/2 left-1/2 text-2xl select-none"
           >
             {emoji}
           </motion.span>

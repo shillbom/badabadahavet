@@ -289,7 +289,10 @@ export async function createGroup(opts: {
   let codeFound = false;
   for (let i = 0; i < 5; i++) {
     const taken = await lookupGroupByCode(code);
-    if (!taken) { codeFound = true; break; }
+    if (!taken) {
+      codeFound = true;
+      break;
+    }
     code = generateGroupCode();
   }
   if (!codeFound) throw new Error("Could not generate a unique group code.");
@@ -307,9 +310,7 @@ export async function createGroup(opts: {
 }
 
 /** Preview a group without joining — returns name/emoji/memberCount or null. */
-export async function lookupGroupByCode(
-  code: string,
-): Promise<{
+export async function lookupGroupByCode(code: string): Promise<{
   id: string;
   name: string;
   emoji: string | null;

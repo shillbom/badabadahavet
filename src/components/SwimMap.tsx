@@ -299,104 +299,110 @@ export default function SwimMap({
           showCoverageOnHover={false}
           spiderfyOnMaxZoom
         >
-          {places.filter((p) => p.id !== activePlaceId).map((p) => {
-            const sessions = sessionsByPlace.get(p.id) ?? [];
-            const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
-            // When logging a swim, clicking a pickable pin selects it
-            // immediately — no popup button needed.
-            const isPickable =
-              !!onPickExisting && (!canPickExisting || canPickExisting(p));
+          {places
+            .filter((p) => p.id !== activePlaceId)
+            .map((p) => {
+              const sessions = sessionsByPlace.get(p.id) ?? [];
+              const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
+              // When logging a swim, clicking a pickable pin selects it
+              // immediately — no popup button needed.
+              const isPickable =
+                !!onPickExisting && (!canPickExisting || canPickExisting(p));
 
-            return (
-              <Marker
-                key={p.id}
-                position={[p.lat, p.lng]}
-                icon={hasFreshTemp(p) ? tempIcon(p.waterTemp) : dropletIcon}
-                eventHandlers={{
-                  mouseover: () => maybeRefreshPlaceTemp(p),
-                  click: () => {
-                    maybeRefreshPlaceTemp(p);
-                    if (isPickable) {
-                      mapRef.current?.closePopup();
-                      onPickExisting(p);
-                    }
-                  },
-                }}
-              >
-                {hasFreshTemp(p) ? (
-                  <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
-                    <div className="text-[11px]">
-                      <span className="font-semibold text-wave-900">
-                        💧 {p.waterTemp.toFixed(1)} °C
-                      </span>
-                      {p.waterTempAt ? (
-                        <span className="ml-1 text-slate-500">
-                          · {formatAge(p.waterTempAt, t)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </Tooltip>
-                ) : null}
-                {/* Only show popup when not in logging mode — clicking a
-                    pin while logging selects it immediately instead. */}
-                {!isPickable ? (
-                  <Popup>
-                    <div className="text-sm">
-                      <div className="font-semibold text-wave-900">{p.name}</div>
-                      <div className="text-[11px] text-slate-500">
-                        {sessions.length === 1
-                          ? t("map.popup.swims_one")
-                          : sessions.length > 0
-                            ? t("map.popup.swims_many", { n: sessions.length })
-                            : t("map.popup.no_swims_yet")}
-                      </div>
-                      {hasFreshTemp(p) ? (
-                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+              return (
+                <Marker
+                  key={p.id}
+                  position={[p.lat, p.lng]}
+                  icon={hasFreshTemp(p) ? tempIcon(p.waterTemp) : dropletIcon}
+                  eventHandlers={{
+                    mouseover: () => maybeRefreshPlaceTemp(p),
+                    click: () => {
+                      maybeRefreshPlaceTemp(p);
+                      if (isPickable) {
+                        mapRef.current?.closePopup();
+                        onPickExisting(p);
+                      }
+                    },
+                  }}
+                >
+                  {hasFreshTemp(p) ? (
+                    <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
+                      <div className="text-[11px]">
+                        <span className="font-semibold text-wave-900">
                           💧 {p.waterTemp.toFixed(1)} °C
-                          {p.waterTempAt ? (
-                            <span className="font-normal text-sky-600">
-                              · {formatAge(p.waterTempAt, t)}
-                            </span>
-                          ) : null}
+                        </span>
+                        {p.waterTempAt ? (
+                          <span className="ml-1 text-slate-500">
+                            · {formatAge(p.waterTempAt, t)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </Tooltip>
+                  ) : null}
+                  {/* Only show popup when not in logging mode — clicking a
+                    pin while logging selects it immediately instead. */}
+                  {!isPickable ? (
+                    <Popup>
+                      <div className="text-sm">
+                        <div className="font-semibold text-wave-900">
+                          {p.name}
                         </div>
-                      ) : null}
-                      {photos.length ? (
-                        <div className="mt-1.5 flex gap-1 overflow-x-auto">
-                          {photos.map((s) => (
-                            <img
-                              key={s.id}
-                              src={s.photoUrl}
-                              alt=""
-                              loading="lazy"
-                              className="h-12 w-12 flex-none rounded-md object-cover ring-1 ring-slate-200"
-                            />
+                        <div className="text-[11px] text-slate-500">
+                          {sessions.length === 1
+                            ? t("map.popup.swims_one")
+                            : sessions.length > 0
+                              ? t("map.popup.swims_many", {
+                                  n: sessions.length,
+                                })
+                              : t("map.popup.no_swims_yet")}
+                        </div>
+                        {hasFreshTemp(p) ? (
+                          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                            💧 {p.waterTemp.toFixed(1)} °C
+                            {p.waterTempAt ? (
+                              <span className="font-normal text-sky-600">
+                                · {formatAge(p.waterTempAt, t)}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+                        {photos.length ? (
+                          <div className="mt-1.5 flex gap-1 overflow-x-auto">
+                            {photos.map((s) => (
+                              <img
+                                key={s.id}
+                                src={s.photoUrl}
+                                alt=""
+                                loading="lazy"
+                                className="h-12 w-12 flex-none rounded-md object-cover ring-1 ring-slate-200"
+                              />
+                            ))}
+                          </div>
+                        ) : null}
+                        <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                          {sessions.slice(0, 5).map((s) => (
+                            <li key={s.id} className="text-[11px]">
+                              {formatDate(s.date)} — {s.displayName}
+                              {s.isWinter ? " ❄️" : ""}
+                            </li>
                           ))}
-                        </div>
-                      ) : null}
-                      <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
-                        {sessions.slice(0, 5).map((s) => (
-                          <li key={s.id} className="text-[11px]">
-                            {formatDate(s.date)} — {s.displayName}
-                            {s.isWinter ? " ❄️" : ""}
-                          </li>
-                        ))}
-                      </ul>
-                      {linkToSpot ? (
-                        <div className="mt-1.5">
-                          <Link
-                            to={`/spot/${p.id}`}
-                            className="text-[11px] font-semibold text-wave-700 hover:underline"
-                          >
-                            {t("map.popup.see_full_history")}
-                          </Link>
-                        </div>
-                      ) : null}
-                    </div>
-                  </Popup>
-                ) : null}
-              </Marker>
-            );
-          })}
+                        </ul>
+                        {linkToSpot ? (
+                          <div className="mt-1.5">
+                            <Link
+                              to={`/spot/${p.id}`}
+                              className="text-[11px] font-semibold text-wave-700 hover:underline"
+                            >
+                              {t("map.popup.see_full_history")}
+                            </Link>
+                          </div>
+                        ) : null}
+                      </div>
+                    </Popup>
+                  ) : null}
+                </Marker>
+              );
+            })}
         </MarkerClusterGroup>
         {/* Active place is rendered outside the cluster group so it is never
             merged into a cluster bubble regardless of zoom level. */}
@@ -405,12 +411,9 @@ export default function SwimMap({
               .filter((p) => p.id === activePlaceId)
               .map((p) => {
                 const sessions = sessionsByPlace.get(p.id) ?? [];
-                const photos = sessions
-                  .filter((s) => s.photoUrl)
-                  .slice(0, 6);
+                const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
                 const isPickable =
-                  !!onPickExisting &&
-                  (!canPickExisting || canPickExisting(p));
+                  !!onPickExisting && (!canPickExisting || canPickExisting(p));
                 return (
                   <Marker
                     key={`active-${p.id}`}
@@ -514,7 +517,7 @@ export default function SwimMap({
         type="button"
         onClick={() => setSatellite((v) => !v)}
         className={cn(
-          "absolute right-3 top-12 z-[600] flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold shadow-md ring-1 transition active:scale-95",
+          "absolute top-12 right-3 z-[600] flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold shadow-md ring-1 transition active:scale-95",
           satellite
             ? "bg-white/95 text-wave-800 ring-slate-200 hover:bg-white"
             : "bg-white/95 text-wave-800 ring-slate-200 hover:bg-white",
@@ -538,7 +541,7 @@ export default function SwimMap({
                 animate: true,
               });
           }}
-          className="absolute right-3 bottom-5 z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition active:scale-95 hover:bg-white"
+          className="absolute right-3 bottom-5 z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
           aria-label={t("map.center_on_me")}
           title={t("map.center_on_me")}
         >

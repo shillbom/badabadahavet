@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -b --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "emulators": "firebase emulators:start",
     "seed:badplatser": "node scripts/seed-badplatser.mjs",
     "update:temperatures": "node scripts/update-temperatures.mjs"
@@ -36,6 +38,8 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "firebase-admin": "^13.9.0",
+    "prettier": "^3.8.3",
+    "prettier-plugin-tailwindcss": "^0.8.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.12",

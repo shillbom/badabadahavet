@@ -62,7 +62,9 @@ async function fetchBadplatser() {
   }
   const data = await res.json();
   // Accept either { features: [...] } GeoJSON or a flat array.
-  const raw = Array.isArray(data) ? data : data.features ?? data.objects ?? [];
+  const raw = Array.isArray(data)
+    ? data
+    : (data.features ?? data.objects ?? []);
   const places = [];
   for (const item of raw) {
     const place = normalize(item);
@@ -136,7 +138,9 @@ async function main() {
   console.log(`→ ${existingKeys.size} existing places loaded`);
 
   const fresh = places.filter((p) => !existingKeys.has(dedupKey(p)));
-  console.log(`→ ${fresh.length} new places to insert (${places.length - fresh.length} duplicates skipped)`);
+  console.log(
+    `→ ${fresh.length} new places to insert (${places.length - fresh.length} duplicates skipped)`,
+  );
 
   if (!WRITE) {
     console.log("\nsample (first 5):");

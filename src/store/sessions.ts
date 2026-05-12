@@ -112,7 +112,11 @@ export const useStore = create<State>((set, get) => ({
 
   // ── Auth actions ──────────────────────────────────────────────────────
   login: async (email, password) => {
-    await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
+    await signInWithEmailAndPassword(
+      auth,
+      email.trim().toLowerCase(),
+      password,
+    );
   },
 
   signup: async (email, password, displayName, homeCountry) => {
@@ -202,19 +206,28 @@ export const useStore = create<State>((set, get) => ({
 
         watchUserSessions(u.uid, (mySessions) => {
           const { allSessions, places } = get();
-          set({ mySessions, ...derive(u.uid, mySessions, allSessions, places) });
+          set({
+            mySessions,
+            ...derive(u.uid, mySessions, allSessions, places),
+          });
           persistNewAchievements(get);
         }),
 
         watchAllSessions((allSessions) => {
           const { myUid, mySessions, places } = get();
-          set({ allSessions, ...derive(myUid ?? "", mySessions, allSessions, places) });
+          set({
+            allSessions,
+            ...derive(myUid ?? "", mySessions, allSessions, places),
+          });
           persistNewAchievements(get);
         }),
 
         watchPlaces((places) => {
           const { myUid, mySessions, allSessions } = get();
-          set({ places, ...derive(myUid ?? "", mySessions, allSessions, places) });
+          set({
+            places,
+            ...derive(myUid ?? "", mySessions, allSessions, places),
+          });
         }),
 
         watchUserGroups(u.uid, (groups) => set({ groups })),
@@ -269,7 +282,11 @@ function derive(
 function persistNewAchievements(get: () => State) {
   const { user, profile, mySessions, allSessions } = get();
   if (!user || !profile) return;
-  const unlocked = evaluateAchievements({ uid: user.uid, mySessions, allSessions });
+  const unlocked = evaluateAchievements({
+    uid: user.uid,
+    mySessions,
+    allSessions,
+  });
   const persisted = new Set(Object.keys(profile.achievements ?? {}));
   const toPersist = [...unlocked].filter((id) => !persisted.has(id));
   if (toPersist.length) void recordAchievements(user.uid, toPersist);

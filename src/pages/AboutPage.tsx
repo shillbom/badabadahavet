@@ -8,7 +8,7 @@ export default function AboutPage() {
   const t = useT();
 
   return (
-    <div className="px-4 pb-12 pt-2">
+    <div className="px-4 pt-2 pb-12">
       <div className="mb-4 flex items-center gap-2">
         <button
           onClick={() => navigate(-1)}
@@ -48,7 +48,7 @@ export default function AboutPage() {
       </Section>
 
       <Section title={t("about.scoring.title")}>
-        <ul className="space-y-1.5 list-disc pl-5">
+        <ul className="list-disc space-y-1.5 pl-5">
           <li>{t("about.scoring.bracket")}</li>
           <li>{t("about.scoring.new_place")}</li>
           <li>{t("about.scoring.xmas")}</li>
@@ -110,7 +110,7 @@ function Section({
 }) {
   return (
     <section className="mt-6">
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-wave-700">
+      <h3 className="mb-2 text-xs font-semibold tracking-wide text-wave-700 uppercase">
         {title}
       </h3>
       <div className="rounded-2xl bg-white/70 p-3 text-sm leading-relaxed text-slate-700 ring-1 ring-white/60">

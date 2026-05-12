@@ -93,11 +93,7 @@ export function scoreSession(opts: {
   if (opts.isUniqueForUser) points += POINTS_NEW_PLACE;
   // Christmas-Eve bonus only applies to cold-climate homes (it's a Nordic
   // tradition); OTHER-home users still get their category-A base.
-  if (
-    isHome &&
-    opts.homeCountry !== "OTHER" &&
-    isChristmasEve(date)
-  )
+  if (isHome && opts.homeCountry !== "OTHER" && isChristmasEve(date))
     points += POINTS_CHRISTMAS_EVE;
   return {
     points,

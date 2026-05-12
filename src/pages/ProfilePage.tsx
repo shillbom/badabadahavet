@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -70,9 +70,9 @@ export default function ProfilePage() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(profile?.displayName ?? "");
   const [emojiOpen, setEmojiOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [busy, startBusy] = useTransition();
+  const [deleting, deleteTransition] = useTransition();
   const locale = useLocale((s) => s.locale);
   const setLocale = useLocale((s) => s.setLocale);
 
@@ -88,20 +88,20 @@ export default function ProfilePage() {
   }
 
   async function onDeleteAccount() {
-    setDeleting(true);
-    try {
-      await deleteAccount();
-      // Auth state listener will tear down to the login screen.
-      navigate("/", { replace: true });
-    } catch (e) {
-      const msg = (e as Error).message ?? "";
-      if (msg.includes("requires-recent-login")) {
-        toast.error(t("profile.delete.relogin"));
-      } else {
-        toast.error(t("profile.delete.error"));
+    deleteTransition(async () => {
+      try {
+        await deleteAccount();
+        // Auth state listener will tear down to the login screen.
+        navigate("/", { replace: true });
+      } catch (e) {
+        const msg = (e as Error).message ?? "";
+        if (msg.includes("requires-recent-login")) {
+          toast.error(t("profile.delete.relogin"));
+        } else {
+          toast.error(t("profile.delete.error"));
+        }
       }
-      setDeleting(false);
-    }
+    });
   }
 
   async function pickHomeCountry(next: string) {
@@ -119,19 +119,19 @@ export default function ProfilePage() {
     if (!user) return;
     const trimmed = nameInput.trim();
     if (!trimmed) return;
-    setBusy(true);
-    try {
-      // Keep Firebase Auth and Firestore in sync so ensureUserDoc
-      // doesn't revert the name on the next app load.
-      await updateProfile(auth.currentUser!, { displayName: trimmed });
-      await updateUserDisplayName(user.uid, trimmed);
-      toast.success(t("profile.name_saved"));
-      setEditingName(false);
-    } catch {
-      toast.error(t("profile.save_error"));
-    } finally {
-      setBusy(false);
-    }
+
+    startBusy(async () => {
+      try {
+        // Keep Firebase Auth and Firestore in sync so ensureUserDoc
+        // doesn't revert the name on the next app load.
+        await updateProfile(auth.currentUser!, { displayName: trimmed });
+        await updateUserDisplayName(user.uid, trimmed);
+        toast.success(t("profile.name_saved"));
+        setEditingName(false);
+      } catch {
+        toast.error(t("profile.save_error"));
+      }
+    });
   }
 
   async function pickEmoji(emoji: string) {
@@ -146,7 +146,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="px-4 pb-12 pt-2">
+    <div className="px-4 pt-2 pb-12">
       <div className="mb-5 flex items-center gap-2">
         <button
           onClick={() => navigate(-1)}
@@ -241,13 +241,13 @@ export default function ProfilePage() {
 
       {/* Home country */}
       <div className="mb-3 flex items-center justify-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
           {t("profile.home_country")}
         </span>
         <select
           value={profile?.homeCountry ?? ""}
           onChange={(e) => pickHomeCountry(e.target.value)}
-          className="rounded-full border border-slate-200 bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm focus:border-wave-400 focus:outline-none focus:ring-2 focus:ring-wave-200"
+          className="rounded-full border border-slate-200 bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"
         >
           {!profile?.homeCountry ? (
             <option value="" disabled>
@@ -264,11 +264,11 @@ export default function ProfilePage() {
 
       {/* Language */}
       <div className="mb-4 flex items-center justify-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        <span className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
           {t("profile.language")}
         </span>
         <div
-          className="flex rounded-full bg-white/80 p-0.5 text-[11px] font-bold uppercase tracking-wide shadow-sm ring-1 ring-white/70"
+          className="flex rounded-full bg-white/80 p-0.5 text-[11px] font-bold tracking-wide uppercase shadow-sm ring-1 ring-white/70"
           role="group"
           aria-label="Language"
         >
@@ -326,7 +326,7 @@ export default function ProfilePage() {
           >
             <Sparkles className="h-5 w-5 text-amber-500" />
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                 {t("map.recap.label")}
               </div>
               <div className="font-display text-sm font-bold text-wave-900">
@@ -340,7 +340,7 @@ export default function ProfilePage() {
           >
             <Award className="h-5 w-5 text-amber-500" />
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+              <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
                 {t("map.achievements.label")}
               </div>
               <div className="font-display text-sm font-bold text-wave-900">
@@ -397,7 +397,7 @@ export default function ProfilePage() {
 
       {/* Danger zone */}
       <div className="mt-6 border-t border-rose-100 pt-4">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-rose-500">
+        <h3 className="mb-2 text-xs font-semibold tracking-wide text-rose-500 uppercase">
           {t("profile.danger.title")}
         </h3>
         {!confirmDelete ? (
@@ -452,7 +452,7 @@ function MiniCard({
 }) {
   return (
     <div className="glass flex flex-col items-start gap-0.5 px-2.5 py-2">
-      <div className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-wave-700">
+      <div className="flex items-center gap-1 text-[9px] font-semibold tracking-wide text-wave-700 uppercase">
         {icon}
         <span className="truncate">{label}</span>
       </div>
@@ -488,7 +488,7 @@ function Vibes({ stats }: { stats: MyStats }) {
 
   return (
     <div className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+      <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
         {t("vibes.title")}
       </h3>
 
@@ -514,7 +514,7 @@ function Vibes({ stats }: { stats: MyStats }) {
         >
           <Star className="h-5 w-5 text-amber-500" />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
               {t("vibes.fav_spot")}
             </div>
             <div className="truncate font-display text-base font-bold text-wave-900">
@@ -531,7 +531,7 @@ function Vibes({ stats }: { stats: MyStats }) {
         <div className="glass flex items-center gap-3 p-3">
           <Compass className="h-5 w-5 text-wave-600" />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
               {t("vibes.range")}
             </div>
             <div className="text-sm text-wave-900">
@@ -545,7 +545,7 @@ function Vibes({ stats }: { stats: MyStats }) {
         <div className="glass flex items-center gap-3 p-3">
           <CalendarHeart className="h-5 w-5 text-rose-500" />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
               {t("vibes.best_month")}
             </div>
             <div className="text-sm text-wave-900">
@@ -565,7 +565,7 @@ function Vibes({ stats }: { stats: MyStats }) {
         >
           <span className="text-2xl">🗓️</span>
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-wave-700">
+            <div className="text-[10px] font-semibold tracking-wide text-wave-700 uppercase">
               {t("vibes.on_this_day")}
             </div>
             <div className="text-sm text-wave-900">
@@ -595,7 +595,7 @@ function VibesMini({
 }) {
   return (
     <div className="glass flex flex-col gap-0.5 px-3 py-2.5">
-      <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
         {icon}
         {label}
       </div>

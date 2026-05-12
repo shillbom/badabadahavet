@@ -30,7 +30,7 @@ export default function AchievementsPage() {
   }, [unlockedAchievements]);
 
   return (
-    <div className="px-4 pb-12 pt-2">
+    <div className="px-4 pt-2 pb-12">
       <div className="mb-3 flex items-center gap-2">
         <button
           onClick={() => navigate(-1)}
@@ -95,12 +95,14 @@ function Row({
       )}
     >
       <motion.div
-        whileHover={unlocked ? { rotate: [-3, 3, -2, 0], scale: 1.05 } : undefined}
+        whileHover={
+          unlocked ? { rotate: [-3, 3, -2, 0], scale: 1.05 } : undefined
+        }
         transition={{ duration: 0.6 }}
         className={cn(
           "relative flex h-12 w-12 flex-none items-center justify-center rounded-full text-2xl ring-2",
           unlocked
-            ? "bg-gradient-to-br from-amber-200 to-wave-200 ring-amber-300 shadow-sm"
+            ? "bg-gradient-to-br from-amber-200 to-wave-200 shadow-sm ring-amber-300"
             : "bg-slate-100 ring-slate-200 grayscale",
         )}
       >
@@ -125,7 +127,7 @@ function Row({
           </span>
           <span
             className={cn(
-              "rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
+              "rounded-full px-1.5 py-0.5 text-[9px] font-bold tracking-wide uppercase",
               achievement.tier === 3
                 ? "bg-amber-100 text-amber-800"
                 : achievement.tier === 2

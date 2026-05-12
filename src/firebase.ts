@@ -8,15 +8,17 @@ import {
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
-import { getAnalytics, isSupported as analyticsSupported } from "firebase/analytics";
+import {
+  getAnalytics,
+  isSupported as analyticsSupported,
+} from "firebase/analytics";
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "demo-key",
   authDomain:
     import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ??
     "demo-badabadahavet.firebaseapp.com",
-  projectId:
-    import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "demo-badabadahavet",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "demo-badabadahavet",
   storageBucket:
     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ??
     "demo-badabadahavet.appspot.com",
