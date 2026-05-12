@@ -525,7 +525,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.popup.age.hrs": "för {n} tim sedan",
     "map.popup.age.days": "för {n} dagar sedan",
     "map.show.all": "🌍 Visa alla platser",
-    "map.show.mine": "📍 Bara mina",
+    "map.show.mine": "📍 Mina platser",
     "map.toggle_satellite": "Satellit",
     "map.toggle_terrain": "Terräng",
 

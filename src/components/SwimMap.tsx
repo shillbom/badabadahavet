@@ -181,6 +181,9 @@ export type SwimMapProps = {
   /** Optional ref that will be populated with the Leaflet Map instance,
    *  allowing the parent to call flyTo / setView imperatively. */
   mapRef?: RefObject<L.Map | null>;
+  /** Stable key used to persist pan/zoom across unmounts (e.g. tab navigation).
+   *  Maps with the same key share saved view state. Defaults to "default". */
+  viewKey?: string;
 };
 
 const userLocationIcon = L.divIcon({
@@ -228,6 +231,7 @@ export default function SwimMap({
   skipInitialFit,
   fitBoundsToPlaces = false,
   mapRef: externalMapRef,
+  viewKey = "default",
 }: SwimMapProps) {
   const t = useT();
   const [satellite, setSatellite] = useState(false);
@@ -241,12 +245,13 @@ export default function SwimMap({
   }, [places, userLocation]);
   const fallbackZoom = userLocation && places.length === 0 ? 12 : zoom;
   const mapRef = useRef<L.Map | null>(null);
+  const saved = savedViews.get(viewKey);
 
   return (
     <div className={cn("relative h-full w-full", className)}>
       <MapContainer
-        center={center ?? fallbackCenter}
-        zoom={fallbackZoom}
+        center={saved?.center ?? center ?? fallbackCenter}
+        zoom={saved?.zoom ?? fallbackZoom}
         scrollWheelZoom
         dragging={!lockPan}
         doubleClickZoom
@@ -279,11 +284,12 @@ export default function SwimMap({
           />
         )}
         <MapZoomLock locked={!!lockPan} />
+        <SaveView viewKey={viewKey} skip={!!saved} />
         <FitToPlaces
           places={places}
           userLocation={userLocation ?? null}
           fitToken={fitToken}
-          skipInitialFit={skipInitialFit}
+          skipInitialFit={skipInitialFit || !!saved}
           fitBoundsToPlaces={fitBoundsToPlaces}
         />
         {keepCenteredOn ? <KeepCentered target={keepCenteredOn} /> : null}
@@ -586,6 +592,45 @@ function MapZoomLock({ locked }: { locked: boolean }) {
   return null;
 }
 
+// Module-level set so "already fitted" survives component re-renders.
+// Keyed by Leaflet map container element so different map instances
+// are independent. Cleared when the container is removed from the DOM.
+const fittedMaps = new WeakSet<HTMLElement>();
+
+// Persists the last panned/zoomed view so navigating away and back
+// restores the exact position instead of re-fitting everything.
+type SavedView = { center: L.LatLng; zoom: number };
+const savedViews = new Map<string, SavedView>();
+
+/** Saves center+zoom to the module-level map on every move/zoom end. */
+function SaveView({ viewKey, skip }: { viewKey: string; skip: boolean }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const save = () =>
+      savedViews.set(viewKey, { center: map.getCenter(), zoom: map.getZoom() });
+
+    if (skip) {
+      // View was restored from saved state — start tracking right away.
+      map.on("moveend zoomend", save);
+      return () => {
+        map.off("moveend zoomend", save);
+      };
+    }
+
+    // Fresh mount — wait for FitToPlaces animation to finish before tracking.
+    const t = window.setTimeout(() => {
+      map.on("moveend zoomend", save);
+    }, 800);
+    return () => {
+      window.clearTimeout(t);
+      map.off("moveend zoomend", save);
+    };
+  }, [map, viewKey, skip]);
+
+  return null;
+}
+
 function FitToPlaces({
   places,
   userLocation,
@@ -600,18 +645,17 @@ function FitToPlaces({
   fitBoundsToPlaces?: boolean;
 }) {
   const map = useMap();
-  const hasInitialFit = useRef(false);
   const lastFitToken = useRef(fitToken);
 
   useEffect(() => {
-    // Only auto-fit on the very first render with usable data, or when
-    // fitToken explicitly bumps. Otherwise toggling "show all" would
-    // zoom back out to fit hundreds of spots, which is jarring.
+    const container = map.getContainer();
     const tokenChanged = fitToken !== lastFitToken.current;
     lastFitToken.current = fitToken;
-    if (hasInitialFit.current && !tokenChanged) return;
+
+    const alreadyFitted = fittedMaps.has(container);
+    if (alreadyFitted && !tokenChanged) return;
     if (skipInitialFit && !tokenChanged) {
-      hasInitialFit.current = true;
+      fittedMaps.add(container);
       return;
     }
 
@@ -620,15 +664,15 @@ function FitToPlaces({
       if (userLocation) pts.push([userLocation.lat, userLocation.lng]);
       const bounds = L.latLngBounds(pts);
       map.fitBounds(bounds.pad(0.25), { animate: true, maxZoom: 13 });
-      hasInitialFit.current = true;
+      fittedMaps.add(container);
     } else if (userLocation) {
       map.setView([userLocation.lat, userLocation.lng], 11, { animate: true });
-      hasInitialFit.current = true;
+      fittedMaps.add(container);
     } else if (places.length) {
       const pts: [number, number][] = places.map((p) => [p.lat, p.lng]);
       const bounds = L.latLngBounds(pts);
       map.fitBounds(bounds.pad(0.25), { animate: true, maxZoom: 12 });
-      hasInitialFit.current = true;
+      fittedMaps.add(container);
     }
   }, [places, userLocation, map, fitToken]);
   return null;

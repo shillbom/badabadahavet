@@ -106,6 +106,7 @@ export default function MapPage() {
             userLocation={myLocation}
             fitToken={fitToken}
             fitBoundsToPlaces={!showAll}
+            viewKey="main"
           />
         </div>
         <button
