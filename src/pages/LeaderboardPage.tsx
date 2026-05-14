@@ -55,7 +55,7 @@ export default function LeaderboardPage() {
         {groups.map((g) => (
           <ScopeChip
             key={g.id}
-            label={`👥 ${g.name}`}
+            label={`${g.emoji ?? "👥"} ${g.name}`}
             active={scope === g.id}
             onClick={() => setScope(g.id)}
           />

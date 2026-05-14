@@ -30,9 +30,9 @@ import { computeMyStats, type MyStats } from "@/lib/stats";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useLocale } from "@/lib/i18n";
 
-// Tracks whether a signup write is in-flight so the auth-state listener
-// doesn't race to create a half-baked user doc in parallel.
-let signupInFlight = false;
+// Resolves when the current signup write finishes, so the auth-state
+// listener can wait rather than bail out and leave loading=true forever.
+let signupDone: Promise<void> | null = null;
 
 const EMPTY_STATS: MyStats = {
   totalSwims: 0,
@@ -120,7 +120,10 @@ export const useStore = create<State>((set, get) => ({
   },
 
   signup: async (email, password, displayName, homeCountry) => {
-    signupInFlight = true;
+    let resolve!: () => void;
+    signupDone = new Promise<void>((r) => {
+      resolve = r;
+    });
     try {
       const cred = await createUserWithEmailAndPassword(
         auth,
@@ -133,7 +136,8 @@ export const useStore = create<State>((set, get) => ({
         homeCountry,
       });
     } finally {
-      signupInFlight = false;
+      resolve();
+      signupDone = null;
     }
   },
 
@@ -183,10 +187,9 @@ export const useStore = create<State>((set, get) => ({
         return;
       }
 
-      if (signupInFlight) {
-        // signup() is writing the doc; the onSnapshot below will pick it up.
-        return;
-      }
+      // If signup is still writing the user doc, wait for it to finish
+      // before proceeding — ensureUserDoc is safe to call on an existing doc.
+      if (signupDone) await signupDone;
 
       const profile = await ensureUserDoc(u.uid, u.displayName ?? "Swimmer");
       set({ profile, loading: false });
