@@ -927,6 +927,7 @@ function MemberMapSheet({
               <SwimMap
                 places={memberPlaces}
                 sessionsByPlace={sessionsByPlace}
+                fitBoundsToPlaces
                 linkToSpot
               />
             </div>
