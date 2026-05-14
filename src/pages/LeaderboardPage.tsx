@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
-import type { GroupDoc, SessionDoc } from "@/lib/types";
+import type { SessionDoc } from "@/lib/types";
 import { bonusPointsForUid } from "@/lib/achievements";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
@@ -37,8 +37,6 @@ export default function LeaderboardPage() {
     return rows.sort((a, b) => b.points - a.points);
   }, [all, groups, scope]);
 
-  const activeGroup: GroupDoc | undefined = groups.find((g) => g.id === scope);
-
   return (
     <div className="px-4 pt-2">
       <div className="mb-3 flex items-end justify-between">
@@ -64,19 +62,8 @@ export default function LeaderboardPage() {
         ))}
       </div>
 
-      {activeGroup ? (
-        <div className="mb-3 flex items-center justify-between rounded-2xl bg-white/70 px-3 py-2 ring-1 ring-white/60">
-          <span className="text-xs text-slate-500">
-            {t("leaderboard.group_code")}
-          </span>
-          <code className="font-mono text-sm font-bold tracking-widest text-wave-800">
-            {activeGroup.code}
-          </code>
-        </div>
-      ) : null}
-
       <ol className="space-y-2">
-        <AnimatePresence initial={false}>
+        <AnimatePresence mode="popLayout">
           {rows.map((r, i) => {
             const isMe = user?.uid === r.uid;
             const podium = podiumStyle(i);
@@ -87,7 +74,7 @@ export default function LeaderboardPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                transition={{ type: "spring", stiffness: 280, damping: 26 }}
+                transition={{ type: "tween", duration: 0.2 }}
                 className={cn(
                   "glass relative flex items-center gap-3 p-3 transition",
                   podium.cardClass,

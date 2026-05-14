@@ -1,5 +1,5 @@
-import { motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   value: number;
@@ -9,35 +9,107 @@ type Props = {
   className?: string;
 };
 
+/** A single digit slot that steps from its current value to `char` at a
+ *  rate that always takes exactly `duration` seconds in total. */
+function DigitSlot({
+  char,
+  dir,
+  duration,
+}: {
+  char: string;
+  dir: 1 | -1;
+  duration: number;
+}) {
+  const isDigit = /\d/.test(char);
+  const target = isDigit ? parseInt(char, 10) : 0;
+  const currentRef = useRef(0);
+  const stepDurationRef = useRef(
+    isDigit && target > 0 ? duration / target : duration,
+  );
+  const [displayed, setDisplayed] = useState(isDigit ? "0" : char);
+
+  useEffect(() => {
+    if (!isDigit) {
+      setDisplayed(char);
+      return;
+    }
+    const from = currentRef.current;
+    const steps = Math.abs(target - from);
+    if (steps === 0) return;
+
+    const stepDuration = duration / steps;
+    stepDurationRef.current = stepDuration;
+    const step = target > from ? 1 : -1;
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+    for (let i = 1; i <= steps; i++) {
+      const val = from + i * step;
+      timeouts.push(
+        setTimeout(
+          () => {
+            currentRef.current = val;
+            setDisplayed(String(val));
+          },
+          i * stepDuration * 1000,
+        ),
+      );
+    }
+
+    return () => timeouts.forEach(clearTimeout);
+  }, [char]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <span className="relative inline-block overflow-hidden">
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={displayed}
+          initial={{ y: dir > 0 ? 8 : -8, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: dir > 0 ? -8 : 8, opacity: 0 }}
+          transition={{
+            duration: stepDurationRef.current * 0.85,
+            ease: "circInOut",
+          }}
+          className="inline-block"
+        >
+          {displayed}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}
+
 /**
- * Smoothly tweens to `value` whenever it changes. For integer stats we
- * round to whole numbers; pass a custom `format` for fractional values.
+ * Animates each digit individually to its target value, giving an
+ * odometer-style rolling effect.
  */
 export function AnimatedNumber({
   value,
-  duration = 0.8,
+  duration = 0.7,
   format,
   className,
 }: Props) {
-  const mv = useMotionValue(0);
-  const rounded = useTransform(mv, (v) =>
-    format ? format(v) : Math.round(v).toString(),
-  );
-  const [text, setText] = useState(() =>
-    format ? format(value) : Math.round(value).toString(),
-  );
+  const text = format ? format(value) : Math.round(value).toString();
+  const prevValueRef = useRef(value);
+  const dirRef = useRef<1 | -1>(1);
 
-  useEffect(() => {
-    const controls = animate(mv, value, {
-      duration,
-      ease: [0.16, 1, 0.3, 1],
-    });
-    const unsub = rounded.on("change", setText);
-    return () => {
-      controls.stop();
-      unsub();
-    };
-  }, [value, duration, mv, rounded]);
+  if (value !== prevValueRef.current) {
+    dirRef.current = value >= prevValueRef.current ? 1 : -1;
+    prevValueRef.current = value;
+  }
 
-  return <motion.span className={className}>{text}</motion.span>;
+  const chars = text.split("");
+
+  return (
+    <span className={`inline-flex ${className ?? ""}`}>
+      {chars.map((char, i) => (
+        <DigitSlot
+          key={chars.length - 1 - i}
+          char={char}
+          dir={dirRef.current}
+          duration={duration}
+        />
+      ))}
+    </span>
+  );
 }
