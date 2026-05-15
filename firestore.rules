@@ -21,6 +21,26 @@ service cloud.firestore {
     function unchanged(field) {
       return !changedKeys().hasAny([field]);
     }
+    // Returns true when the only change to the reactions map is that
+    // request.auth.uid was added to, or removed from, exactly one emoji key.
+    function onlyOwnReactionChanged() {
+      let myUid = request.auth.uid;
+      let oldR = resource.data.get('reactions', {});
+      let newR = request.resource.data.get('reactions', {});
+      let changed = newR.diff(oldR).affectedKeys();
+      return changed.size() == 1
+        && validReactionDelta(changed.toList()[0], oldR, newR, myUid);
+    }
+    function validReactionDelta(emoji, oldR, newR, myUid) {
+      let oldSet = oldR.get(emoji, []).toSet();
+      let newSet = newR.get(emoji, []).toSet();
+      // Added own uid — nothing else changed
+      return (newSet.difference(oldSet) == [myUid].toSet()
+              && oldSet.difference(newSet).size() == 0)
+          // Removed own uid — nothing else changed
+          || (oldSet.difference(newSet) == [myUid].toSet()
+              && newSet.difference(oldSet).size() == 0);
+    }
     function validLatLng(lat, lng) {
       return lat is number && lng is number
              && lat >= -90 && lat <= 90
@@ -131,6 +151,7 @@ service cloud.firestore {
 
       // Owners can edit cosmetic fields only; admins can moderate (e.g.
       // strip a bad photoUrl, fix a placeName after a rename).
+      // Any signed-in user may update only the reactions map.
       allow update: if (
         signedIn()
         && resource.data.uid == request.auth.uid
@@ -143,6 +164,10 @@ service cloud.firestore {
         && unchanged('isUniqueForUser')
         && unchanged('isWinter')
         && unchanged('createdAt')
+      ) || (
+        signedIn()
+        && changedKeys().hasOnly(['reactions'])
+        && onlyOwnReactionChanged()
       ) || isAdminUser();
 
       allow delete: if (signedIn() && resource.data.uid == request.auth.uid)

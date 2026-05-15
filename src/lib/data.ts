@@ -13,6 +13,7 @@ import {
   onSnapshot,
   serverTimestamp,
   arrayRemove,
+  arrayUnion,
   limit,
   writeBatch,
   Unsubscribe,
@@ -274,6 +275,27 @@ export function watchAllSessions(
     query(sessionsCol, where("date", ">=", start), where("date", "<", end)),
     (snap) => cb(snap.docs.map((d) => d.data() as SessionDoc)),
   );
+}
+
+export const REACTION_EMOJIS = ["🔥", "💪", "❄️", "🤩", "👏"] as const;
+
+/**
+ * Toggle an emoji reaction on a session. If the user has already reacted
+ * with this emoji, remove them; otherwise add them.
+ */
+export async function toggleReaction(
+  sessionId: string,
+  emoji: string,
+  uid: string,
+  currentReactors: string[],
+): Promise<void> {
+  const ref = doc(sessionsCol, sessionId);
+  const field = `reactions.${emoji}`;
+  if (currentReactors.includes(uid)) {
+    await updateDoc(ref, { [field]: arrayRemove(uid) });
+  } else {
+    await updateDoc(ref, { [field]: arrayUnion(uid) });
+  }
 }
 
 // ---------- Groups ----------

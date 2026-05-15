@@ -403,6 +403,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "spot.log_here": "Logga ett bad här",
     "spot.not_found": "Den platsen finns inte (längre).",
 
+    "reactions.add": "Reagera",
+    "reactions.toggle": "Reagera med {emoji}",
+
     "admin.label": "Admin",
     "admin.rename": "Döp om plats",
     "admin.rename.prompt": 'Nytt namn för "{name}"',
@@ -812,6 +815,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "spot.empty.group": "Nobody in this group has swum here yet.",
     "spot.log_here": "Log a swim here",
     "spot.not_found": "That spot doesn't exist (any more).",
+
+    "reactions.add": "React",
+    "reactions.toggle": "React with {emoji}",
 
     "admin.label": "Admin",
     "admin.rename": "Rename spot",

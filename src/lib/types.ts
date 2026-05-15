@@ -59,6 +59,8 @@ export type SessionDoc = {
   monthCategory?: "A" | "B" | "C" | "D";
   points: number;
   createdAt: number;
+  /** Emoji reactions: key = emoji, value = list of UIDs who reacted. */
+  reactions?: Record<string, string[]>;
 };
 
 export type GroupDoc = {
