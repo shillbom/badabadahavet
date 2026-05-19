@@ -13,6 +13,7 @@ export type MyStats = {
   bestMonth: { month: number; points: number } | null;
   range: { km: number } | null;
   onThisDay: SessionDoc | null;
+  countriesAbroad: number;
 };
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -52,6 +53,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
       bestMonth: null,
       range: null,
       onThisDay: null,
+      countriesAbroad: 0,
     };
   }
 
@@ -60,6 +62,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
   const placeCounts = new Map<string, { name: string; count: number }>();
   const monthPoints = new Array(12).fill(0) as number[];
   const weekSet = new Set<string>();
+  const abroadCountries = new Set<string>();
   let lats: number[] = [];
   let lngs: number[] = [];
 
@@ -72,6 +75,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
     placeCounts.set(s.placeId, cur);
     monthPoints[new Date(s.date).getMonth()] += s.points;
     weekSet.add(weekKey(s.date));
+    if (!s.isHomeCountry && s.country) abroadCountries.add(s.country);
     lats.push(s.lat);
     lngs.push(s.lng);
   }
@@ -181,6 +185,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
     bestMonth,
     range,
     onThisDay,
+    countriesAbroad: abroadCountries.size,
   };
 }
 

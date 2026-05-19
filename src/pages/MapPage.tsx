@@ -17,12 +17,15 @@ export default function MapPage() {
   const myStats = useStore((s) => s.myStats);
   const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
 
-  const [myLocation, setMyLocation] = useState<{
-    lat: number;
-    lng: number;
-  } | null>(null);
+  // Seed from Firestore so the map opens at the right place without waiting for GPS
+  const currentLocation = useStore((s) => s.currentLocation);
+  const locationPermission = useStore((s) => s.locationPermission);
+  // Fall back to Firestore lastLocation while GPS hasn't resolved yet
+  const myLocation = currentLocation ?? profile?.lastLocation ?? null;
+
   const [fitToken, setFitToken] = useState(0);
   const [showAll, setShowAll] = useState(true);
+
   // Re-fit whenever the toggle changes so switching to "my places" zooms
   // in to fit them, and switching to "all" re-centres on user position.
   const prevShowAll = useRef(showAll);
@@ -31,15 +34,12 @@ export default function MapPage() {
     prevShowAll.current = showAll;
     setFitToken((n) => n + 1);
   }, [showAll]);
-  useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        setMyLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
-    );
-  }, []);
+
+  // Hold the map until we have a real position when permission is already granted
+  // (prevents Stockholm → real-location ping-pong on first load)
+  const mapReady =
+    locationPermission !== "checking" &&
+    (locationPermission !== "granted" || myLocation !== null);
 
   const totalPoints = myStats.totalPoints + achievementBonusPoints;
 
@@ -95,19 +95,28 @@ export default function MapPage() {
           label={t("map.stat.streak")}
           value={myStats.currentDayStreak}
           icon={<Flame className="h-4 w-4" />}
+          sub={
+            myStats.currentDayStreak > 0 && myStats.daysSinceLast === 1
+              ? t("map.streak.at_risk")
+              : undefined
+          }
         />
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
         <div className="absolute inset-0">
-          <SwimMap
-            places={showAll ? places : myPlaces}
-            sessionsByPlace={sessionsByPlace}
-            userLocation={myLocation}
-            fitToken={fitToken}
-            fitBoundsToPlaces={!showAll}
-            viewKey="main"
-          />
+          {mapReady ? (
+            <SwimMap
+              places={showAll ? places : myPlaces}
+              sessionsByPlace={sessionsByPlace}
+              userLocation={myLocation}
+              fitToken={fitToken}
+              fitBoundsToPlaces={!showAll}
+              viewKey="main"
+            />
+          ) : (
+            <div className="h-full w-full bg-slate-100" />
+          )}
         </div>
         <button
           type="button"

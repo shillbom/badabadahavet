@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ChevronLeft, ChevronRight, Award } from "lucide-react";
@@ -34,7 +34,20 @@ export default function RecapPage() {
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
 
-  const year = new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    for (const s of mySessions) years.add(new Date(s.date).getFullYear());
+    if (years.size === 0) return [currentYear];
+    return [...years].sort((a, b) => a - b);
+  }, [mySessions, currentYear]);
+
+  const minYear = availableYears[0] ?? currentYear;
+  const canGoPrev = year > minYear;
+  const canGoNext = year < currentYear;
+
   const startTs = startOfYear(year);
   const endTs = endOfYear(year);
 
@@ -176,6 +189,11 @@ export default function RecapPage() {
 
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
+
+  // Reset to first slide when browsing a different year
+  useEffect(() => {
+    setIdx(0);
+  }, [year]);
   const slide = slides[idx];
   const isLast = idx === slides.length - 1;
 
@@ -198,6 +216,24 @@ export default function RecapPage() {
         <h2 className="font-display text-xl font-black text-wave-900">
           {t("recap.title", { year })}
         </h2>
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            onClick={() => setYear((y) => y - 1)}
+            disabled={!canGoPrev}
+            className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
+            aria-label={t("common.previous")}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => setYear((y) => y + 1)}
+            disabled={!canGoNext}
+            className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
+            aria-label={t("common.next")}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="relative z-10 mb-3 flex gap-1">

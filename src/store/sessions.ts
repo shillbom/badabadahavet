@@ -47,6 +47,7 @@ const EMPTY_STATS: MyStats = {
   bestMonth: null,
   range: null,
   onThisDay: null,
+  countriesAbroad: 0,
 };
 
 type State = {
@@ -54,6 +55,10 @@ type State = {
   user: User | null;
   profile: UserDoc | null;
   loading: boolean;
+
+  // ── Location ──────────────────────────────────────────────────────────
+  currentLocation: { lat: number; lng: number } | null;
+  locationPermission: PermissionState | "unsupported" | "checking";
 
   // ── Raw data ──────────────────────────────────────────────────────────
   myUid: string | null;
@@ -91,6 +96,8 @@ type State = {
   // ── Bootstrap ─────────────────────────────────────────────────────────
   /** Call once at app boot. Returns the cleanup function. */
   _startListening: () => () => void;
+  /** Refresh GPS position (e.g. after user grants permission). */
+  _refreshLocation: () => void;
 };
 
 export const useStore = create<State>((set, get) => ({
@@ -98,6 +105,8 @@ export const useStore = create<State>((set, get) => ({
   user: null,
   profile: null,
   loading: true,
+  currentLocation: null,
+  locationPermission: "checking",
   myUid: null,
   mySessions: [],
   allSessions: [],
@@ -155,14 +164,55 @@ export const useStore = create<State>((set, get) => ({
     await deleteUser(current);
   },
 
+  // ── Location ──────────────────────────────────────────────────────────
+  _refreshLocation: () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        set({
+          currentLocation: {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          },
+        }),
+      () => {},
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
+    );
+  },
+
   // ── Bootstrap ─────────────────────────────────────────────────────────
   _startListening: () => {
     let dataUnsubs: (() => void)[] = [];
+    let permissionStatus: PermissionStatus | null = null;
+
+    const fetchLocation = () => get()._refreshLocation();
 
     const stopData = () => {
       dataUnsubs.forEach((u) => u());
       dataUnsubs = [];
     };
+
+    // Kick off permission check immediately — independent of auth state.
+    if (typeof navigator !== "undefined" && navigator.permissions) {
+      navigator.permissions
+        .query({ name: "geolocation" })
+        .then((s) => {
+          permissionStatus = s;
+          set({ locationPermission: s.state });
+          if (s.state !== "denied") fetchLocation();
+          s.addEventListener("change", () => {
+            set({ locationPermission: s.state as PermissionState });
+            if (s.state !== "denied") fetchLocation();
+          });
+        })
+        .catch(() => {
+          set({ locationPermission: "unsupported" });
+          fetchLocation();
+        });
+    } else {
+      set({ locationPermission: "unsupported" });
+      fetchLocation();
+    }
 
     const authUnsub = onAuthStateChanged(auth, async (u) => {
       // Tear down the previous user's subscriptions on every auth change.
@@ -240,6 +290,7 @@ export const useStore = create<State>((set, get) => ({
     return () => {
       authUnsub();
       stopData();
+      permissionStatus?.removeEventListener("change", () => {});
     };
   },
 }));

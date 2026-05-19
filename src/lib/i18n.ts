@@ -250,6 +250,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.stat.points": "Poäng",
     "map.stat.spots": "Platser",
     "map.stat.streak": "Streak",
+    "map.streak.at_risk": "Bada idag för att hålla streaken! 🔥",
     "map.bonus.subtitle": "+{n} från bonusar",
     "map.recap.label": "Årssammanfattning",
     "map.recap.cta": "Bläddra tillbaka {year} →",
@@ -298,6 +299,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "leaderboard.swims": "· {n} bad",
     "leaderboard.swim": "· 1 bad",
     "leaderboard.bonus_hint": "· +{n} 🏅",
+    "leaderboard.countries": "· {n} länder 🌍",
     "leaderboard.empty": "Inga bad ännu — bli först.",
 
     "groups.title": "Grupper",
@@ -480,7 +482,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Första gången du badar på en ny plats: +2 bonus.",
     "about.scoring.xmas": "Bada på julafton i ditt hemland: +5 bonus.",
     "about.scoring.abroad":
-      "Bad utomlands räknas separat — landbonus är på gång.",
+      "Bad utomlands ger +4 poäng per unikt land du badat i (regel G).",
     "about.scoring.streak":
       "Streak räknar antalet dagar i rad du badat. Idag eller igår håller den vid liv.",
     "about.data.title": "Datakällor",
@@ -664,6 +666,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.stat.points": "Points",
     "map.stat.spots": "Spots",
     "map.stat.streak": "Day streak",
+    "map.streak.at_risk": "Swim today to keep it! 🔥",
     "map.bonus.subtitle": "+{n} from bonuses",
     "map.recap.label": "Year recap",
     "map.recap.cta": "Rewind {year} →",
@@ -712,6 +715,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "leaderboard.swims": "· {n} swims",
     "leaderboard.swim": "· 1 swim",
     "leaderboard.bonus_hint": "· +{n} 🏅",
+    "leaderboard.countries": "· {n} countries 🌍",
     "leaderboard.empty": "No swims yet — be the first.",
 
     "groups.title": "Groups",
@@ -892,7 +896,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.scoring.new_place": "First time swimming at a new spot: +2 bonus.",
     "about.scoring.xmas": "Christmas Eve swim in your home country: +5 bonus.",
     "about.scoring.abroad":
-      "Swims abroad are tallied separately — country bonus coming.",
+      "Swims abroad earn +4 pts per distinct country visited (rule G).",
     "about.scoring.streak":
       "Your streak counts consecutive days with a swim. Today or yesterday keeps it alive.",
     "about.data.title": "Data sources",

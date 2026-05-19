@@ -5,6 +5,7 @@ import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
 import { bonusPointsForUid } from "@/lib/achievements";
+import { POINTS_COUNTRY_BONUS } from "@/lib/scoring";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
@@ -14,9 +15,11 @@ type Row = {
   displayName: string;
   points: number;
   bonusPoints: number;
+  countryBonusPoints: number;
   uniquePlaces: number;
   winters: number;
   sessions: number;
+  countriesAbroad: number;
 };
 
 export default function LeaderboardPage() {
@@ -121,6 +124,11 @@ export default function LeaderboardPage() {
                         {t("leaderboard.bonus_hint", { n: r.bonusPoints })}
                       </span>
                     ) : null}
+                    {r.countriesAbroad > 0 ? (
+                      <span className="text-teal-700">
+                        {t("leaderboard.countries", { n: r.countriesAbroad })}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <AnimatedNumber
@@ -205,6 +213,7 @@ function aggregate(
   allSessions: SessionDoc[],
 ): Row[] {
   const map = new Map<string, Row>();
+  const abroadCountriesMap = new Map<string, Set<string>>();
   for (const s of sessions) {
     if (memberFilter && !memberFilter.has(s.uid)) continue;
     let row = map.get(s.uid);
@@ -214,9 +223,11 @@ function aggregate(
         displayName: s.displayName,
         points: 0,
         bonusPoints: 0,
+        countryBonusPoints: 0,
         uniquePlaces: 0,
         winters: 0,
         sessions: 0,
+        countriesAbroad: 0,
       };
       map.set(s.uid, row);
     }
@@ -225,10 +236,20 @@ function aggregate(
     if (s.isUniqueForUser) row.uniquePlaces += 1;
     if (s.isWinter) row.winters += 1;
     row.displayName = s.displayName;
+    if (!s.isHomeCountry && s.country) {
+      let c = abroadCountriesMap.get(s.uid);
+      if (!c) {
+        c = new Set();
+        abroadCountriesMap.set(s.uid, c);
+      }
+      c.add(s.country);
+    }
   }
   for (const row of map.values()) {
     row.bonusPoints = bonusPointsForUid(row.uid, allSessions);
-    row.points += row.bonusPoints;
+    row.countriesAbroad = abroadCountriesMap.get(row.uid)?.size ?? 0;
+    row.countryBonusPoints = row.countriesAbroad * POINTS_COUNTRY_BONUS;
+    row.points += row.bonusPoints + row.countryBonusPoints;
   }
   return [...map.values()];
 }

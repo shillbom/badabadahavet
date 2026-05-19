@@ -15,6 +15,7 @@
 
 export const POINTS_NEW_PLACE = 2;
 export const POINTS_CHRISTMAS_EVE = 5;
+export const POINTS_COUNTRY_BONUS = 4;
 export const PLACE_RADIUS_METERS = 100;
 
 export type MonthCategory = "A" | "B" | "C" | "D";

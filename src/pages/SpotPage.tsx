@@ -8,6 +8,7 @@ import {
   Users,
   Calendar,
   MapPin,
+  Thermometer,
   X,
   Pencil,
   Trash2,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/data";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
@@ -51,6 +53,7 @@ export default function SpotPage() {
       if (cancelled) return;
       setPlace(p);
       setLoading(false);
+      if (p) maybeRefreshPlaceTemp(p);
     });
     const unsub = watchPlaceSessions(placeId, (s) => setSessions(s));
     return () => {
@@ -288,6 +291,8 @@ export default function SpotPage() {
           icon={<Snowflake className="h-3.5 w-3.5" />}
         />
       </div>
+
+      <WaterTempCard place={place} t={t} />
 
       {stats.topSwimmer ? (
         <div className="glass mt-3 flex items-center gap-3 p-3">
@@ -591,6 +596,58 @@ function ReactionBar({
           </AnimatePresence>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function WaterTempCard({
+  place,
+  t,
+}: {
+  place: PlaceDoc;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  if (!place.waterTemp || !place.waterTempAt) return null;
+  if (Date.now() - place.waterTempAt > WEEK_MS) return null;
+
+  const ageMs = Date.now() - place.waterTempAt;
+  const ageHrs = Math.floor(ageMs / (60 * 60 * 1000));
+  const ageMins = Math.floor(ageMs / 60_000);
+  const ageLabel =
+    ageMins < 60
+      ? t("map.popup.age.mins", { n: ageMins })
+      : ageHrs < 24
+        ? t("map.popup.age.hrs", { n: ageHrs })
+        : t("map.popup.age.days", { n: Math.floor(ageHrs / 24) });
+
+  const isWarm = place.waterTemp >= 17;
+  const isCool = place.waterTemp < 10;
+
+  return (
+    <div
+      className={`mt-3 flex items-center gap-2.5 rounded-2xl px-3 py-2.5 ring-1 ${
+        isWarm
+          ? "bg-amber-50/80 ring-amber-200"
+          : isCool
+            ? "bg-sky-50/80 ring-sky-200"
+            : "bg-teal-50/80 ring-teal-200"
+      }`}
+    >
+      <Thermometer
+        className={`h-4 w-4 flex-none ${isWarm ? "text-amber-500" : isCool ? "text-sky-500" : "text-teal-500"}`}
+      />
+      <span
+        className={`font-semibold ${isWarm ? "text-amber-900" : isCool ? "text-sky-900" : "text-teal-900"}`}
+      >
+        {place.waterTemp.toFixed(1)} °C
+      </span>
+      <span
+        className={`text-xs ${isWarm ? "text-amber-600" : isCool ? "text-sky-600" : "text-teal-600"}`}
+      >
+        {ageLabel}
+      </span>
     </div>
   );
 }
