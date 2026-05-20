@@ -3,6 +3,8 @@ import { Navigate } from "react-router";
 import { getRedirectResult } from "firebase/auth";
 import { auth } from "@/firebase";
 import { FullSplash } from "@/components/Splash";
+import { toast } from "@/components/ui/Toast";
+import { useT } from "@/lib/i18n";
 
 /**
  * Return-landing page for the Google sign-in redirect flow.
@@ -21,19 +23,20 @@ const redirectResultPromise = getRedirectResult(auth).catch((e) =>
 );
 
 export default function GoogleAuthPage() {
-  const [done, setDone] = useState(false);
+  const [redirect, setRedirect] = useState(false);
+  const t = useT();
   useEffect(() => {
     redirectResultPromise.then((result) => {
-      if (result != null) {
-        console.debug("Google login result", result);
-        setDone(true);
+      console.debug("Google redirect result:", result);
+      if (result === null) {
+        toast.error(t("auth.error.google_cancelled"));
       }
-      // If result is null: redirect was cancelled, blocked, or already consumed.
-      // onAuthStateChanged will handle routing if the user is actually signed in.
+      // Navigate to "/" regardless — onAuthStateChanged handles routing.
+      setRedirect(true);
     });
   }, []);
 
-  if (done) {
+  if (redirect) {
     return <Navigate replace to="/" />;
   }
 

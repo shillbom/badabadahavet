@@ -27,6 +27,9 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,webp}"],
         // SPA fallback so deep links work when offline.
         navigateFallback: "index.html",
+        // Never intercept Firebase auth handler or any /__/* URLs —
+        // the service worker must let those reach the network.
+        navigateFallbackDenylist: [/^\/__\//],
         // Cache OpenStreetMap tiles so the map works offline.
         runtimeCaching: [
           {
