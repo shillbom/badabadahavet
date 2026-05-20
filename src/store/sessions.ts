@@ -32,6 +32,7 @@ import {
 import { computeMyStats, type MyStats } from "@/lib/stats";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useLocale } from "@/lib/i18n";
+import { getCurrentPosition } from "@/lib/native";
 
 // Resolves when the current signup write finishes, so the auth-state
 // listener can wait rather than bail out and leave loading=true forever.
@@ -200,18 +201,9 @@ export const useStore = create<State>((set, get) => ({
 
   // ── Location ──────────────────────────────────────────────────────────
   _refreshLocation: () => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        set({
-          currentLocation: {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          },
-        }),
-      () => {},
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
-    );
+    getCurrentPosition({ enableHighAccuracy: false })
+      .then((loc) => set({ currentLocation: loc }))
+      .catch(() => {});
   },
 
   // ── Bootstrap ─────────────────────────────────────────────────────────

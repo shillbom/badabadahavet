@@ -24,6 +24,7 @@ import {
   pickerCodeFor,
 } from "@/lib/countries";
 import { reverseGeocodeCountry } from "@/lib/geocode";
+import { getCurrentPosition } from "@/lib/native";
 
 export default function LoginPage() {
   const {
@@ -69,21 +70,15 @@ export default function LoginPage() {
   // so we can flip the UI to the user's likely language before they've
   // even touched the form. Manual changes still win.
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
     let cancelled = false;
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const real = await reverseGeocodeCountry(
-          pos.coords.latitude,
-          pos.coords.longitude,
-        );
+    getCurrentPosition({ enableHighAccuracy: false })
+      .then(async (loc) => {
+        const real = await reverseGeocodeCountry(loc.lat, loc.lng);
         if (cancelled || homeCountryTouched) return;
         const code = pickerCodeFor(real);
         setHomeCountry(code, false);
-      },
-      () => {},
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
-    );
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };

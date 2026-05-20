@@ -3,3 +3,7 @@ node_modules
 functions/node_modules
 public
 *.webmanifest
+
+# Generated/managed by Xcode and Android Studio.
+ios/
+android/

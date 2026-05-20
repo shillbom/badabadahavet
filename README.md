@@ -70,6 +70,63 @@ Both workflows need the following **GitHub repository secrets**:
 
 Rules and indexes are **not** auto-deployed — run `firebase deploy --only firestore:rules,storage:rules,firestore:indexes` locally when you change them.
 
+## Native apps (Capacitor wrapper)
+
+The same React codebase ships as iOS and Android apps via [Capacitor](https://capacitorjs.com).
+The wrapper hosts the built SPA in a system WebView and exposes native
+APIs (camera, geolocation, splash, push) through plugins. There's a
+small `src/lib/native.ts` shim that picks the Capacitor implementation
+when `Capacitor.isNativePlatform()` is true and falls back to the
+browser APIs otherwise, so a single code path works in both contexts.
+
+### Building
+
+```bash
+# Build the web bundle for native (skips the PWA service worker
+# and copies dist/ into android/ + ios/)
+npm run cap:build
+
+# Open the project in the platform IDE
+npm run cap:open:android   # → Android Studio
+npm run cap:open:ios       # → Xcode (macOS only)
+
+# Or run on an attached device / simulator
+npm run cap:run:android
+npm run cap:run:ios
+```
+
+After any web-side change, re-run `npm run cap:build` (or `npm run cap:sync`
+if you've already built) to push the new assets into the native projects.
+
+### Requirements
+
+- **Android:** Android Studio (or just the Android SDK + `adb`) and a JDK 17+.
+- **iOS:** macOS with Xcode 15+. Capacitor 8 uses Swift Package Manager,
+  so CocoaPods is no longer required.
+
+### Permissions
+
+iOS usage strings live in `ios/App/App/Info.plist` (`NSCameraUsageDescription`,
+`NSPhotoLibraryUsageDescription`, `NSLocationWhenInUseUsageDescription`).
+Android permissions are declared in `android/app/src/main/AndroidManifest.xml`
+(`CAMERA`, `ACCESS_FINE_LOCATION`, `READ_MEDIA_IMAGES`, …). Edit the strings
+there to localise them before submitting to the stores.
+
+### Known caveats
+
+- **Google sign-in** uses the Firebase JS SDK redirect flow, which is
+  flaky inside system WebViews on iOS. If you want a smooth native
+  Google sign-in, add `@capacitor-firebase/authentication` and use the
+  native Google SDK (the app already handles Google account onboarding
+  in `GoogleAuthPage`, so the wiring is mostly there).
+- **Push notifications** need `@capacitor/push-notifications` + a Firebase
+  Cloud Messaging server key (Android) and an APNs certificate (iOS).
+  Not wired up yet — add when you need it.
+- The Capacitor build intentionally skips `vite-plugin-pwa`. Inside a
+  native binary the assets are already bundled, and a service worker
+  under `capacitor://localhost` / `https://localhost` causes stale-cache
+  pain after app updates.
+
 ## Admin / moderation
 
 Admins can rename and delete spots, delete individual swims, and remove

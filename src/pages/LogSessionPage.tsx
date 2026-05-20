@@ -30,6 +30,7 @@ import { haversineMeters } from "@/lib/utils";
 import { PLACE_RADIUS_METERS } from "@/lib/scoring";
 import type { SessionDoc } from "@/lib/types";
 import { useLocale, useT } from "@/lib/i18n";
+import { getCurrentPosition, isNative, pickPhoto } from "@/lib/native";
 
 type Mode = "now" | "pick";
 
@@ -90,16 +91,17 @@ export default function LogSessionPage() {
   // even in "pick" mode where coords aren't auto-set from geolocation.
   // Initialised above with a fallback; here we override with the real position.
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    let cancelled = false;
+    getCurrentPosition({ enableHighAccuracy: false })
+      .then((loc) => {
+        if (cancelled) return;
         setSearchOrigin(loc);
         if (user) void updateUserLastLocation(user.uid, loc.lat, loc.lng);
-      },
-      () => {},
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
-    );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Once we know the user's location, fly the map there at a close zoom
@@ -199,20 +201,17 @@ export default function LogSessionPage() {
       setSearch("");
       autoPickedNowRef.current = false;
       setDate(toLocalInput(new Date()));
-      if (!navigator.geolocation) {
-        toast.error(t("log.geo.unavailable"));
-        setMode("pick");
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => {
-          toast.error(t("log.geo.failed"));
+      getCurrentPosition({ enableHighAccuracy: true })
+        .then((loc) => setCoords(loc))
+        .catch((err) => {
+          const code = (err as { message?: string })?.message;
+          toast.error(
+            code === "geolocation_unavailable"
+              ? t("log.geo.unavailable")
+              : t("log.geo.failed"),
+          );
           setMode("pick");
-        },
-        { enableHighAccuracy: true, timeout: 8000 },
-      );
+        });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
@@ -222,6 +221,21 @@ export default function LogSessionPage() {
     if (!f) return;
     setPhotoFile(f);
     setPhotoPreview(URL.createObjectURL(f));
+  }
+
+  async function onAddPhotoClick() {
+    if (!isNative()) {
+      photoInput.current?.click();
+      return;
+    }
+    try {
+      const f = await pickPhoto(photoInput.current);
+      if (!f) return;
+      setPhotoFile(f);
+      setPhotoPreview(URL.createObjectURL(f));
+    } catch {
+      // User cancelled the native picker or denied permission — no-op.
+    }
   }
 
   function clearPhoto() {
@@ -601,7 +615,7 @@ export default function LogSessionPage() {
             ) : (
               <button
                 type="button"
-                onClick={() => photoInput.current?.click()}
+                onClick={onAddPhotoClick}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white/60 py-6 text-sm text-slate-500 hover:bg-white/90"
               >
                 <Camera className="h-4 w-4" />
