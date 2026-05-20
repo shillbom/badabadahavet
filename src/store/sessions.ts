@@ -32,7 +32,12 @@ import {
 import { computeMyStats, type MyStats } from "@/lib/stats";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useLocale } from "@/lib/i18n";
-import { getCurrentPosition } from "@/lib/native";
+import {
+  getCurrentPosition,
+  isNative,
+  signInWithGoogleNative,
+  signOutNative,
+} from "@/lib/native";
 
 // Resolves when the current signup write finishes, so the auth-state
 // listener can wait rather than bail out and leave loading=true forever.
@@ -96,7 +101,7 @@ type State = {
     displayName: string,
     homeCountry: string,
   ) => Promise<void>;
-  loginWithGoogle: () => void;
+  loginWithGoogle: () => Promise<void>;
   completeGoogleOnboarding: (
     displayName: string,
     homeCountry: string,
@@ -163,8 +168,15 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  loginWithGoogle: () => {
-    // Silently rewrite the URL before redirecting. Firebase stores
+  loginWithGoogle: async () => {
+    // On native: open the OS-level Google account picker via the
+    // Capacitor Firebase plugin and hand the resulting credential to
+    // the JS SDK. No redirect — the picker is a true native sheet.
+    if (isNative()) {
+      await signInWithGoogleNative();
+      return;
+    }
+    // Web: Silently rewrite the URL before redirecting. Firebase stores
     // window.location.href as the return URL, so this makes it land on
     // /auth/google after auth — without bouncing there first.
     window.history.replaceState(null, "", "/auth/google");
@@ -185,7 +197,12 @@ export const useStore = create<State>((set, get) => ({
     set({ googleOnboarding: false });
   },
 
-  logout: async () => await signOut(auth),
+  logout: async () => {
+    // Clear the native account picker session too so the next sign-in
+    // shows the account chooser instead of silently reusing the last one.
+    await signOutNative();
+    await signOut(auth);
+  },
 
   resetPassword: async (email) =>
     await sendPasswordResetEmail(auth, email.trim().toLowerCase()),

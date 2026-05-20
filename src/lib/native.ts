@@ -1,4 +1,10 @@
 import { Capacitor } from "@capacitor/core";
+import {
+  GoogleAuthProvider,
+  signInWithCredential,
+  type UserCredential,
+} from "firebase/auth";
+import { auth } from "@/firebase";
 
 /**
  * Thin platform abstraction so the same React code runs as a web PWA
@@ -84,4 +90,43 @@ export async function pickPhoto(
   // Web: trigger the hidden <input type="file" capture> the page already renders.
   webFallbackInput?.click();
   return null;
+}
+
+/**
+ * Native Google sign-in. Opens the OS-level account picker (Google
+ * Sign-In on iOS, Google Play Services on Android) instead of the
+ * Firebase web redirect flow — which is unreliable inside system
+ * WebViews. The credential returned by the plugin is forwarded to the
+ * Firebase JS SDK so the existing onAuthStateChanged listener fires
+ * normally and the rest of the app sees a logged-in user.
+ *
+ * Only callable on native — guard with `isNative()` at the call site.
+ */
+export async function signInWithGoogleNative(): Promise<UserCredential> {
+  const { FirebaseAuthentication } =
+    await import("@capacitor-firebase/authentication");
+  const result = await FirebaseAuthentication.signInWithGoogle();
+  const idToken = result.credential?.idToken;
+  const accessToken = result.credential?.accessToken;
+  if (!idToken && !accessToken) {
+    throw new Error("native_google_signin_missing_credential");
+  }
+  const credential = GoogleAuthProvider.credential(idToken, accessToken);
+  return signInWithCredential(auth, credential);
+}
+
+/**
+ * Sign out from the native account picker too, so the next sign-in
+ * shows the account chooser rather than silently reusing the last
+ * Google account. Called alongside Firebase JS signOut.
+ */
+export async function signOutNative(): Promise<void> {
+  if (!isNative()) return;
+  const { FirebaseAuthentication } =
+    await import("@capacitor-firebase/authentication");
+  try {
+    await FirebaseAuthentication.signOut();
+  } catch {
+    // Best-effort — the JS SDK signOut is what actually matters.
+  }
 }

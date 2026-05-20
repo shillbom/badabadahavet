@@ -26,3 +26,10 @@ android/app/src/main/assets/capacitor.plugins.json
 ios/App/App/public/
 ios/App/App/capacitor.config.json
 ios/App/App/capacitor.plugins.json
+
+# Per-environment Firebase config for the native apps. Download these
+# from the Firebase Console (Project settings → "Your apps") and drop
+# them in here — they're project-specific, not secret, but live outside
+# version control so dev/staging/prod stay clean.
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist

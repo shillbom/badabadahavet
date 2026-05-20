@@ -112,13 +112,61 @@ Android permissions are declared in `android/app/src/main/AndroidManifest.xml`
 (`CAMERA`, `ACCESS_FINE_LOCATION`, `READ_MEDIA_IMAGES`, …). Edit the strings
 there to localise them before submitting to the stores.
 
-### Known caveats
+### Native Google sign-in
 
-- **Google sign-in** uses the Firebase JS SDK redirect flow, which is
-  flaky inside system WebViews on iOS. If you want a smooth native
-  Google sign-in, add `@capacitor-firebase/authentication` and use the
-  native Google SDK (the app already handles Google account onboarding
-  in `GoogleAuthPage`, so the wiring is mostly there).
+The wrapper uses [`@capacitor-firebase/authentication`](https://github.com/capawesome-team/capacitor-firebase)
+to open the OS-level Google account picker (Google Sign-In on iOS,
+Play Services on Android) instead of the Firebase web redirect flow,
+which is unreliable inside system WebViews. The plugin returns an ID
+token; we hand it to the Firebase JS SDK via `signInWithCredential` so
+the rest of the app — which already listens to JS auth state — works
+unchanged. The branch lives in `loginWithGoogle()` in
+`src/store/sessions.ts`, gated by `isNative()` from `src/lib/native.ts`.
+
+Once-per-Firebase-project setup:
+
+1. In the Firebase Console → **Project settings → Your apps**, add an
+   **iOS app** (bundle id `se.badligan.app`) and an **Android app**
+   (package `se.badligan.app`).
+2. Download the config files:
+   - **`GoogleService-Info.plist`** → drop into `ios/App/App/`
+     (next to `Info.plist`), then drag it into the Xcode project so it
+     gets included in the app bundle.
+   - **`google-services.json`** → drop into `android/app/`.
+3. **iOS only** — open `GoogleService-Info.plist`, copy the
+   `REVERSED_CLIENT_ID` value, and add it as a URL scheme in
+   `ios/App/App/Info.plist`:
+
+   ```xml
+   <key>CFBundleURLTypes</key>
+   <array>
+     <dict>
+       <key>CFBundleURLSchemes</key>
+       <array>
+         <string>com.googleusercontent.apps.1234567890-abcdef…</string>
+       </array>
+     </dict>
+   </array>
+   ```
+
+   (without this, Google Sign-In can't redirect back into the app)
+
+4. In the Firebase Console → **Authentication → Sign-in method**, make
+   sure **Google** is enabled. For the **Android** side, also add the
+   SHA-1 fingerprint of your debug keystore (and release keystore later)
+   under the Android app's settings — the native Google sign-in fails
+   silently without it.
+
+Both config files are `.gitignore`d (they're per-environment, not
+secret) so each developer/CI environment drops in their own copy.
+
+### Other caveats
+
+- **Apple sign-in** isn't wired up. App Store policy requires it on
+  iOS once any other social login is offered, so before submitting to
+  the App Store add `signInWithApple` from the same plugin (it needs
+  the "Sign In with Apple" capability enabled in the Xcode project and
+  Apple Developer Account).
 - **Push notifications** need `@capacitor/push-notifications` + a Firebase
   Cloud Messaging server key (Android) and an APNs certificate (iOS).
   Not wired up yet — add when you need it.

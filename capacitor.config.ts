@@ -17,6 +17,16 @@ const config: CapacitorConfig = {
       androidSplashResourceName: "splash",
       showSpinner: false,
     },
+    // We use the native Firebase Authentication plugin only to open the
+    // native account picker and obtain a credential. Sign-in itself is
+    // then performed with the Firebase JS SDK (via signInWithCredential)
+    // so the rest of the app — which already listens to JS auth state —
+    // keeps working unchanged. `skipNativeAuth: true` stops the plugin
+    // from also signing into the native Firebase SDK (which we don't use).
+    FirebaseAuthentication: {
+      skipNativeAuth: true,
+      providers: ["google.com"],
+    },
   },
 };
 
