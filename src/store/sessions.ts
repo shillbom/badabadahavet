@@ -7,6 +7,8 @@ import {
   signOut,
   updateProfile,
   deleteUser,
+  GoogleAuthProvider,
+  signInWithRedirect,
   type User,
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -14,6 +16,7 @@ import { auth, db } from "@/firebase";
 import {
   deleteAccountData,
   ensureUserDoc,
+  finalizeGoogleProfile,
   recordAchievements,
   setupUserDoc,
   watchAllSessions,
@@ -81,11 +84,19 @@ type State = {
   /** Total bonus points from unlocked achievements. */
   achievementBonusPoints: number;
 
+  // ── Auth state ────────────────────────────────────────────────────────
+  googleOnboarding: boolean;
+
   // ── Auth actions ──────────────────────────────────────────────────────
   login: (email: string, password: string) => Promise<void>;
   signup: (
     email: string,
     password: string,
+    displayName: string,
+    homeCountry: string,
+  ) => Promise<void>;
+  loginWithGoogle: () => void;
+  completeGoogleOnboarding: (
     displayName: string,
     homeCountry: string,
   ) => Promise<void>;
@@ -118,6 +129,7 @@ export const useStore = create<State>((set, get) => ({
   achievementCtx: { uid: "", mySessions: [], allSessions: [] },
   unlockedAchievements: new Set(),
   achievementBonusPoints: 0,
+  googleOnboarding: false,
 
   // ── Auth actions ──────────────────────────────────────────────────────
   login: async (email, password) => {
@@ -148,6 +160,28 @@ export const useStore = create<State>((set, get) => ({
       resolve();
       signupDone = null;
     }
+  },
+
+  loginWithGoogle: () => {
+    // Silently rewrite the URL before redirecting. Firebase stores
+    // window.location.href as the return URL, so this makes it land on
+    // /auth/google after auth — without bouncing there first.
+    window.history.replaceState(null, "", "/auth/google");
+    signInWithRedirect(auth, new GoogleAuthProvider());
+  },
+
+  completeGoogleOnboarding: async (displayName, homeCountry) => {
+    const { user } = get();
+    if (!user) return;
+    const trimmed = displayName.trim() || user.displayName || "Swimmer";
+    await updateProfile(user, { displayName: trimmed });
+    // Use updateDoc (via finalizeGoogleProfile) so we don't touch createdAt,
+    // which the Firestore security rules forbid changing after creation.
+    await finalizeGoogleProfile(user.uid, trimmed, {
+      locale: useLocale.getState().locale,
+      homeCountry,
+    });
+    set({ googleOnboarding: false });
   },
 
   logout: async () => await signOut(auth),
@@ -217,12 +251,13 @@ export const useStore = create<State>((set, get) => ({
     const authUnsub = onAuthStateChanged(auth, async (u) => {
       // Tear down the previous user's subscriptions on every auth change.
       stopData();
-      set({ user: u, myUid: u?.uid ?? null });
-
       if (!u) {
         set({
+          user: null,
+          myUid: null,
           profile: null,
           loading: false,
+          googleOnboarding: false,
           mySessions: [],
           allSessions: [],
           places: [],
@@ -237,11 +272,22 @@ export const useStore = create<State>((set, get) => ({
         return;
       }
 
+      set({ user: u, myUid: u.uid });
+
       // If signup is still writing the user doc, wait for it to finish
       // before proceeding — ensureUserDoc is safe to call on an existing doc.
       if (signupDone) await signupDone;
 
       const profile = await ensureUserDoc(u.uid, u.displayName ?? "Swimmer");
+
+      // A Google user with no homeCountry needs to complete onboarding.
+      const isGoogleUser = u.providerData.some(
+        (p) => p.providerId === "google.com",
+      );
+      if (isGoogleUser && !profile.homeCountry) {
+        set({ googleOnboarding: true });
+      }
+
       set({ profile, loading: false });
       if (profile.locale) useLocale.getState().setLocale(profile.locale);
 

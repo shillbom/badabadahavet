@@ -220,6 +220,14 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "auth.error.taken": "Den e-posten är redan registrerad",
     "auth.error.weak_password": "Välj ett längre lösenord (minst 6 tecken)",
     "auth.error.generic": "Kunde inte logga in",
+    "auth.error.google_cancelled": "Inloggning med Google avbröts",
+    "auth.google": "Fortsätt med Google",
+    "auth.google.divider": "eller",
+    "auth.google.onboarding.title": "Välkommen! Välj ditt hemland",
+    "auth.google.onboarding.hint":
+      "Det här använder vi för att beräkna bonuspoäng när du badar utomlands.",
+    "auth.google.onboarding.name": "Namn (från Google)",
+    "auth.google.onboarding.submit": "Klar — hoppa i!",
 
     "layout.swimmer": "Badare",
     "layout.solo_swimmer": "Solobadare",
@@ -495,6 +503,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.tech.body":
       "Byggt med React, Vite, Firebase, Leaflet och Tailwind. Kartan använder CartoDB-tiles ovanpå OpenStreetMap.",
     "about.tech.source": "Källkoden finns på",
+    "about.created_by": "Skapad av",
 
     "profile.title": "Profil",
     "profile.home_country": "Hemland",
@@ -636,6 +645,14 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "auth.error.taken": "That email is already registered",
     "auth.error.weak_password": "Pick a longer password (min 6 chars)",
     "auth.error.generic": "Couldn't sign you in",
+    "auth.error.google_cancelled": "Google sign-in was cancelled",
+    "auth.google": "Continue with Google",
+    "auth.google.divider": "or",
+    "auth.google.onboarding.title": "Welcome! Pick your home country",
+    "auth.google.onboarding.hint":
+      "We use this to award bonus points when you swim abroad.",
+    "auth.google.onboarding.name": "Name (from Google)",
+    "auth.google.onboarding.submit": "Done — dive in!",
 
     "layout.swimmer": "Swimmer",
     "layout.solo_swimmer": "Solo swimmer",
@@ -909,6 +926,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.tech.body":
       "Built with React, Vite, Firebase, Leaflet and Tailwind. The map uses CartoDB tiles over OpenStreetMap.",
     "about.tech.source": "Source code lives on",
+    "about.created_by": "Created by",
 
     "profile.title": "Profile",
     "profile.home_country": "Home country",

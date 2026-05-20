@@ -82,6 +82,23 @@ export async function setupUserDoc(
   return data;
 }
 
+/**
+ * Called after Google onboarding — updates an existing user doc without
+ * touching `createdAt` (which the security rules forbid changing).
+ */
+export async function finalizeGoogleProfile(
+  uid: string,
+  displayName: string,
+  opts: { locale: "sv" | "en"; homeCountry: string },
+): Promise<void> {
+  await updateDoc(doc(usersCol, uid), {
+    displayName,
+    emoji: pickEmoji(displayName),
+    locale: opts.locale,
+    homeCountry: opts.homeCountry,
+  });
+}
+
 export async function updateUserLocale(uid: string, locale: "sv" | "en") {
   await updateDoc(doc(usersCol, uid), { locale });
 }

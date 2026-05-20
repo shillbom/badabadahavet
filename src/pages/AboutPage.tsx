@@ -93,6 +93,19 @@ export default function AboutPage() {
       </Section>
 
       <div className="mt-8 text-center text-xs text-slate-500">
+        <p>
+          {t("about.created_by")}{" "}
+          <a
+            href="https://www.linkedin.com/in/simon-hillbom/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-wave-700 underline hover:text-wave-800"
+          >
+            Simon Hillbom
+          </a>
+        </p>
+      </div>
+      <div className="mt-3 text-center text-xs text-slate-500">
         <Link to="/profile" className="hover:underline">
           ← {t("profile.title")}
         </Link>
