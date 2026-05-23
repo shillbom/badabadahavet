@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -8,6 +13,7 @@ import {
   Users,
   Calendar,
   MapPin,
+  Share2,
   Thermometer,
   X,
   Pencil,
@@ -25,7 +31,7 @@ import {
   watchPlaceSessions,
 } from "@/lib/data";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, formatDateTime, shareOrCopy } from "@/lib/utils";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
@@ -45,6 +51,12 @@ export default function SpotPage() {
   const [loading, setLoading] = useState(true);
   const [scope, setScope] = useState<"all" | string>("all");
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [searchParams] = useSearchParams();
+  const focusedSessionId = searchParams.get("session");
+  // Track which sessions have been highlighted once so we don't replay
+  // the effect every time the sessions list re-streams from Firestore.
+  const highlightedRef = useRef<Set<string>>(new Set());
+  const sessionRefs = useRef<Map<string, HTMLLIElement>>(new Map());
 
   useEffect(() => {
     if (!placeId) return;
@@ -85,6 +97,54 @@ export default function SpotPage() {
     () => visibleSessions.filter((s) => s.photoUrl),
     [visibleSessions],
   );
+
+  // When a `?session=<id>` deep link is opened, scroll the matching swim
+  // into view once it has streamed in, and flash a highlight ring so the
+  // user can spot it in the list.
+  useEffect(() => {
+    if (!focusedSessionId) return;
+    if (highlightedRef.current.has(focusedSessionId)) return;
+    const exists = visibleSessions.some((s) => s.id === focusedSessionId);
+    if (!exists) return;
+    highlightedRef.current.add(focusedSessionId);
+    // Wait a tick so the freshly mounted <li ref={...}> is in the map.
+    const raf = requestAnimationFrame(() => {
+      const el = sessionRefs.current.get(focusedSessionId);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [focusedSessionId, visibleSessions]);
+
+  async function onShareSpot() {
+    if (!place) return;
+    const url = `${window.location.origin}/spot/${place.id}`;
+    const result = await shareOrCopy({
+      url,
+      title: t("spot.share.title", { name: place.name }),
+      text: t("spot.share.text", { name: place.name }),
+    });
+    if (result === "copied") toast.success(t("spot.share.copied"));
+    else if (result === "failed") toast.error(t("spot.share.failed"));
+  }
+
+  async function onShareSession(s: SessionDoc) {
+    if (!place) return;
+    const url = `${window.location.origin}/spot/${place.id}?session=${s.id}`;
+    const result = await shareOrCopy({
+      url,
+      title: t("spot.share.session_title", {
+        name: s.displayName,
+        place: place.name,
+      }),
+      text: t("spot.share.session_text", {
+        name: s.displayName,
+        place: place.name,
+      }),
+    });
+    if (result === "copied") toast.success(t("spot.share.copied"));
+    else if (result === "failed") toast.error(t("spot.share.failed"));
+  }
 
   async function onAdminRename() {
     if (!place) return;
@@ -167,7 +227,7 @@ export default function SpotPage() {
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="truncate font-display text-2xl font-black text-wave-900">
             {place.name}
           </h2>
@@ -189,6 +249,15 @@ export default function SpotPage() {
             ) : null}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onShareSpot}
+          className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+          aria-label={t("spot.share")}
+          title={t("spot.share")}
+        >
+          <Share2 className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="h-44 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
@@ -198,6 +267,7 @@ export default function SpotPage() {
           center={[place.lat, place.lng]}
           zoom={13}
           linkToSpot={false}
+          viewKey={`spot-${place.id}`}
         />
       </div>
 
@@ -313,10 +383,16 @@ export default function SpotPage() {
         {visibleSessions.map((s, i) => (
           <motion.li
             key={s.id}
+            ref={(el) => {
+              if (el) sessionRefs.current.set(s.id, el);
+              else sessionRefs.current.delete(s.id);
+            }}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: Math.min(i, 8) * 0.03 }}
-            className="glass flex items-start gap-3 p-3"
+            className={`glass flex items-start gap-3 p-3 ${
+              focusedSessionId === s.id ? "animate-highlight" : ""
+            }`}
           >
             {s.photoUrl ? (
               <img
@@ -343,6 +419,14 @@ export default function SpotPage() {
                   <div className="font-display text-base font-black text-wave-700">
                     +{s.points}
                   </div>
+                  <button
+                    onClick={() => onShareSession(s)}
+                    className="rounded-full bg-white/80 p-1 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+                    aria-label={t("spot.share_session")}
+                    title={t("spot.share_session")}
+                  >
+                    <Share2 className="h-3 w-3" />
+                  </button>
                   {isAdmin ? (
                     <button
                       onClick={() => onAdminDeleteSession(s.id)}

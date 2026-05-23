@@ -24,6 +24,7 @@
 
   --animate-bob: bob 3s ease-in-out infinite;
   --animate-ripple: ripple 1.6s ease-out infinite;
+  --animate-highlight: highlight 2.4s ease-out 1;
 }
 
 @keyframes bob {
@@ -44,6 +45,18 @@
   100% {
     transform: scale(2.4);
     opacity: 0;
+  }
+}
+
+@keyframes highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(2, 158, 234, 0);
+  }
+  15% {
+    box-shadow: 0 0 0 6px rgba(2, 158, 234, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(2, 158, 234, 0);
   }
 }
 

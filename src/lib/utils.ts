@@ -50,3 +50,36 @@ export function generateGroupCode(length = 5) {
   }
   return s;
 }
+
+/**
+ * Share a URL via the Web Share API when available, otherwise copy to the
+ * clipboard. Returns "shared" / "copied" / "failed" so the caller can show
+ * the right toast.
+ */
+export async function shareOrCopy(opts: {
+  url: string;
+  title?: string;
+  text?: string;
+}): Promise<"shared" | "copied" | "failed"> {
+  const nav = typeof navigator !== "undefined" ? navigator : undefined;
+  if (nav?.share) {
+    try {
+      await nav.share({ url: opts.url, title: opts.title, text: opts.text });
+      return "shared";
+    } catch (err) {
+      // AbortError means the user dismissed the share sheet — that's not
+      // a failure, just a no-op.
+      if ((err as { name?: string })?.name === "AbortError") return "shared";
+      // Otherwise fall through to clipboard fallback.
+    }
+  }
+  if (nav?.clipboard?.writeText) {
+    try {
+      await nav.clipboard.writeText(opts.url);
+      return "copied";
+    } catch {
+      /* fall through */
+    }
+  }
+  return "failed";
+}

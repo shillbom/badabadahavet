@@ -163,6 +163,17 @@ export const useStore = create<State>((set, get) => ({
   },
 
   loginWithGoogle: () => {
+    // Preserve any deep link (e.g. /spot/abc?session=xyz) across the
+    // Google redirect so the user lands back where they started.
+    const here =
+      window.location.pathname + window.location.search + window.location.hash;
+    if (here && here !== "/" && !here.startsWith("/auth/google")) {
+      try {
+        sessionStorage.setItem("login.returnTo", here);
+      } catch {
+        /* sessionStorage may be unavailable (private mode) — fall through */
+      }
+    }
     // Silently rewrite the URL before redirecting. Firebase stores
     // window.location.href as the return URL, so this makes it land on
     // /auth/google after auth — without bouncing there first.

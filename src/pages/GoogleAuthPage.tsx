@@ -22,8 +22,20 @@ const redirectResultPromise = getRedirectResult(auth).catch((e) =>
   console.error(e),
 );
 
+function consumeReturnTo(): string {
+  try {
+    const saved = sessionStorage.getItem("login.returnTo");
+    sessionStorage.removeItem("login.returnTo");
+    // Only honour same-origin relative paths to avoid open-redirect risk.
+    if (saved && saved.startsWith("/") && !saved.startsWith("//")) return saved;
+  } catch {
+    /* sessionStorage unavailable — fall back to root */
+  }
+  return "/";
+}
+
 export default function GoogleAuthPage() {
-  const [redirect, setRedirect] = useState(false);
+  const [target, setTarget] = useState<string | null>(null);
   const t = useT();
   useEffect(() => {
     redirectResultPromise.then((result) => {
@@ -31,13 +43,14 @@ export default function GoogleAuthPage() {
       if (result === null) {
         toast.error(t("auth.error.google_cancelled"));
       }
-      // Navigate to "/" regardless — onAuthStateChanged handles routing.
-      setRedirect(true);
+      // Navigate to the preserved deep link (or "/") regardless —
+      // onAuthStateChanged handles routing if the user isn't authed yet.
+      setTarget(consumeReturnTo());
     });
   }, []);
 
-  if (redirect) {
-    return <Navigate replace to="/" />;
+  if (target) {
+    return <Navigate replace to={target} />;
   }
 
   return <FullSplash />;
