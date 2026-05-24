@@ -239,12 +239,15 @@ export const useStore = create<State>((set, get) => ({
 
   // ── Bootstrap ─────────────────────────────────────────────────────────
   _startListening: () => {
-    // Public subscriptions (places + community sessions) run for the
-    // lifetime of the app — they don't require auth and they power the
-    // logged-out map. User-scoped subscriptions are torn down/restarted
-    // on every auth change.
+    // Public subscriptions (places + community sessions) survive auth
+    // changes — but we hold off starting them until Firebase Auth has
+    // resolved its first state. Subscribing before that race-condition
+    // fires the query with `auth.currentUser == null`, which the current
+    // production rules reject (sessions require signedIn) — and the
+    // listener stays empty even after the user signs in.
     let publicUnsubs: (() => void)[] = [];
     let userUnsubs: (() => void)[] = [];
+    let publicStarted = false;
     let permissionStatus: PermissionStatus | null = null;
 
     const fetchLocation = () => get()._refreshLocation();
@@ -252,6 +255,28 @@ export const useStore = create<State>((set, get) => ({
     const stopUser = () => {
       userUnsubs.forEach((u) => u());
       userUnsubs = [];
+    };
+
+    const startPublic = () => {
+      if (publicStarted) return;
+      publicStarted = true;
+      publicUnsubs = [
+        watchAllSessions((allSessions) => {
+          const { myUid, mySessions, places } = get();
+          set({
+            allSessions,
+            ...derive(myUid ?? "", mySessions, allSessions, places),
+          });
+          if (myUid) persistNewAchievements(get);
+        }),
+        watchPlaces((places) => {
+          const { myUid, mySessions, allSessions } = get();
+          set({
+            places,
+            ...derive(myUid ?? "", mySessions, allSessions, places),
+          });
+        }),
+      ];
     };
 
     // Kick off permission check immediately — independent of auth state.
@@ -276,26 +301,10 @@ export const useStore = create<State>((set, get) => ({
       fetchLocation();
     }
 
-    // Public reads — always active, regardless of auth state.
-    publicUnsubs = [
-      watchAllSessions((allSessions) => {
-        const { myUid, mySessions, places } = get();
-        set({
-          allSessions,
-          ...derive(myUid ?? "", mySessions, allSessions, places),
-        });
-        if (myUid) persistNewAchievements(get);
-      }),
-      watchPlaces((places) => {
-        const { myUid, mySessions, allSessions } = get();
-        set({
-          places,
-          ...derive(myUid ?? "", mySessions, allSessions, places),
-        });
-      }),
-    ];
-
     const authUnsub = onAuthStateChanged(auth, async (u) => {
+      // First auth state resolved — safe to start public listeners now
+      // (with the user's credentials attached if they're signed in).
+      startPublic();
       // Tear down the previous user's subscriptions on every auth change.
       stopUser();
       if (!u) {
