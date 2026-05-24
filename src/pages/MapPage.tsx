@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Flame, LogIn, MapPin, Trophy } from "lucide-react";
+import { Flame, MapPin, Trophy } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
-import { rememberReturnPath } from "@/lib/utils";
 
 export default function MapPage() {
   const { user, profile } = useAuth();
@@ -81,14 +80,6 @@ export default function MapPage() {
               {t("map.guest.subtitle")}
             </div>
           </div>
-          <Link
-            to="/login"
-            onClick={rememberReturnPath}
-            className="inline-flex flex-none items-center gap-1.5 rounded-full bg-wave-600 px-3 py-2 text-xs font-semibold text-white shadow hover:bg-wave-700"
-          >
-            <LogIn className="h-3.5 w-3.5" />
-            {t("layout.sign_in")}
-          </Link>
         </motion.div>
       ) : (
         <motion.div
