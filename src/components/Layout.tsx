@@ -111,7 +111,7 @@ export default function Layout() {
 
       <main
         className={cn(
-          "relative flex flex-1 flex-col",
+          "relative flex flex-1 flex-col overflow-x-hidden",
           isMapPage
             ? "overflow-hidden"
             : hideChrome

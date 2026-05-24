@@ -66,6 +66,14 @@
   #root {
     height: 100%;
   }
+  /* iOS PWA: 100dvh includes areas that aren't truly available (home indicator
+     gap, etc.). -webkit-fill-available gives the exact usable height instead.
+     Scoped to iOS via -webkit-touch-callout so it doesn't affect other browsers. */
+  @supports (-webkit-touch-callout: none) {
+    html {
+      height: -webkit-fill-available;
+    }
+  }
   body {
     @apply font-sans text-slate-900 antialiased;
     background:
