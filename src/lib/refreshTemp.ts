@@ -1,5 +1,4 @@
-import { httpsCallable } from "firebase/functions";
-import { auth, functions } from "@/firebase";
+import { auth, cloudFn } from "@/firebase";
 
 const STALE_AFTER_MS = 60 * 60 * 1000; // 1 hour
 const LOCAL_THROTTLE_MS = 5 * 60 * 1000; // don't ask for the same place more than once per 5 min
@@ -10,10 +9,7 @@ const lastRequested = new Map<string, number>();
 
 type Place = { id: string; externalId?: string; waterTempAt?: number };
 
-const callable = httpsCallable<{ placeId: string }, unknown>(
-  functions,
-  "refreshPlaceTemp",
-);
+const callable = cloudFn<{ placeId: string }, unknown>("refreshPlaceTemp");
 
 /**
  * Trigger a server-side temperature refresh for `place` if the stored

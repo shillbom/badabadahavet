@@ -9,7 +9,34 @@
   "hosting": {
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "rewrites": [
+      {
+        "source": "/api/lookupGroupByCode",
+        "function": {
+          "functionId": "lookupGroupByCode",
+          "region": "europe-west1"
+        }
+      },
+      {
+        "source": "/api/joinGroupByCode",
+        "function": {
+          "functionId": "joinGroupByCode",
+          "region": "europe-west1"
+        }
+      },
+      {
+        "source": "/api/leaveGroup",
+        "function": { "functionId": "leaveGroup", "region": "europe-west1" }
+      },
+      {
+        "source": "/api/refreshPlaceTemp",
+        "function": {
+          "functionId": "refreshPlaceTemp",
+          "region": "europe-west1"
+        }
+      },
+      { "source": "**", "destination": "/index.html" }
+    ],
     "headers": [
       {
         "source": "/index.html",

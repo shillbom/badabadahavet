@@ -33,6 +33,8 @@ const DETAIL_URL = (nutsCode) =>
 export const refreshPlaceTemp = onCall(
   {
     region: PROJECT_REGION,
+    cors: true,
+    invoker: "public",
     // Modest concurrency; this is a thin proxy.
     maxInstances: 5,
     memory: "256MiB",
@@ -157,6 +159,8 @@ export const refreshPlaceTemp = onCall(
 export const lookupGroupByCode = onCall(
   {
     region: PROJECT_REGION,
+    cors: true,
+    invoker: "public",
     maxInstances: 5,
     memory: "256MiB",
     timeoutSeconds: 10,
@@ -209,6 +213,8 @@ export const lookupGroupByCode = onCall(
 export const leaveGroup = onCall(
   {
     region: PROJECT_REGION,
+    cors: true,
+    invoker: "public",
     maxInstances: 5,
     memory: "256MiB",
     timeoutSeconds: 15,
@@ -275,6 +281,8 @@ export const leaveGroup = onCall(
 export const joinGroupByCode = onCall(
   {
     region: PROJECT_REGION,
+    cors: true,
+    invoker: "public",
     maxInstances: 5,
     memory: "256MiB",
     timeoutSeconds: 15,

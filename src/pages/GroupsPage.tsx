@@ -28,16 +28,18 @@ import {
   fetchUsers,
   lookupGroupByCode,
   updateGroupMeta,
+  watchMemberSessions,
 } from "@/lib/data";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import SwimMap from "@/components/SwimMap";
+import { bonusPointsForUid } from "@/lib/achievements";
+import { POINTS_COUNTRY_BONUS } from "@/lib/scoring";
 
 export default function GroupsPage() {
   const { user } = useAuth();
   const t = useT();
   const groups = useStore((s) => s.groups);
-  const allSessions = useStore((s) => s.allSessions);
   const places = useStore((s) => s.places);
   const [groupName, setGroupName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -314,7 +316,6 @@ export default function GroupsPage() {
           <GroupDetailSheet
             group={openGroup}
             myUid={user?.uid ?? ""}
-            allSessions={allSessions}
             places={places}
             onClose={() => setOpenGroup(null)}
             onLeave={() => onLeave(openGroup.id, openGroup.name)}
@@ -394,19 +395,22 @@ export default function GroupsPage() {
 function GroupDetailSheet({
   group,
   myUid,
-  allSessions,
   places,
   onClose,
   onLeave,
 }: {
   group: GroupDoc;
   myUid: string;
-  allSessions: SessionDoc[];
   places: PlaceDoc[];
   onClose: () => void;
   onLeave: () => void;
 }) {
   const t = useT();
+  const [allSessions, setAllSessions] = useState<SessionDoc[]>([]);
+
+  useEffect(() => {
+    return watchMemberSessions(group.members, setAllSessions);
+  }, [group.members]);
 
   function shareInviteLink() {
     const url = `${window.location.origin}/groups?join=${group.code}`;
@@ -484,6 +488,7 @@ function GroupDetailSheet({
       string,
       { points: number; swims: number; spots: Set<string> }
     >();
+    const abroadCountriesMap = new Map<string, Set<string>>();
     for (const uid of group.members)
       map.set(uid, { points: 0, swims: 0, spots: new Set() });
     for (const s of allSessions) {
@@ -492,6 +497,19 @@ function GroupDetailSheet({
       entry.points += s.points;
       entry.swims += 1;
       entry.spots.add(s.placeId);
+      if (!s.isHomeCountry && s.country) {
+        let c = abroadCountriesMap.get(s.uid);
+        if (!c) {
+          c = new Set();
+          abroadCountriesMap.set(s.uid, c);
+        }
+        c.add(s.country);
+      }
+    }
+    for (const [uid, entry] of map) {
+      entry.points += bonusPointsForUid(uid, allSessions);
+      entry.points +=
+        (abroadCountriesMap.get(uid)?.size ?? 0) * POINTS_COUNTRY_BONUS;
     }
     return map;
   }, [allSessions, group.members]);

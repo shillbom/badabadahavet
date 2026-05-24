@@ -7,7 +7,13 @@ import {
 } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
-import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+import {
+  getFunctions,
+  connectFunctionsEmulator,
+  httpsCallable,
+  httpsCallableFromURL,
+  type HttpsCallable,
+} from "firebase/functions";
 import {
   getAnalytics,
   isSupported as analyticsSupported,
@@ -68,4 +74,18 @@ if (
     .catch(() => {
       /* analytics is best-effort — ignore failures */
     });
+}
+
+/**
+ * Create a callable that routes through Firebase Hosting rewrites in production
+ * (same-origin, no CORS) and through the emulator in local dev.
+ */
+export function cloudFn<Req, Res>(name: string): HttpsCallable<Req, Res> {
+  if (useEmulators) {
+    return httpsCallable<Req, Res>(functions, name);
+  }
+  return httpsCallableFromURL<Req, Res>(
+    functions,
+    `${window.location.origin}/api/${name}`,
+  );
 }

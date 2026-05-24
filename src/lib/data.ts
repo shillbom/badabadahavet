@@ -24,8 +24,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { db, functions, storage } from "@/firebase";
-import { httpsCallable } from "firebase/functions";
+import { cloudFn, db, storage } from "@/firebase";
 import { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS, scoreSession } from "./scoring";
@@ -295,6 +294,32 @@ export function watchUserSessions(
   );
 }
 
+/** Subscribe to all sessions for a fixed set of users (e.g. a group). */
+export function watchMemberSessions(
+  uids: string[],
+  cb: (sessions: SessionDoc[]) => void,
+): Unsubscribe {
+  if (uids.length === 0) {
+    cb([]);
+    return () => {};
+  }
+  // Firestore `in` supports up to 30 values; chunk if needed.
+  const chunks: string[][] = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+
+  const results = new Map<string, SessionDoc[]>();
+  const unsubs = chunks.map((chunk, idx) =>
+    onSnapshot(query(sessionsCol, where("uid", "in", chunk)), (snap) => {
+      results.set(
+        String(idx),
+        snap.docs.map((d) => d.data() as SessionDoc),
+      );
+      cb([...results.values()].flat());
+    }),
+  );
+  return () => unsubs.forEach((u) => u());
+}
+
 /**
  * Subscribe to every swim logged during a calendar year (defaults to the
  * current year). Personal history and per-place history are *not* time-
@@ -373,10 +398,10 @@ export async function lookupGroupByCode(code: string): Promise<{
   emoji: string | null;
   memberCount: number;
 } | null> {
-  const callable = httpsCallable<
+  const callable = cloudFn<
     { code: string },
     { id: string; name: string; emoji: string | null; memberCount: number }
-  >(functions, "lookupGroupByCode");
+  >("lookupGroupByCode");
   try {
     const res = await callable({ code });
     return res.data ?? null;
@@ -395,10 +420,7 @@ export async function joinGroupByCode(opts: {
   // a Cloud Function (Admin SDK) which validates the code and atomically
   // adds the caller to the group.
   void opts.uid; // uid comes from auth context server-side; kept for callsite compat
-  const callable = httpsCallable<{ code: string }, GroupDoc>(
-    functions,
-    "joinGroupByCode",
-  );
+  const callable = cloudFn<{ code: string }, GroupDoc>("joinGroupByCode");
   try {
     const res = await callable({ code: opts.code });
     return res.data ?? null;
@@ -424,10 +446,7 @@ export async function leaveGroup(opts: {
   uid: string;
 }): Promise<void> {
   void opts.uid; // handled server-side from auth context
-  const callable = httpsCallable<{ groupId: string }, void>(
-    functions,
-    "leaveGroup",
-  );
+  const callable = cloudFn<{ groupId: string }, void>("leaveGroup");
   await callable({ groupId: opts.groupId });
 }
 

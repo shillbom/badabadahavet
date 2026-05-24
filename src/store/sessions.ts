@@ -323,22 +323,28 @@ export const useStore = create<State>((set, get) => ({
 
       set({ user: u, myUid: u.uid });
 
-      // If signup is still writing the user doc, wait for it to finish
-      // before proceeding — ensureUserDoc is safe to call on an existing doc.
-      if (signupDone) await signupDone;
+      try {
+        // If signup is still writing the user doc, wait for it to finish
+        // before proceeding — ensureUserDoc is safe to call on an existing doc.
+        if (signupDone) await signupDone;
 
-      const profile = await ensureUserDoc(u.uid, u.displayName ?? "Swimmer");
+        const profile = await ensureUserDoc(u.uid, u.displayName ?? "Swimmer");
 
-      // A Google user with no homeCountry needs to complete onboarding.
-      const isGoogleUser = u.providerData.some(
-        (p) => p.providerId === "google.com",
-      );
-      if (isGoogleUser && !profile.homeCountry) {
-        set({ googleOnboarding: true });
+        // A Google user with no homeCountry needs to complete onboarding.
+        const isGoogleUser = u.providerData.some(
+          (p) => p.providerId === "google.com",
+        );
+        if (isGoogleUser && !profile.homeCountry) {
+          set({ googleOnboarding: true });
+        }
+
+        set({ profile, loading: false });
+        if (profile.locale) useLocale.getState().setLocale(profile.locale);
+      } catch {
+        // Network error or Firestore failure — user is authed but profile
+        // couldn't be loaded. Unblock the UI so the spinner doesn't hang.
+        set({ loading: false });
       }
-
-      set({ profile, loading: false });
-      if (profile.locale) useLocale.getState().setLocale(profile.locale);
 
       userUnsubs = [
         // User profile — so locale/display-name changes propagate live.
