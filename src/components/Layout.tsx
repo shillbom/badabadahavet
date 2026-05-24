@@ -6,14 +6,7 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Map as MapIcon,
-  History,
-  Trophy,
-  Plus,
-  ListChecks,
-  LogIn,
-} from "lucide-react";
+import { Map as MapIcon, Trophy, Plus, ListChecks, LogIn } from "lucide-react";
 import { Suspense } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
@@ -192,9 +185,9 @@ export default function Layout() {
             />
             {!isGuest ? (
               <NavTab
-                to="/history"
-                label={t("nav.history")}
-                icon={<History className="h-5 w-5" />}
+                to="/toswim"
+                label={t("nav.toswim")}
+                icon={<ListChecks className="h-5 w-5" />}
               />
             ) : null}
             {!isGuest ? <span className="w-14" aria-hidden /> : null}
@@ -205,9 +198,9 @@ export default function Layout() {
             />
             {!isGuest ? (
               <NavTab
-                to="/toswim"
-                label={t("nav.toswim")}
-                icon={<ListChecks className="h-5 w-5" />}
+                to="/groups"
+                label={t("nav.groups")}
+                icon={<span className="text-base">👥</span>}
               />
             ) : null}
           </motion.nav>

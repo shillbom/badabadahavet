@@ -549,7 +549,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.created_by": "Skapad av",
 
     "profile.title": "Profil",
-    "profile.groups_cta": "Hantera dina grupper",
+    "profile.history_cta": "Bläddra i alla dina bad",
     "profile.home_country": "Hemland",
     "profile.home_country_saved": "Hemland uppdaterat",
     "profile.danger.title": "Farozon",
@@ -1016,7 +1016,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.created_by": "Created by",
 
     "profile.title": "Profile",
-    "profile.groups_cta": "Manage your groups",
+    "profile.history_cta": "Browse all your swims",
     "profile.home_country": "Home country",
     "profile.home_country_saved": "Home country updated",
     "profile.danger.title": "Danger zone",
