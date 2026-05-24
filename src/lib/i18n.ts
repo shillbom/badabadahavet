@@ -244,7 +244,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "nav.history": "Historik",
     "nav.top": "Topp",
     "nav.groups": "Grupper",
-    "nav.toswim": "Att bada",
+    "nav.toswim": "ToDopp",
 
     "map.greeting": "Hej {name} 👋",
     "map.empty.subtitle": "Tryck + för att logga ditt första bad.",
@@ -713,7 +713,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "nav.history": "History",
     "nav.top": "Top",
     "nav.groups": "Groups",
-    "nav.toswim": "To swim",
+    "nav.toswim": "ToSwim",
 
     "map.greeting": "Hi {name} 👋",
     "map.empty.subtitle": "Tap + to log your first dip.",
