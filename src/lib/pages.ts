@@ -49,6 +49,7 @@ const PAGES = [
   },
   { key: "About", load: withStaleReload(() => import("@/pages/AboutPage")) },
   { key: "Recap", load: withStaleReload(() => import("@/pages/RecapPage")) },
+  { key: "Toswim", load: withStaleReload(() => import("@/pages/ToswimPage")) },
 ] as const;
 
 type PageKey = (typeof PAGES)[number]["key"];

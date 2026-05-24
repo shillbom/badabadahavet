@@ -81,6 +81,11 @@ service cloud.firestore {
                       !('lastLocation' in request.resource.data)
                       || (validLatLng(request.resource.data.lastLocation.lat,
                                       request.resource.data.lastLocation.lng))
+                    )
+                    && (
+                      !('toswim' in request.resource.data)
+                      || (request.resource.data.toswim is map
+                          && request.resource.data.toswim.size() <= 200)
                     );
 
       // Account deletion: the owner may wipe their own user doc as part
@@ -91,10 +96,11 @@ service cloud.firestore {
 
     // ============================================================
     // places/{id}
-    //   World-readable. Admins may rename/delete for moderation.
+    //   World-readable so logged-out visitors can browse. Admins may
+    //   rename/delete for moderation.
     // ============================================================
     match /places/{placeId} {
-      allow read: if signedIn();
+      allow read: if true;
 
       allow create: if signedIn()
                     && request.resource.data.createdBy == request.auth.uid
@@ -126,9 +132,10 @@ service cloud.firestore {
 
     // ============================================================
     // sessions/{id}
+    //   World-readable so logged-out visitors can browse swim history.
     // ============================================================
     match /sessions/{sessionId} {
-      allow read: if signedIn();
+      allow read: if true;
 
       allow create: if signedIn()
                     && request.resource.data.uid == request.auth.uid

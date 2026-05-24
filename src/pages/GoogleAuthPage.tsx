@@ -5,6 +5,7 @@ import { auth } from "@/firebase";
 import { FullSplash } from "@/components/Splash";
 import { toast } from "@/components/ui/Toast";
 import { useT } from "@/lib/i18n";
+import { consumeReturnPath } from "@/lib/utils";
 
 /**
  * Return-landing page for the Google sign-in redirect flow.
@@ -22,18 +23,6 @@ const redirectResultPromise = getRedirectResult(auth).catch((e) =>
   console.error(e),
 );
 
-function consumeReturnTo(): string {
-  try {
-    const saved = sessionStorage.getItem("login.returnTo");
-    sessionStorage.removeItem("login.returnTo");
-    // Only honour same-origin relative paths to avoid open-redirect risk.
-    if (saved && saved.startsWith("/") && !saved.startsWith("//")) return saved;
-  } catch {
-    /* sessionStorage unavailable — fall back to root */
-  }
-  return "/";
-}
-
 export default function GoogleAuthPage() {
   const [target, setTarget] = useState<string | null>(null);
   const t = useT();
@@ -45,7 +34,7 @@ export default function GoogleAuthPage() {
       }
       // Navigate to the preserved deep link (or "/") regardless —
       // onAuthStateChanged handles routing if the user isn't authed yet.
-      setTarget(consumeReturnTo());
+      setTarget(consumeReturnPath());
     });
   }, []);
 

@@ -6,6 +6,7 @@ import {
   Award,
   CalendarHeart,
   Check,
+  ChevronRight,
   Clock,
   Compass,
   Flame,
@@ -353,6 +354,21 @@ export default function ProfilePage() {
           </Link>
         </div>
       ) : null}
+
+      {/* Groups shortcut — Groups isn't in the bottom nav anymore, so make
+          sure it stays discoverable from the profile. */}
+      <Link to="/groups" className="glass mb-4 flex items-center gap-2 p-3">
+        <span className="text-xl">👥</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+            {t("nav.groups")}
+          </div>
+          <div className="font-display text-sm font-bold text-wave-900">
+            {t("profile.groups_cta")}
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-slate-400" />
+      </Link>
 
       {/* Achievement chips */}
       {/* {unlockedAchievements.size > 0 ? (

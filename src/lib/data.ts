@@ -131,6 +131,35 @@ export async function recordAchievements(uid: string, ids: string[]) {
   await updateDoc(doc(usersCol, uid), updates);
 }
 
+// ---------- Toswim list ----------
+
+/** Add a place to the user's "want to swim" list. No-op if already there. */
+export async function addToSwim(uid: string, placeId: string): Promise<void> {
+  await updateDoc(doc(usersCol, uid), {
+    [`toswim.${placeId}`]: { addedAt: Date.now() },
+  });
+}
+
+export async function removeFromSwim(
+  uid: string,
+  placeId: string,
+): Promise<void> {
+  await updateDoc(doc(usersCol, uid), {
+    [`toswim.${placeId}`]: deleteField(),
+  });
+}
+
+/** Mark a toswim entry done. Used after a session is logged at that place. */
+export async function markToSwimDone(
+  uid: string,
+  placeId: string,
+  doneAt: number,
+): Promise<void> {
+  await updateDoc(doc(usersCol, uid), {
+    [`toswim.${placeId}.doneAt`]: doneAt,
+  });
+}
+
 function pickEmoji(seed: string): string {
   const pool = ["🐬", "🦭", "🐟", "🦦", "🐳", "🪼", "🐠", "🦑", "🐢", "🦞"];
   let h = 0;
@@ -264,6 +293,22 @@ export async function createSession(opts: {
   // strip undefineds for Firestore
   const clean = JSON.parse(JSON.stringify(data));
   await setDoc(ref, { ...clean, createdAtServer: serverTimestamp() });
+
+  // If this place was on the user's toswim list, mark it done. Best-effort —
+  // the swim itself is the success criterion, not the side-effect.
+  try {
+    const u = await getDoc(doc(usersCol, opts.uid));
+    if (u.exists()) {
+      const profile = u.data() as UserDoc;
+      const entry = profile.toswim?.[opts.place.id];
+      if (entry && !entry.doneAt) {
+        await markToSwimDone(opts.uid, opts.place.id, data.date);
+      }
+    }
+  } catch {
+    /* ignore — toswim auto-mark is best-effort */
+  }
+
   return data;
 }
 

@@ -52,6 +52,39 @@ export function generateGroupCode(length = 5) {
 }
 
 /**
+ * Stash the current path so login (email or Google) can return to it.
+ * Skips the login + Google redirect pages so we never recurse to them.
+ */
+export function rememberReturnPath() {
+  if (typeof window === "undefined") return;
+  const here =
+    window.location.pathname + window.location.search + window.location.hash;
+  if (!here || here.startsWith("/login") || here.startsWith("/auth/google"))
+    return;
+  try {
+    sessionStorage.setItem("login.returnTo", here);
+  } catch {
+    /* sessionStorage may be unavailable (private mode) */
+  }
+}
+
+/**
+ * Read and clear the saved return path. Returns `fallback` (default "/")
+ * when nothing was saved or the saved value isn't a safe same-origin path.
+ */
+export function consumeReturnPath(fallback = "/"): string {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const saved = sessionStorage.getItem("login.returnTo");
+    sessionStorage.removeItem("login.returnTo");
+    if (saved && saved.startsWith("/") && !saved.startsWith("//")) return saved;
+  } catch {
+    /* fall through */
+  }
+  return fallback;
+}
+
+/**
  * Share a URL via the Web Share API when available, otherwise copy to the
  * clipboard. Returns "shared" / "copied" / "failed" so the caller can show
  * the right toast.

@@ -12,6 +12,9 @@ import {
   Sparkles,
   Users,
   Calendar,
+  Check,
+  ListChecks,
+  LogIn,
   MapPin,
   Share2,
   Thermometer,
@@ -21,17 +24,24 @@ import {
   ImageOff,
 } from "lucide-react";
 import {
+  addToSwim,
   adminClearSessionPhoto,
   adminDeletePlace,
   adminDeleteSession,
   adminRenamePlace,
   getPlace,
   REACTION_EMOJIS,
+  removeFromSwim,
   toggleReaction,
   watchPlaceSessions,
 } from "@/lib/data";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
-import { formatDate, formatDateTime, shareOrCopy } from "@/lib/utils";
+import {
+  formatDate,
+  formatDateTime,
+  rememberReturnPath,
+  shareOrCopy,
+} from "@/lib/utils";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
@@ -57,6 +67,9 @@ export default function SpotPage() {
   // the effect every time the sessions list re-streams from Firestore.
   const highlightedRef = useRef<Set<string>>(new Set());
   const sessionRefs = useRef<Map<string, HTMLLIElement>>(new Map());
+  const isGuest = !user;
+  const toswimEntry = placeId ? profile?.toswim?.[placeId] : undefined;
+  const onToswim = !!toswimEntry;
 
   useEffect(() => {
     if (!placeId) return;
@@ -144,6 +157,21 @@ export default function SpotPage() {
     });
     if (result === "copied") toast.success(t("spot.share.copied"));
     else if (result === "failed") toast.error(t("spot.share.failed"));
+  }
+
+  async function onToggleToswim() {
+    if (!user || !place) return;
+    try {
+      if (onToswim) {
+        await removeFromSwim(user.uid, place.id);
+        toast.success(t("spot.toswim.removed"));
+      } else {
+        await addToSwim(user.uid, place.id);
+        toast.success(t("spot.toswim.added"));
+      }
+    } catch {
+      toast.error(t("spot.toswim.error"));
+    }
   }
 
   async function onAdminRename() {
@@ -270,6 +298,30 @@ export default function SpotPage() {
           viewKey={`spot-${place.id}`}
         />
       </div>
+
+      {!isGuest ? (
+        <button
+          type="button"
+          onClick={onToggleToswim}
+          className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow ring-1 transition active:scale-95 ${
+            onToswim
+              ? "bg-emerald-50 text-emerald-800 ring-emerald-200 hover:bg-emerald-100"
+              : "bg-white/80 text-wave-700 ring-wave-200 hover:bg-white"
+          }`}
+        >
+          {onToswim ? (
+            <>
+              <Check className="h-3.5 w-3.5" />
+              {t("spot.toswim.remove")}
+            </>
+          ) : (
+            <>
+              <ListChecks className="h-3.5 w-3.5" />
+              {t("spot.toswim.add")}
+            </>
+          )}
+        </button>
+      ) : null}
 
       {isAdmin ? (
         <div className="mt-3 flex flex-wrap gap-2 rounded-2xl bg-amber-50/80 p-2 ring-1 ring-amber-200">
@@ -427,7 +479,7 @@ export default function SpotPage() {
                   >
                     <Share2 className="h-3 w-3" />
                   </button>
-                  {isAdmin ? (
+                  {!isGuest && isAdmin ? (
                     <button
                       onClick={() => onAdminDeleteSession(s.id)}
                       className="rounded-full bg-white/80 p-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
@@ -466,12 +518,23 @@ export default function SpotPage() {
       </ul>
 
       <div className="mt-6 text-center">
-        <Link
-          to={`/log?placeId=${place.id}`}
-          className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-4 py-2 text-sm font-medium text-white shadow"
-        >
-          {t("spot.log_here")}
-        </Link>
+        {isGuest ? (
+          <Link
+            to="/login"
+            onClick={rememberReturnPath}
+            className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-4 py-2 text-sm font-medium text-white shadow"
+          >
+            <LogIn className="h-3.5 w-3.5" />
+            {t("spot.guest.cta")}
+          </Link>
+        ) : (
+          <Link
+            to={`/log?placeId=${place.id}`}
+            className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-4 py-2 text-sm font-medium text-white shadow"
+          >
+            {t("spot.log_here")}
+          </Link>
+        )}
       </div>
 
       <Lightbox
