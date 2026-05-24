@@ -21,25 +21,33 @@ service cloud.firestore {
     function unchanged(field) {
       return !changedKeys().hasAny([field]);
     }
-    // Returns true when the only change to the reactions map is that
-    // request.auth.uid was added to, or removed from, exactly one emoji key.
+    // Returns true when the only delta to the reactions map is that
+    // request.auth.uid was added to, or removed from, one or more emoji
+    // keys. We validate each known reaction emoji individually (instead
+    // of picking out the changed key, which would need toList() and
+    // trips the rules linter) and restrict affectedKeys to the known
+    // emoji set so unknown keys can't slip through.
     function onlyOwnReactionChanged() {
-      let myUid = request.auth.uid;
       let oldR = resource.data.get('reactions', {});
       let newR = request.resource.data.get('reactions', {});
-      let changed = newR.diff(oldR).affectedKeys();
-      return changed.size() == 1
-        && validReactionDelta(changed.toList()[0], oldR, newR, myUid);
+      let affected = newR.diff(oldR).affectedKeys();
+      return affected.hasOnly(['🔥', '💪', '❄️', '🤩', '👏'])
+        && validReactionDelta('🔥', oldR, newR)
+        && validReactionDelta('💪', oldR, newR)
+        && validReactionDelta('❄️', oldR, newR)
+        && validReactionDelta('🤩', oldR, newR)
+        && validReactionDelta('👏', oldR, newR);
     }
-    function validReactionDelta(emoji, oldR, newR, myUid) {
+    function validReactionDelta(emoji, oldR, newR) {
+      let myUid = request.auth.uid;
       let oldSet = oldR.get(emoji, []).toSet();
       let newSet = newR.get(emoji, []).toSet();
-      // Added own uid — nothing else changed
-      return (newSet.difference(oldSet) == [myUid].toSet()
-              && oldSet.difference(newSet).size() == 0)
-          // Removed own uid — nothing else changed
-          || (oldSet.difference(newSet) == [myUid].toSet()
-              && newSet.difference(oldSet).size() == 0);
+      let added = newSet.difference(oldSet);
+      let removed = oldSet.difference(newSet);
+      // Either unchanged, or exactly the caller's uid was toggled.
+      return (added.size() == 0 && removed.size() == 0)
+          || (added == [myUid].toSet() && removed.size() == 0)
+          || (removed == [myUid].toSet() && added.size() == 0);
     }
     function validLatLng(lat, lng) {
       return lat is number && lng is number
