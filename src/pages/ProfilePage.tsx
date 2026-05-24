@@ -6,9 +6,11 @@ import {
   Award,
   CalendarHeart,
   Check,
+  ChevronRight,
   Clock,
   Compass,
   Flame,
+  History as HistoryIcon,
   Info,
   LogOut,
   MapPin,
@@ -353,6 +355,21 @@ export default function ProfilePage() {
           </Link>
         </div>
       ) : null}
+
+      {/* History shortcut — History isn't in the bottom nav anymore, so
+          make sure it stays discoverable from the profile. */}
+      <Link to="/history" className="glass mb-4 flex items-center gap-2 p-3">
+        <HistoryIcon className="h-5 w-5 text-wave-700" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+            {t("nav.history")}
+          </div>
+          <div className="font-display text-sm font-bold text-wave-900">
+            {t("profile.history_cta")}
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-slate-400" />
+      </Link>
 
       {/* Achievement chips */}
       {/* {unlockedAchievements.size > 0 ? (

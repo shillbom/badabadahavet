@@ -131,6 +131,24 @@ export async function recordAchievements(uid: string, ids: string[]) {
   await updateDoc(doc(usersCol, uid), updates);
 }
 
+// ---------- Toswim list ----------
+
+/** Add a place to the user's "want to swim" list. No-op if already there. */
+export async function addToSwim(uid: string, placeId: string): Promise<void> {
+  await updateDoc(doc(usersCol, uid), {
+    [`toswim.${placeId}`]: { addedAt: Date.now() },
+  });
+}
+
+export async function removeFromSwim(
+  uid: string,
+  placeId: string,
+): Promise<void> {
+  await updateDoc(doc(usersCol, uid), {
+    [`toswim.${placeId}`]: deleteField(),
+  });
+}
+
 function pickEmoji(seed: string): string {
   const pool = ["🐬", "🦭", "🐟", "🦦", "🐳", "🪼", "🐠", "🦑", "🐢", "🦞"];
   let h = 0;

@@ -24,6 +24,7 @@ import {
   pickerCodeFor,
 } from "@/lib/countries";
 import { reverseGeocodeCountry } from "@/lib/geocode";
+import { consumeReturnPath } from "@/lib/utils";
 
 export default function LoginPage() {
   const {
@@ -118,6 +119,8 @@ export default function LoginPage() {
         await login(trimmedEmail, password);
         toast.success(t("auth.hello_again"));
       }
+      // Return the user to wherever they came from (e.g. /spot/abc).
+      navigate(consumeReturnPath(), { replace: true });
     } catch (err) {
       const msg = (err as Error).message ?? "";
       toast.error(prettyAuthError(msg, t));
@@ -152,6 +155,7 @@ export default function LoginPage() {
           name: displayName.trim() || user?.displayName || "",
         }),
       );
+      navigate(consumeReturnPath(), { replace: true });
     } catch (err) {
       console.error("completeGoogleOnboarding error:", err);
       const msg = (err as Error).message ?? "";
@@ -517,6 +521,23 @@ export default function LoginPage() {
         >
           <GoogleIcon />
           {t("auth.google")}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            // User chose to skip login — drop any pending return path so a
+            // later sign-in doesn't surprise them by jumping back.
+            try {
+              sessionStorage.removeItem("login.returnTo");
+            } catch {
+              /* ignore */
+            }
+            navigate("/");
+          }}
+          className="block w-full text-center text-[12px] font-semibold text-wave-700 hover:underline"
+        >
+          {t("auth.browse_as_guest")}
         </button>
       </motion.form>
 

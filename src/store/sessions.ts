@@ -163,6 +163,29 @@ export const useStore = create<State>((set, get) => ({
   },
 
   loginWithGoogle: () => {
+    // Preserve any deep link (e.g. /spot/abc?session=xyz) across the
+    // Google redirect so the user lands back where they started. If the
+    // caller already stashed a path (the "Sign in" button does this), keep
+    // that — otherwise fall back to the current URL.
+    try {
+      const existing = sessionStorage.getItem("login.returnTo");
+      if (!existing) {
+        const here =
+          window.location.pathname +
+          window.location.search +
+          window.location.hash;
+        if (
+          here &&
+          here !== "/" &&
+          !here.startsWith("/auth/google") &&
+          !here.startsWith("/login")
+        ) {
+          sessionStorage.setItem("login.returnTo", here);
+        }
+      }
+    } catch {
+      /* sessionStorage may be unavailable (private mode) — fall through */
+    }
     // Silently rewrite the URL before redirecting. Firebase stores
     // window.location.href as the return URL, so this makes it land on
     // /auth/google after auth — without bouncing there first.
@@ -216,14 +239,44 @@ export const useStore = create<State>((set, get) => ({
 
   // ── Bootstrap ─────────────────────────────────────────────────────────
   _startListening: () => {
-    let dataUnsubs: (() => void)[] = [];
+    // Public subscriptions (places + community sessions) survive auth
+    // changes — but we hold off starting them until Firebase Auth has
+    // resolved its first state. Subscribing before that race-condition
+    // fires the query with `auth.currentUser == null`, which the current
+    // production rules reject (sessions require signedIn) — and the
+    // listener stays empty even after the user signs in.
+    let publicUnsubs: (() => void)[] = [];
+    let userUnsubs: (() => void)[] = [];
+    let publicStarted = false;
     let permissionStatus: PermissionStatus | null = null;
 
     const fetchLocation = () => get()._refreshLocation();
 
-    const stopData = () => {
-      dataUnsubs.forEach((u) => u());
-      dataUnsubs = [];
+    const stopUser = () => {
+      userUnsubs.forEach((u) => u());
+      userUnsubs = [];
+    };
+
+    const startPublic = () => {
+      if (publicStarted) return;
+      publicStarted = true;
+      publicUnsubs = [
+        watchAllSessions((allSessions) => {
+          const { myUid, mySessions, places } = get();
+          set({
+            allSessions,
+            ...derive(myUid ?? "", mySessions, allSessions, places),
+          });
+          if (myUid) persistNewAchievements(get);
+        }),
+        watchPlaces((places) => {
+          const { myUid, mySessions, allSessions } = get();
+          set({
+            places,
+            ...derive(myUid ?? "", mySessions, allSessions, places),
+          });
+        }),
+      ];
     };
 
     // Kick off permission check immediately — independent of auth state.
@@ -249,8 +302,11 @@ export const useStore = create<State>((set, get) => ({
     }
 
     const authUnsub = onAuthStateChanged(auth, async (u) => {
+      // First auth state resolved — safe to start public listeners now
+      // (with the user's credentials attached if they're signed in).
+      startPublic();
       // Tear down the previous user's subscriptions on every auth change.
-      stopData();
+      stopUser();
       if (!u) {
         set({
           user: null,
@@ -259,15 +315,8 @@ export const useStore = create<State>((set, get) => ({
           loading: false,
           googleOnboarding: false,
           mySessions: [],
-          allSessions: [],
-          places: [],
           groups: [],
-          myStats: EMPTY_STATS,
-          sessionsByPlace: new Map(),
-          myPlaces: [],
-          achievementCtx: { uid: "", mySessions: [], allSessions: [] },
-          unlockedAchievements: new Set(),
-          achievementBonusPoints: 0,
+          ...derive("", [], get().allSessions, get().places),
         });
         return;
       }
@@ -291,7 +340,7 @@ export const useStore = create<State>((set, get) => ({
       set({ profile, loading: false });
       if (profile.locale) useLocale.getState().setLocale(profile.locale);
 
-      dataUnsubs = [
+      userUnsubs = [
         // User profile — so locale/display-name changes propagate live.
         onSnapshot(doc(db, "users", u.uid), (snap) => {
           if (snap.exists()) {
@@ -312,30 +361,15 @@ export const useStore = create<State>((set, get) => ({
           persistNewAchievements(get);
         }),
 
-        watchAllSessions((allSessions) => {
-          const { myUid, mySessions, places } = get();
-          set({
-            allSessions,
-            ...derive(myUid ?? "", mySessions, allSessions, places),
-          });
-          persistNewAchievements(get);
-        }),
-
-        watchPlaces((places) => {
-          const { myUid, mySessions, allSessions } = get();
-          set({
-            places,
-            ...derive(myUid ?? "", mySessions, allSessions, places),
-          });
-        }),
-
         watchUserGroups(u.uid, (groups) => set({ groups })),
       ];
     });
 
     return () => {
       authUnsub();
-      stopData();
+      stopUser();
+      publicUnsubs.forEach((u) => u());
+      publicUnsubs = [];
       permissionStatus?.removeEventListener("change", () => {});
     };
   },

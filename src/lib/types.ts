@@ -15,6 +15,13 @@ export type UserDoc = {
   isAdmin?: boolean;
   /** Last known geolocation — used as the map starting point. */
   lastLocation?: { lat: number; lng: number };
+  /** "Want to swim" list — keyed by placeId. Whether an entry is "done" is
+   *  derived from the user's sessions at that place, not stored here. */
+  toswim?: Record<string, ToswimEntry>;
+};
+
+export type ToswimEntry = {
+  addedAt: number;
 };
 
 export type PlaceDoc = {

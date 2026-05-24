@@ -9,13 +9,14 @@ import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 
 export default function MapPage() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const t = useT();
   const places = useStore((s) => s.places);
   const myPlaces = useStore((s) => s.myPlaces);
   const sessionsByPlace = useStore((s) => s.sessionsByPlace);
   const myStats = useStore((s) => s.myStats);
   const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
+  const isGuest = !user;
 
   // Seed from Firestore so the map opens at the right place without waiting for GPS
   const currentLocation = useStore((s) => s.currentLocation);
@@ -65,69 +66,94 @@ export default function MapPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+6rem)]">
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-        <h2 className="font-display text-2xl font-black text-wave-900">
-          {greeting}
-        </h2>
-        <p className="text-sm text-slate-500">{subtitle}</p>
-      </motion.div>
+      {isGuest ? (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass flex items-center justify-between gap-3 p-3"
+        >
+          <div className="min-w-0">
+            <div className="font-display text-base font-bold text-wave-900">
+              {t("map.guest.title")}
+            </div>
+            <div className="text-[11px] text-slate-500">
+              {t("map.guest.subtitle")}
+            </div>
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
+          <h2 className="font-display text-2xl font-black text-wave-900">
+            {greeting}
+          </h2>
+          <p className="text-sm text-slate-500">{subtitle}</p>
+        </motion.div>
+      )}
 
-      <div className="grid grid-cols-3 gap-2">
-        <Stat
-          to="/history"
-          label={t("map.stat.points")}
-          value={totalPoints}
-          icon={<Trophy className="h-4 w-4" />}
-          sub={
-            achievementBonusPoints > 0
-              ? t("map.bonus.subtitle", { n: achievementBonusPoints })
-              : undefined
-          }
-        />
-        <Stat
-          onClick={() => setFitToken((n) => n + 1)}
-          label={t("map.stat.spots")}
-          value={myStats.uniquePlaces}
-          icon={<MapPin className="h-4 w-4" />}
-        />
-        <Stat
-          to="/history?view=streak"
-          label={t("map.stat.streak")}
-          value={myStats.currentDayStreak}
-          icon={<Flame className="h-4 w-4" />}
-          sub={
-            myStats.currentDayStreak > 0 && myStats.daysSinceLast === 1
-              ? t("map.streak.at_risk")
-              : undefined
-          }
-        />
-      </div>
+      {!isGuest ? (
+        <div className="grid grid-cols-3 gap-2">
+          <Stat
+            to="/history"
+            label={t("map.stat.points")}
+            value={totalPoints}
+            icon={<Trophy className="h-4 w-4" />}
+            sub={
+              achievementBonusPoints > 0
+                ? t("map.bonus.subtitle", { n: achievementBonusPoints })
+                : undefined
+            }
+          />
+          <Stat
+            onClick={() => setFitToken((n) => n + 1)}
+            label={t("map.stat.spots")}
+            value={myStats.uniquePlaces}
+            icon={<MapPin className="h-4 w-4" />}
+          />
+          <Stat
+            to="/history?view=streak"
+            label={t("map.stat.streak")}
+            value={myStats.currentDayStreak}
+            icon={<Flame className="h-4 w-4" />}
+            sub={
+              myStats.currentDayStreak > 0 && myStats.daysSinceLast === 1
+                ? t("map.streak.at_risk")
+                : undefined
+            }
+          />
+        </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
         <div className="absolute inset-0">
           {mapReady ? (
             <SwimMap
-              places={showAll ? places : myPlaces}
+              places={isGuest || showAll ? places : myPlaces}
               sessionsByPlace={sessionsByPlace}
               userLocation={myLocation}
               fitToken={fitToken}
-              fitBoundsToPlaces={!showAll}
+              fitBoundsToPlaces={!isGuest && !showAll}
               viewKey="main"
+              topRightActions={
+                isGuest
+                  ? undefined
+                  : [
+                      {
+                        label: showAll ? t("map.show.mine") : t("map.show.all"),
+                        onClick: () => setShowAll((v) => !v),
+                      },
+                    ]
+              }
             />
           ) : (
             <div className="h-full w-full bg-slate-100" />
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          className="absolute top-3 right-3 z-[600] flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
-        >
-          {showAll ? t("map.show.mine") : t("map.show.all")}
-        </button>
       </div>
 
-      {myStats.totalSwims === 0 ? (
+      {!isGuest && myStats.totalSwims === 0 ? (
         <p className="text-center text-xs text-slate-500">
           {t("map.empty.helper")}
         </p>
