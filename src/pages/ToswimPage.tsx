@@ -24,6 +24,7 @@ export default function ToswimPage() {
   const t = useT();
   const { user, profile } = useAuth();
   const places = useStore((s) => s.places);
+  const mySessions = useStore((s) => s.mySessions);
   const [view, setView] = useState<View>("todo");
   const [search, setSearch] = useState("");
 
@@ -33,22 +34,38 @@ export default function ToswimPage() {
     return m;
   }, [places]);
 
+  // First swim date per place — undefined means I haven't swum there yet.
+  const firstSwimAt = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of mySessions) {
+      const cur = m.get(s.placeId);
+      if (cur === undefined || s.date < cur) m.set(s.placeId, s.date);
+    }
+    return m;
+  }, [mySessions]);
+
   const entries = useMemo(() => {
     const list: Array<{
       placeId: string;
       place: PlaceDoc | null;
       entry: ToswimEntry;
+      doneAt: number | undefined;
     }> = [];
     const toswim = profile?.toswim ?? {};
     for (const [placeId, entry] of Object.entries(toswim)) {
-      list.push({ placeId, place: placesById.get(placeId) ?? null, entry });
+      list.push({
+        placeId,
+        place: placesById.get(placeId) ?? null,
+        entry,
+        doneAt: firstSwimAt.get(placeId),
+      });
     }
     list.sort((a, b) => b.entry.addedAt - a.entry.addedAt);
     return list;
-  }, [profile?.toswim, placesById]);
+  }, [profile?.toswim, placesById, firstSwimAt]);
 
-  const todo = entries.filter((e) => !e.entry.doneAt);
-  const done = entries.filter((e) => !!e.entry.doneAt);
+  const todo = entries.filter((e) => e.doneAt === undefined);
+  const done = entries.filter((e) => e.doneAt !== undefined);
   const visible = view === "todo" ? todo : done;
 
   const onMyList = useMemo(
@@ -191,7 +208,7 @@ export default function ToswimPage() {
                     className="flex flex-1 items-center gap-3 p-3"
                   >
                     <div className="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
-                      {e.entry.doneAt ? "🏆" : "📍"}
+                      {e.doneAt !== undefined ? "🏆" : "📍"}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1 truncate font-display text-base font-bold text-wave-900">
@@ -202,10 +219,10 @@ export default function ToswimPage() {
                         <MapPin className="h-3 w-3" />
                         {e.place.lat.toFixed(3)}, {e.place.lng.toFixed(3)}
                       </div>
-                      {e.entry.doneAt ? (
+                      {e.doneAt !== undefined ? (
                         <div className="mt-0.5 text-[11px] font-semibold text-emerald-700">
                           {t("toswim.done_on", {
-                            date: formatDate(e.entry.doneAt),
+                            date: formatDate(e.doneAt),
                           })}
                         </div>
                       ) : (
