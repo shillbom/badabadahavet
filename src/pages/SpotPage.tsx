@@ -12,7 +12,6 @@ import {
   Sparkles,
   Users,
   Calendar,
-  Check,
   ListChecks,
   LogIn,
   MapPin,
@@ -22,6 +21,7 @@ import {
   Pencil,
   Trash2,
   ImageOff,
+  Delete,
 } from "lucide-react";
 import {
   addToSwim,
@@ -305,13 +305,13 @@ export default function SpotPage() {
           onClick={onToggleToswim}
           className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow ring-1 transition active:scale-95 ${
             onToswim
-              ? "bg-emerald-50 text-emerald-800 ring-emerald-200 hover:bg-emerald-100"
-              : "bg-white/80 text-wave-700 ring-wave-200 hover:bg-white"
+              ? "bg-rose-50 text-rose-800 ring-rose-200 hover:bg-rose-50"
+              : "bg-white/80 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"
           }`}
         >
           {onToswim ? (
             <>
-              <Check className="h-3.5 w-3.5" />
+              <Delete className="h-3.5 w-3.5" />
               {t("spot.toswim.remove")}
             </>
           ) : (
