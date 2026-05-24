@@ -145,6 +145,17 @@ const newSwimIcon = L.divIcon({
   }),
 });
 
+/** A button rendered in the map's top-right action stack. The map appends
+ *  its own built-in actions (e.g. satellite toggle) after these, so the
+ *  buttons end up in a consistent vertical list regardless of how many
+ *  the caller passes. */
+export type MapAction = {
+  label: string;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  ariaLabel?: string;
+};
+
 export type SwimMapProps = {
   places: PlaceDoc[];
   sessionsByPlace: Map<string, SessionDoc[]>;
@@ -155,6 +166,10 @@ export type SwimMapProps = {
   className?: string;
   linkToSpot?: boolean;
   userLocation?: { lat: number; lng: number } | null;
+  /** Caller-supplied buttons rendered above the built-in map actions
+   *  (satellite toggle, etc.). Stacked vertically so the layout stays
+   *  consistent regardless of which actions are present. */
+  topRightActions?: MapAction[];
   /** Bumping this triggers a re-fit to all places. */
   fitToken?: number;
   /** When set, clicking an existing place pin offers a "use this spot" action. */
@@ -232,6 +247,7 @@ export default function SwimMap({
   fitBoundsToPlaces = false,
   mapRef: externalMapRef,
   viewKey = "default",
+  topRightActions,
 }: SwimMapProps) {
   const t = useT();
   const [satellite, setSatellite] = useState(false);
@@ -518,23 +534,22 @@ export default function SwimMap({
         ) : null}
         {onPick ? <ClickToPick onPick={onPick} /> : null}
       </MapContainer>
-      {/* Layer toggle — top right, shows what you'll switch TO */}
-      <button
-        type="button"
-        onClick={() => setSatellite((v) => !v)}
-        className={cn(
-          "absolute top-12 right-3 z-[600] flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold shadow-md ring-1 transition active:scale-95",
-          satellite
-            ? "bg-white/95 text-wave-800 ring-slate-200 hover:bg-white"
-            : "bg-white/95 text-wave-800 ring-slate-200 hover:bg-white",
-        )}
-        aria-label={
-          satellite ? t("map.toggle_terrain") : t("map.toggle_satellite")
-        }
-      >
-        <Layers className="h-3.5 w-3.5" />
-        {satellite ? t("map.toggle_terrain") : t("map.toggle_satellite")}
-      </button>
+      {/* Stacked action buttons — caller-supplied actions on top, the
+          built-in satellite toggle at the bottom of the stack. */}
+      <div className="absolute top-3 right-3 z-[600] flex flex-col items-end gap-2">
+        {topRightActions?.map((a, i) => (
+          <MapActionButton key={i} action={a} />
+        ))}
+        <MapActionButton
+          action={{
+            label: satellite
+              ? t("map.toggle_terrain")
+              : t("map.toggle_satellite"),
+            onClick: () => setSatellite((v) => !v),
+            icon: <Layers className="h-3.5 w-3.5" />,
+          }}
+        />
+      </div>
 
       {/* Locate me — bottom right, Google Maps style */}
       {userLocation ? (
@@ -555,6 +570,20 @@ export default function SwimMap({
         </button>
       ) : null}
     </div>
+  );
+}
+
+function MapActionButton({ action }: { action: MapAction }) {
+  return (
+    <button
+      type="button"
+      onClick={action.onClick}
+      aria-label={action.ariaLabel ?? action.label}
+      className="flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-semibold text-wave-800 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+    >
+      {action.icon}
+      {action.label}
+    </button>
   );
 }
 

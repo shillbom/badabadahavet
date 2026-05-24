@@ -145,20 +145,21 @@ export default function MapPage() {
               fitToken={fitToken}
               fitBoundsToPlaces={!isGuest && !showAll}
               viewKey="main"
+              topRightActions={
+                isGuest
+                  ? undefined
+                  : [
+                      {
+                        label: showAll ? t("map.show.mine") : t("map.show.all"),
+                        onClick: () => setShowAll((v) => !v),
+                      },
+                    ]
+              }
             />
           ) : (
             <div className="h-full w-full bg-slate-100" />
           )}
         </div>
-        {!isGuest ? (
-          <button
-            type="button"
-            onClick={() => setShowAll((v) => !v)}
-            className="absolute top-3 right-3 z-[600] flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
-          >
-            {showAll ? t("map.show.mine") : t("map.show.all")}
-          </button>
-        ) : null}
       </div>
 
       {!isGuest && myStats.totalSwims === 0 ? (
