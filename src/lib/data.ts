@@ -200,6 +200,7 @@ export async function findOrCreatePlace(opts: {
     lng: opts.lng,
     createdBy: opts.createdBy,
     firstSwumAt: opts.date,
+    source: "manual",
   };
   await setDoc(ref, data);
   return data;

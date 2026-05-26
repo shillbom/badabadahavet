@@ -44,6 +44,11 @@ const COUNTRIES = (args.get("--countries") ?? "DK,FI")
   .split(",")
   .map((c) => c.trim().toUpperCase())
   .filter(Boolean);
+// Anything closer than this to an existing place is treated as the
+// same spot and skipped — the existing place wins (it's the "master").
+// Matches the client-side PLACE_RADIUS_METERS used for "same spot"
+// matching when logging a swim.
+const MIN_DISTANCE_M = Number(args.get("--min-distance") ?? 100);
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "badligan";
 
 const EEA_BASE =
@@ -184,10 +189,62 @@ function dedupKey(p) {
   return `${p.name.toLowerCase()}|${p.lat.toFixed(4)}|${p.lng.toFixed(4)}`;
 }
 
+function haversineMeters(a, b) {
+  const R = 6_371_000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// 0.01° grid (~1.1 km lat, ~0.5 km lng at 60°N) — coarse enough that
+// "same cell + 8 neighbours" always covers any 100 m proximity check.
+function gridKey(lat, lng) {
+  return `${Math.round(lat * 100)}|${Math.round(lng * 100)}`;
+}
+
+function makeSpatialIndex() {
+  const idx = new Map();
+  return {
+    add(p) {
+      const k = gridKey(p.lat, p.lng);
+      const arr = idx.get(k);
+      if (arr) arr.push(p);
+      else idx.set(k, [p]);
+    },
+    nearestWithin(p, maxMeters) {
+      const lc = Math.round(p.lat * 100);
+      const gc = Math.round(p.lng * 100);
+      let best = null;
+      let bestD = Infinity;
+      for (let dl = -1; dl <= 1; dl++) {
+        for (let dg = -1; dg <= 1; dg++) {
+          const arr = idx.get(`${lc + dl}|${gc + dg}`);
+          if (!arr) continue;
+          for (const other of arr) {
+            const d = haversineMeters(p, other);
+            if (d <= maxMeters && d < bestD) {
+              best = other;
+              bestD = d;
+            }
+          }
+        }
+      }
+      return best ? { place: best, meters: bestD } : null;
+    },
+  };
+}
+
 async function main() {
   console.log(`→ project:   ${PROJECT_ID}`);
   console.log(`→ mode:      ${WRITE ? "WRITE" : "dry-run (no writes)"}`);
   console.log(`→ countries: ${COUNTRIES.join(", ") || "(none)"}`);
+  console.log(`→ min dist:  ${MIN_DISTANCE_M} m (existing places are master)`);
   if (FIXTURE) console.log(`→ source:    fixture (${FIXTURE})`);
   else console.log(`→ source:    EEA discomap layer ${LAYER_ID}`);
 
@@ -207,8 +264,9 @@ async function main() {
     process.exit(1);
   }
 
-  // Local dedup pass (a single bathing water can show up more than once
-  // if the EEA layer holds historical snapshots).
+  // Local dedup pass — drop exact name+coord duplicates inside the feed
+  // (a single bathing water can show up more than once if the EEA layer
+  // holds historical snapshots). Cheap pre-pass before the spatial check.
   const localSeen = new Set();
   places = places.filter((p) => {
     const k = dedupKey(p);
@@ -223,29 +281,77 @@ async function main() {
     process.env.GOOGLE_CLOUD_PROJECT,
   );
 
-  let fresh = places;
+  // Spatial index. Existing Firestore places go in first so they win all
+  // proximity checks — that's the "local versions are master" policy.
+  // Accepted incoming places are added as we go, so two incoming features
+  // within MIN_DISTANCE_M of each other are also collapsed (first wins).
+  const index = makeSpatialIndex();
+  let existingCount = 0;
   let db = null;
+
   if (haveCreds) {
     initAdmin();
     db = getFirestore();
-    console.log("→ loading existing places from Firestore for dedup…");
+    console.log("→ loading existing places from Firestore…");
     const existingSnap = await db.collection("places").get();
-    const existingKeys = new Set();
     for (const doc of existingSnap.docs) {
       const data = doc.data();
-      existingKeys.add(
-        `${(data.name ?? "").toLowerCase()}|${(data.lat ?? 0).toFixed(4)}|${(data.lng ?? 0).toFixed(4)}`,
-      );
+      if (typeof data.lat === "number" && typeof data.lng === "number") {
+        index.add({
+          name: data.name ?? "",
+          lat: data.lat,
+          lng: data.lng,
+          source: data.source ?? "(unknown)",
+          existing: true,
+        });
+        existingCount++;
+      }
     }
-    console.log(`→ ${existingKeys.size} existing places loaded`);
-    fresh = places.filter((p) => !existingKeys.has(dedupKey(p)));
-    console.log(
-      `→ ${fresh.length} new (${places.length - fresh.length} already in Firestore)`,
-    );
+    console.log(`→ ${existingCount} existing places loaded into spatial index`);
   } else {
     console.log(
       "→ no Firebase credentials — skipping Firestore dedup (preview only)",
     );
+  }
+
+  const fresh = [];
+  let skippedNearMaster = 0;
+  let skippedNearIncoming = 0;
+  const skipSamples = [];
+  for (const p of places) {
+    const hit = index.nearestWithin(p, MIN_DISTANCE_M);
+    if (hit) {
+      if (hit.place.existing) skippedNearMaster++;
+      else skippedNearIncoming++;
+      if (skipSamples.length < 5) {
+        skipSamples.push({
+          incoming: p.name,
+          near: hit.place.name,
+          meters: Math.round(hit.meters),
+          masterSource: hit.place.source,
+        });
+      }
+      continue;
+    }
+    fresh.push(p);
+    index.add({ name: p.name, lat: p.lat, lng: p.lng, existing: false });
+  }
+  if (haveCreds) {
+    console.log(
+      `→ ${fresh.length} new (${skippedNearMaster} within ${MIN_DISTANCE_M} m of existing master, ${skippedNearIncoming} collapsed inside feed)`,
+    );
+  } else {
+    console.log(
+      `→ ${fresh.length} new (${skippedNearIncoming} collapsed inside feed within ${MIN_DISTANCE_M} m)`,
+    );
+  }
+  if (skipSamples.length) {
+    console.log("  skip samples:");
+    for (const s of skipSamples) {
+      console.log(
+        `    "${s.incoming}" ≈ "${s.near}" (${s.meters} m, source: ${s.masterSource ?? "(incoming)"})`,
+      );
+    }
   }
 
   if (!WRITE) {

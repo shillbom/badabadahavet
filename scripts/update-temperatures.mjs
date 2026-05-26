@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 /**
  * Pull recent water-temperature measurements from Hav och Vatten and
- * update every seeded place. Most baths don't have real-time sensors,
- * so we silently skip the ones with no current reading.
+ * update every Swedish seeded place. Most baths don't have real-time
+ * sensors, so we silently skip the ones with no current reading.
+ *
+ * Scope: this script is Sweden-only — it queries Hav och Vatten's
+ * `badplatsen` API, which only serves SE bathing waters. Places seeded
+ * from other sources (EEA for DK/FI, OSM for NO, …) are filtered out by
+ * `source == "havochvatten.se"`. If equivalent per-bath real-time
+ * temperature APIs ever turn up for DK/FI/NO, write a separate updater
+ * for each — the URL builder and field aliases are source-specific.
  *
  * Usage (local):
  *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
@@ -94,10 +101,15 @@ async function main() {
   console.log(`→ project: ${PROJECT_ID}`);
   console.log(`→ mode:    ${WRITE ? "WRITE" : "dry-run (no writes)"}`);
 
-  console.log("→ loading seeded places…");
-  const snap = await db.collection("places").where("seeded", "==", true).get();
+  console.log("→ loading SE seeded places…");
+  // Hav och Vatten's API is Sweden-only, so we ignore EEA/OSM-seeded
+  // places from other countries.
+  const snap = await db
+    .collection("places")
+    .where("source", "==", "havochvatten.se")
+    .get();
   const seeded = snap.docs.filter((d) => d.data().externalId);
-  console.log(`→ ${seeded.length} seeded places with externalId`);
+  console.log(`→ ${seeded.length} havochvatten.se places with externalId`);
 
   let updated = 0;
   let skipped = 0;
