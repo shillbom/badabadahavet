@@ -1,0 +1,116 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&display=swap");
+
+@import "tailwindcss";
+
+/* Tell Tailwind v4 where to look for class usage. */
+@source "./app.html";
+@source "./**/*.{ts,js,svelte}";
+
+/* Theme — Tailwind v4 reads custom tokens from CSS instead of a JS config. */
+@theme {
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-wave-50: #eff9ff;
+  --color-wave-100: #def1ff;
+  --color-wave-200: #b6e4ff;
+  --color-wave-300: #76d0ff;
+  --color-wave-400: #2bb8ff;
+  --color-wave-500: #019eea;
+  --color-wave-600: #007ec6;
+  --color-wave-700: #0264a0;
+  --color-wave-800: #065684;
+  --color-wave-900: #0b486d;
+
+  --animate-bob: bob 3s ease-in-out infinite;
+  --animate-ripple: ripple 1.6s ease-out infinite;
+  --animate-highlight: highlight 2.4s ease-out 1;
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(2, 158, 234, 0);
+  }
+  15% {
+    box-shadow: 0 0 0 6px rgba(2, 158, 234, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(2, 158, 234, 0);
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  /* iOS PWA: 100dvh includes areas that aren't truly available (home indicator
+     gap, etc.). -webkit-fill-available gives the exact usable height instead.
+     Scoped to iOS via -webkit-touch-callout so it doesn't affect other browsers. */
+  @supports (-webkit-touch-callout: none) {
+    html {
+      height: -webkit-fill-available;
+    }
+  }
+  body {
+    @apply font-sans text-slate-900 antialiased;
+    background:
+      radial-gradient(1200px 600px at 20% -10%, #b6e4ff 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 10%, #def1ff 0%, transparent 55%),
+      linear-gradient(180deg, #eff9ff 0%, #ffffff 60%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply rounded-2xl border border-white/60 bg-white/70 shadow-[0_10px_30px_-12px_rgba(2,100,160,0.25)] backdrop-blur-md;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-wave-800 ring-1 ring-wave-200;
+  }
+  .pill-tab {
+    @apply flex flex-1 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-xs font-medium text-slate-500 transition;
+  }
+  .pill-tab[data-active="true"] {
+    @apply bg-white text-wave-700 shadow ring-1 ring-wave-200;
+  }
+}
+
+/* Leaflet tweaks */
+.leaflet-container {
+  font-family: inherit;
+  background: #def1ff;
+}
+.leaflet-control-attribution {
+  font-size: 10px !important;
+  background: rgba(255, 255, 255, 0.7) !important;
+}
+/* Hide zoom buttons on touch devices — pinch-zoom is the natural gesture */
+@media (pointer: coarse) {
+  .leaflet-control-zoom {
+    display: none !important;
+  }
+}

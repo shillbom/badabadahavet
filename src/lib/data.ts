@@ -16,7 +16,7 @@ import {
   arrayUnion,
   limit,
   writeBatch,
-  Unsubscribe,
+  type Unsubscribe,
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -24,8 +24,8 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { cloudFn, db, storage } from "@/firebase";
-import { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
+import { cloudFn, db, storage } from "@/lib/firebase";
+import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS, scoreSession } from "./scoring";
 import { compressImage } from "./image";

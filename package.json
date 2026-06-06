@@ -4,53 +4,47 @@
   "version": "0.9.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "vite dev",
+    "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc -b --noEmit",
+    "prepare": "svelte-kit sync && husky",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "emulators": "firebase emulators:start",
     "seed:badplatser": "node scripts/seed-badplatser.mjs",
-    "update:temperatures": "node scripts/update-temperatures.mjs",
-    "prepare": "husky"
+    "update:temperatures": "node scripts/update-temperatures.mjs"
   },
   "dependencies": {
+    "@lucide/svelte": "^1.17.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.2.1",
     "firebase": "^12.13.0",
-    "framer-motion": "^12.39.0",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
-    "lucide-react": "^1.16.0",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-leaflet": "^5.0.0",
-    "react-leaflet-cluster": "^4.1.3",
-    "react-router": "^7.15.1",
-    "react-router-dom": "^7.15.1",
-    "tailwind-merge": "^3.6.0",
-    "zustand": "^5.0.13"
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.63.0",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/leaflet": "^1.9.21",
     "@types/leaflet.markercluster": "^1.5.6",
-    "@types/react": "^19.2.15",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.2",
     "firebase-admin": "^13.10.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
+    "prettier-plugin-svelte": "^3.4.0",
     "prettier-plugin-tailwindcss": "^0.8.0",
+    "svelte": "^5.56.2",
+    "svelte-check": "^4.4.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.13",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite": "^8.0.13"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,mjs,json,css}": "prettier --check",
-    "*.{ts,tsx}": "bash -c 'tsc -b --noEmit'"
+    "*.{ts,js,svelte,json,css,md}": "prettier --write"
   }
 }

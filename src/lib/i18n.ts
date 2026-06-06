@@ -1,41 +1,6 @@
-import { create } from "zustand";
+import { localeStore, type Locale } from "@/lib/stores/locale.svelte";
 
-export type Locale = "sv" | "en";
-
-const STORAGE_KEY = "badligan.locale";
-
-function detectInitial(): Locale {
-  if (typeof window === "undefined") return "sv";
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved === "sv" || saved === "en") return saved;
-  // Default to Swedish unless the browser strongly prefers English.
-  const langs = navigator.languages?.length
-    ? navigator.languages
-    : [navigator.language];
-  for (const l of langs) {
-    if (l?.toLowerCase().startsWith("sv")) return "sv";
-    if (l?.toLowerCase().startsWith("en")) return "en";
-  }
-  return "sv";
-}
-
-type LocaleState = {
-  locale: Locale;
-  setLocale: (l: Locale) => void;
-};
-
-export const useLocale = create<LocaleState>((set) => ({
-  locale: detectInitial(),
-  setLocale: (l) => {
-    if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, l);
-    set({ locale: l });
-    if (typeof document !== "undefined") document.documentElement.lang = l;
-  },
-}));
-
-if (typeof document !== "undefined") {
-  document.documentElement.lang = useLocale.getState().locale;
-}
+export type { Locale };
 
 type Vars = Record<string, string | number>;
 
@@ -47,15 +12,9 @@ function format(template: string, vars?: Vars): string {
 }
 
 export function t(key: string, vars?: Vars): string {
-  const locale = useLocale.getState().locale;
+  const locale = localeStore.current;
   const str = MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key;
   return format(str, vars);
-}
-
-export function useT(): (key: string, vars?: Vars) => string {
-  const locale = useLocale((s) => s.locale);
-  return (key, vars) =>
-    format(MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key, vars);
 }
 
 type TimeSlot = "morning" | "midday" | "afternoon";
@@ -120,7 +79,7 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
  * Pass a stable `seed` (e.g. from useRef) so it doesn't re-randomise on every render.
  */
 export function getTimeGreeting(name: string, seed: number): string {
-  const locale = useLocale.getState().locale;
+  const locale = localeStore.current;
   const slot = timeSlot(new Date().getHours());
   const variants = GREETINGS[locale][slot];
   const template = variants[seed % variants.length];
@@ -128,27 +87,27 @@ export function getTimeGreeting(name: string, seed: number): string {
 }
 
 export function plural(n: number, sv: [string, string], en: [string, string]) {
-  const locale = useLocale.getState().locale;
+  const locale = localeStore.current;
   const pair = locale === "sv" ? sv : en;
   return n === 1 ? pair[0] : pair[1];
 }
 
 export function monthShort(idx: number): string {
-  const locale = useLocale.getState().locale;
+  const locale = localeStore.current;
   return new Date(2025, idx, 1).toLocaleString(localeBcp(locale), {
     month: "short",
   });
 }
 
 export function monthLong(idx: number): string {
-  const locale = useLocale.getState().locale;
+  const locale = localeStore.current;
   return new Date(2025, idx, 1).toLocaleString(localeBcp(locale), {
     month: "long",
   });
 }
 
 export function localeBcp(l?: Locale): string {
-  return (l ?? useLocale.getState().locale) === "sv" ? "sv-SE" : "en-GB";
+  return (l ?? localeStore.current) === "sv" ? "sv-SE" : "en-GB";
 }
 
 const MESSAGES: Record<Locale, Record<string, string>> = {

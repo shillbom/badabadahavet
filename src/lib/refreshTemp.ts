@@ -1,4 +1,4 @@
-import { auth, cloudFn } from "@/firebase";
+import { auth, cloudFn } from "@/lib/firebase";
 
 const STALE_AFTER_MS = 60 * 60 * 1000; // 1 hour
 const LOCAL_THROTTLE_MS = 5 * 60 * 1000; // don't ask for the same place more than once per 5 min
