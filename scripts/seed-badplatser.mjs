@@ -166,6 +166,9 @@ async function main() {
         firstSwumAt: now,
         seeded: true,
         source: "havochvatten.se",
+        // Prefer the official SE feed; the refresh function falls back to
+        // Open-Meteo when Hav och Vatten has no reading for this spot.
+        tempSource: "havochvatten",
         ...(p.externalId ? { externalId: p.externalId } : {}),
       });
     }

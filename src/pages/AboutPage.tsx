@@ -70,6 +70,30 @@ export default function AboutPage() {
           </a>
           .
         </p>
+        <p className="mt-2">
+          {t("about.data.eea")}{" "}
+          <a
+            href="https://www.eea.europa.eu/themes/water/europes-seas-and-coasts/assessments/state-of-bathing-water"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-wave-700 underline hover:text-wave-800"
+          >
+            eea.europa.eu
+          </a>
+          .
+        </p>
+        <p className="mt-2">
+          {t("about.data.meteo")}{" "}
+          <a
+            href="https://open-meteo.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-wave-700 underline hover:text-wave-800"
+          >
+            open-meteo.com
+          </a>
+          .
+        </p>
       </Section>
 
       <Section title={t("about.privacy.title")}>

@@ -20,6 +20,27 @@ const PER_USER_PER_HOUR = 60;
 const DETAIL_URL = (nutsCode) =>
   `https://badplatsen.havochvatten.se/badplatsen/api/detail/${encodeURIComponent(nutsCode)}`;
 
+// Open-Meteo's marine model is sea/ocean-only — its grid has no values
+// over inland lakes, so a lake coordinate returns null sea_surface_temperature.
+// That's expected: lake spots without an official reading just show no temp.
+const OPEN_METEO_URL = (lat, lng) =>
+  `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&current=sea_surface_temperature`;
+
+async function fetchOpenMeteoTemp(lat, lng) {
+  const res = await fetch(OPEN_METEO_URL(lat, lng), {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const temp = data?.current?.sea_surface_temperature;
+  const timeStr = data?.current?.time;
+  if (typeof temp !== "number" || Number.isNaN(temp) || temp < -5 || temp > 40)
+    return null;
+  const stamp = timeStr ? Date.parse(timeStr) : null;
+  if (!stamp || Number.isNaN(stamp)) return null;
+  return { temp, stamp, source: "open-meteo" };
+}
+
 /**
  * Callable: refresh a single place's water temperature on demand.
  *
@@ -72,9 +93,6 @@ export const refreshPlaceTemp = onCall(
       throw new HttpsError("not-found", "Place doesn't exist.");
     }
     const place = placeSnap.data();
-    if (!place.externalId) {
-      return { status: "no-data", reason: "no-external-id" };
-    }
     if (
       typeof place.waterTempAt === "number" &&
       now - place.waterTempAt < FRESH_WINDOW_MS
@@ -86,37 +104,65 @@ export const refreshPlaceTemp = onCall(
       };
     }
 
-    // Fetch from Hav och Vatten.
+    // Decide the preferred upstream. Fall back to the legacy `source`
+    // field for places seeded before `tempSource` existed.
+    const tempSource =
+      place.tempSource ??
+      (place.source === "havochvatten.se" ? "havochvatten" : "open-meteo");
+
+    // Try the official SE feed first when that's the preferred source.
+    // Open-Meteo is always the fallback below if this yields nothing —
+    // Hav och Vatten doesn't have a reading for every bathing spot.
     let reading = null;
-    try {
-      const res = await fetch(DETAIL_URL(place.externalId), {
-        headers: { Accept: "application/json" },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const raw =
-          data?.sampleTemperature ??
-          data?.value ??
-          data?.temperature ??
-          data?.celsius;
-        const temp = typeof raw === "string" ? Number(raw) : raw;
-        const stampRaw =
-          data?.sampleDate ?? data?.date ?? data?.timestamp ?? data?.measuredAt;
-        const stamp =
-          typeof stampRaw === "number" ? stampRaw : Date.parse(stampRaw ?? "");
-        if (
-          typeof temp === "number" &&
-          !Number.isNaN(temp) &&
-          temp >= -5 &&
-          temp <= 40 &&
-          stamp &&
-          !Number.isNaN(stamp)
-        ) {
-          reading = { temp, stamp };
+    if (tempSource === "havochvatten" && place.externalId) {
+      try {
+        const res = await fetch(DETAIL_URL(place.externalId), {
+          headers: { Accept: "application/json" },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const raw =
+            data?.sampleTemperature ??
+            data?.value ??
+            data?.temperature ??
+            data?.celsius;
+          const temp = typeof raw === "string" ? Number(raw) : raw;
+          const stampRaw =
+            data?.sampleDate ??
+            data?.date ??
+            data?.timestamp ??
+            data?.measuredAt;
+          const stamp =
+            typeof stampRaw === "number"
+              ? stampRaw
+              : Date.parse(stampRaw ?? "");
+          if (
+            typeof temp === "number" &&
+            !Number.isNaN(temp) &&
+            temp >= -5 &&
+            temp <= 40 &&
+            stamp &&
+            !Number.isNaN(stamp)
+          ) {
+            reading = { temp, stamp, source: "havochvatten" };
+          }
         }
+      } catch (e) {
+        logger.warn("upstream fetch failed", { placeId, error: String(e) });
       }
-    } catch (e) {
-      logger.warn("upstream fetch failed", { placeId, error: String(e) });
+    }
+
+    // Fallback: Open-Meteo marine satellite temperature.
+    if (
+      !reading &&
+      typeof place.lat === "number" &&
+      typeof place.lng === "number"
+    ) {
+      try {
+        reading = await fetchOpenMeteoTemp(place.lat, place.lng);
+      } catch (e) {
+        logger.warn("open-meteo fetch failed", { placeId, error: String(e) });
+      }
     }
 
     if (!reading) {
@@ -130,11 +176,15 @@ export const refreshPlaceTemp = onCall(
     // Only write if it actually changed.
     if (
       place.waterTemp !== reading.temp ||
-      place.waterTempAt !== reading.stamp
+      place.waterTempAt !== reading.stamp ||
+      place.waterTempProvider !== reading.source
     ) {
       await placeRef.update({
         waterTemp: reading.temp,
         waterTempAt: reading.stamp,
+        // Which upstream actually produced this reading ("havochvatten"
+        // or "open-meteo") — distinct from `tempSource` (the preference).
+        waterTempProvider: reading.source,
       });
     }
 
@@ -142,6 +192,7 @@ export const refreshPlaceTemp = onCall(
       status: "updated",
       waterTemp: reading.temp,
       waterTempAt: reading.stamp,
+      provider: reading.source,
     };
   },
 );

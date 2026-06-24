@@ -201,6 +201,8 @@ export async function findOrCreatePlace(opts: {
     createdBy: opts.createdBy,
     firstSwumAt: opts.date,
     source: "manual",
+    // No official feed for user-added spots — read temps from Open-Meteo.
+    tempSource: "open-meteo",
   };
   await setDoc(ref, data);
   return data;

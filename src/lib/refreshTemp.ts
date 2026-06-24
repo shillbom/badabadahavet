@@ -14,14 +14,12 @@ const callable = cloudFn<{ placeId: string }, unknown>("refreshPlaceTemp");
 /**
  * Trigger a server-side temperature refresh for `place` if the stored
  * reading is older than an hour. Silently no-ops if:
- *   - the place has no externalId (we can't refresh it),
  *   - the reading is fresh,
  *   - we already asked recently,
  *   - or the user isn't signed in.
  */
 export function maybeRefreshPlaceTemp(place: Place): void {
   if (!auth.currentUser) return;
-  if (!place.externalId) return;
 
   const now = Date.now();
   const age = place.waterTempAt ? now - place.waterTempAt : Infinity;

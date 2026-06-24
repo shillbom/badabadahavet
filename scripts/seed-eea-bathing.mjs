@@ -5,6 +5,11 @@
  * the other EU members + Albania + Switzerland + UK, available via the
  * --countries flag).
  *
+ * Idempotent: safe to rerun. Existing EEA docs (matched by externalId)
+ * are updated in place with any new/changed props rather than skipped or
+ * duplicated; brand-new spots are created; spots within --min-distance of
+ * a non-EEA master (e.g. a Swedish place) are still left untouched.
+ *
  * NOTE on Norway: Norway is NOT in the EEA bathing-water dataset (the
  * Bathing Water Directive is EU-only; Norway reports separately and isn't
  * in the WISE feature service). For Norway we'll need a different source
@@ -288,6 +293,9 @@ async function main() {
   const index = makeSpatialIndex();
   let existingCount = 0;
   let db = null;
+  // Existing EEA docs keyed by externalId, so a rerun updates them in
+  // place (backfilling new props) instead of skipping or duplicating.
+  const eeaById = new Map();
 
   if (haveCreds) {
     initAdmin();
@@ -305,6 +313,9 @@ async function main() {
           existing: true,
         });
         existingCount++;
+        if (data.source === "eea.europa.eu/wise-bwd" && data.externalId) {
+          eeaById.set(String(data.externalId), { id: doc.id, data });
+        }
       }
     }
     console.log(`→ ${existingCount} existing places loaded into spatial index`);
@@ -314,11 +325,40 @@ async function main() {
     );
   }
 
+  // The props every EEA place should carry. Used both for new docs and
+  // to backfill/update existing ones on a rerun.
+  function desiredProps(p) {
+    return {
+      tempSource: "open-meteo",
+      ...(p.country ? { country: p.country } : {}),
+      ...(p.externalId ? { externalId: p.externalId } : {}),
+    };
+  }
+  // Return only the fields that differ from the existing doc.
+  function changedProps(existing, want) {
+    const diff = {};
+    for (const [k, v] of Object.entries(want)) {
+      if (existing[k] !== v) diff[k] = v;
+    }
+    return diff;
+  }
+
   const fresh = [];
+  const updates = []; // { id, name, props } for existing EEA docs
   let skippedNearMaster = 0;
   let skippedNearIncoming = 0;
+  let unchanged = 0;
   const skipSamples = [];
   for (const p of places) {
+    // Already-imported EEA spot (same externalId) → update in place.
+    const known = p.externalId ? eeaById.get(String(p.externalId)) : null;
+    if (known) {
+      const diff = changedProps(known.data, desiredProps(p));
+      if (Object.keys(diff).length)
+        updates.push({ id: known.id, name: p.name, props: diff });
+      else unchanged++;
+      continue;
+    }
     const hit = index.nearestWithin(p, MIN_DISTANCE_M);
     if (hit) {
       if (hit.place.existing) skippedNearMaster++;
@@ -338,7 +378,7 @@ async function main() {
   }
   if (haveCreds) {
     console.log(
-      `→ ${fresh.length} new (${skippedNearMaster} within ${MIN_DISTANCE_M} m of existing master, ${skippedNearIncoming} collapsed inside feed)`,
+      `→ ${fresh.length} new, ${updates.length} existing updated, ${unchanged} unchanged (${skippedNearMaster} within ${MIN_DISTANCE_M} m of existing master, ${skippedNearIncoming} collapsed inside feed)`,
     );
   } else {
     console.log(
@@ -365,8 +405,13 @@ async function main() {
       for (const [c, n] of [...counts.entries()].sort())
         console.log(`  ${c}: ${n}`);
     }
+    if (updates.length) {
+      console.log(`\nwould update ${updates.length} existing EEA docs, e.g.:`);
+      for (const u of updates.slice(0, 5))
+        console.log(`    "${u.name}" ←`, u.props);
+    }
     console.log(
-      `\nrun again with --write${haveCreds ? "" : " (and GOOGLE_APPLICATION_CREDENTIALS)"} to commit ${fresh.length} docs.`,
+      `\nrun again with --write${haveCreds ? "" : " (and GOOGLE_APPLICATION_CREDENTIALS)"} to commit ${fresh.length} new + ${updates.length} updated docs.`,
     );
     return;
   }
@@ -395,15 +440,30 @@ async function main() {
         firstSwumAt: now,
         seeded: true,
         source: "eea.europa.eu/wise-bwd",
-        ...(p.country ? { country: p.country } : {}),
-        ...(p.externalId ? { externalId: p.externalId } : {}),
+        // EEA has no live temperature feed — read from Open-Meteo satellite.
+        ...desiredProps(p),
       });
     }
     await batch.commit();
     written += chunk.length;
-    process.stdout.write(`\r→ wrote ${written}/${fresh.length}`);
+    process.stdout.write(`\r→ wrote ${written}/${fresh.length} new`);
   }
-  console.log("\n✓ done");
+  if (written) console.log("");
+
+  // Backfill props onto already-imported EEA docs (idempotent rerun).
+  let updated = 0;
+  for (let i = 0; i < updates.length; i += chunkSize) {
+    const chunk = updates.slice(i, i + chunkSize);
+    const batch = db.batch();
+    for (const u of chunk) {
+      batch.update(db.collection("places").doc(u.id), u.props);
+    }
+    await batch.commit();
+    updated += chunk.length;
+    process.stdout.write(`\r→ updated ${updated}/${updates.length} existing`);
+  }
+  if (updated) console.log("");
+  console.log("✓ done");
 }
 
 main().catch((e) => {

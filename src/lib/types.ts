@@ -37,10 +37,18 @@ export type PlaceDoc = {
   source?: string;
   /** External provider's identifier (e.g. badplatsen nutsCode). */
   externalId?: string;
+  /** Which upstream the temperature refresh should prefer. "havochvatten"
+   *  tries the official SE feed first and falls back to Open-Meteo; the
+   *  default (or "open-meteo") goes straight to Open-Meteo satellite data. */
+  tempSource?: "havochvatten" | "open-meteo";
   /** Latest measured water temperature in °C (if known). */
   waterTemp?: number;
   /** Epoch ms — when waterTemp was sampled. */
   waterTempAt?: number;
+  /** Which upstream actually produced the current `waterTemp`. Distinct
+   *  from `tempSource` (the preference) — a "havochvatten" place can end
+   *  up with an "open-meteo" reading when the official feed has none. */
+  waterTempProvider?: "havochvatten" | "open-meteo";
 };
 
 export type SessionDoc = {

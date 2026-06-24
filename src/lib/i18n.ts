@@ -538,7 +538,11 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Streak räknar antalet dagar i rad du badat. Idag eller igår håller den vid liv.",
     "about.data.title": "Datakällor",
     "about.data.body":
-      "Förslag på badplatser och vattentemperaturer kommer från Havs- och vattenmyndighetens öppna data,",
+      "Svenska badplatser och deras vattentemperaturer kommer från Havs- och vattenmyndighetens öppna data,",
+    "about.data.eea":
+      "Badplatser i Danmark och Finland kommer från Europeiska miljöbyrån (EEA),",
+    "about.data.meteo":
+      "För platser utan en officiell mätning uppskattas vattentemperaturen från satellitdata via Open-Meteo,",
     "about.privacy.title": "Integritet",
     "about.privacy.body":
       "Din e-post används bara om du behöver återställa lösenordet. Vi delar inte din data, skickar ingen reklam och du kan radera kontot när som helst från profilen.",
@@ -1005,7 +1009,11 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Your streak counts consecutive days with a swim. Today or yesterday keeps it alive.",
     "about.data.title": "Data sources",
     "about.data.body":
-      "Suggested swim spots and water temperatures come from the Swedish Agency for Marine and Water Management's open data,",
+      "Swedish swim spots and their water temperatures come from the Swedish Agency for Marine and Water Management's open data,",
+    "about.data.eea":
+      "Swim spots in Denmark and Finland come from the European Environment Agency (EEA),",
+    "about.data.meteo":
+      "For spots without an official reading, water temperature is estimated from satellite data via Open-Meteo,",
     "about.privacy.title": "Privacy",
     "about.privacy.body":
       "Your email is only used so you can reset your password. We never share your data, send marketing, and you can delete your account any time from your profile.",
