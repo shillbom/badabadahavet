@@ -25,7 +25,6 @@ import {
   watchUserSessions,
 } from "@/lib/data";
 import {
-  bonusPointsFor,
   evaluateAchievements,
   type AchievementContext,
 } from "@/lib/achievements";
@@ -81,8 +80,6 @@ type State = {
   achievementCtx: AchievementContext;
   /** Set of achievement ids the current user has unlocked. */
   unlockedAchievements: Set<string>;
-  /** Total bonus points from unlocked achievements. */
-  achievementBonusPoints: number;
   /** Place ids the current user has logged a swim at (for ringing "their" pins). */
   myPlaceIds: Set<string>;
 
@@ -130,7 +127,6 @@ export const useStore = create<State>((set, get) => ({
   myPlaces: [],
   achievementCtx: { uid: "", mySessions: [], allSessions: [] },
   unlockedAchievements: new Set(),
-  achievementBonusPoints: 0,
   myPlaceIds: new Set(),
   googleOnboarding: false,
 
@@ -410,7 +406,6 @@ function derive(
   const myPlaceIds = new Set(sessionsByPlace.keys());
   const achievementCtx: AchievementContext = { uid, mySessions, allSessions };
   const unlockedAchievements = evaluateAchievements(achievementCtx);
-  const achievementBonusPoints = bonusPointsFor(achievementCtx);
 
   return {
     myStats,
@@ -419,7 +414,6 @@ function derive(
     myPlaceIds,
     achievementCtx,
     unlockedAchievements,
-    achievementBonusPoints,
   };
 }
 

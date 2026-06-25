@@ -33,7 +33,6 @@ import {
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import SwimMap from "@/components/SwimMap";
-import { bonusPointsForUid } from "@/lib/achievements";
 
 export default function GroupsPage() {
   const { user } = useAuth();
@@ -495,9 +494,6 @@ function GroupDetailSheet({
       entry.points += s.points;
       entry.swims += 1;
       entry.spots.add(s.placeId);
-    }
-    for (const [uid, entry] of map) {
-      entry.points += bonusPointsForUid(uid, allSessions);
     }
     return map;
   }, [allSessions, group.members]);

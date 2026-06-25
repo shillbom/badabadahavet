@@ -70,6 +70,11 @@ export function previewPoints(opts: {
   );
 }
 
+/** Sum a user's stored per-year scores into an all-time total. */
+export function sumScores(scores?: Record<string, number>): number {
+  return scores ? Object.values(scores).reduce((a, b) => a + (b || 0), 0) : 0;
+}
+
 export function startOfYear(year: number): number {
   return new Date(year, 0, 1).getTime();
 }

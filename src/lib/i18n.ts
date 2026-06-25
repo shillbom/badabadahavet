@@ -477,7 +477,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "admin.remove_photo.error": "Kunde inte ta bort bilden",
 
     "achievements.title": "Bedrifter",
-    "achievements.summary": "{n} av {total} klara · +{pts} bonuspoäng",
+    "achievements.summary": "{n} av {total} klara",
+    "achievements.tier": "Nivå {n}",
     "achievements.earned_on": "klar {date}",
     "achievements.unlocked_label": "Bedrift",
     "achievements.bonus_pts": "+{n} bonuspoäng",
@@ -530,7 +531,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Första gången du badar på en ny plats: +3 poäng.",
     "about.scoring.winter": "Vinterdopp (nov–mar): +2 poäng.",
     "about.scoring.achievements":
-      "Bedrifter ger bonuspoäng och låser upp ramar som du själv väljer mellan — en färgad ring runt dina platser på kartan och din profil. Vissa bedrifter låser upp egna teman.",
+      "Bedrifter ger inga poäng — de låser upp ramar som du själv väljer mellan: en färgad ring runt dina platser på kartan och din profil. Vissa bedrifter låser upp egna teman.",
     "border.none": "Ingen ram",
     "border.bronze": "Bronsbadare",
     "border.silver": "Silverbadare",
@@ -959,7 +960,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "admin.remove_photo.error": "Couldn't remove photo",
 
     "achievements.title": "Achievements",
-    "achievements.summary": "{n} of {total} unlocked · +{pts} bonus pts",
+    "achievements.summary": "{n} of {total} unlocked",
+    "achievements.tier": "Tier {n}",
     "achievements.earned_on": "earned {date}",
     "achievements.unlocked_label": "Achievement",
     "achievements.bonus_pts": "+{n} bonus pts",
@@ -1011,7 +1013,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.scoring.new_place": "First swim at a brand-new spot: +3 points.",
     "about.scoring.winter": "Winter dip (Nov–Mar): +2 points.",
     "about.scoring.achievements":
-      "Achievements grant bonus points and unlock frames you can choose between — a coloured ring around your spots on the map and your profile. Some achievements unlock their own themed frame.",
+      "Achievements grant no points — they unlock frames you can choose between: a coloured ring around your spots on the map and your profile. Some achievements unlock their own themed frame.",
     "border.none": "No frame",
     "border.bronze": "Bronze swimmer",
     "border.silver": "Silver swimmer",

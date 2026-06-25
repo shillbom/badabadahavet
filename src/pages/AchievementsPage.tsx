@@ -19,7 +19,6 @@ export default function AchievementsPage() {
   const t = useT();
   const achievementCtx = useStore((s) => s.achievementCtx);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
-  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
 
   const tier = tierForCount(unlockedAchievements.size);
   const next = nextTier(unlockedAchievements.size);
@@ -51,7 +50,6 @@ export default function AchievementsPage() {
             {t("achievements.summary", {
               n: unlockedAchievements.size,
               total: ACHIEVEMENTS.length,
-              pts: achievementBonusPoints,
             })}
           </p>
         </div>
@@ -166,8 +164,9 @@ function Row({
                   ? "bg-wave-100 text-wave-800"
                   : "bg-slate-100 text-slate-600",
             )}
+            title={t("achievements.tier", { n: achievement.tier })}
           >
-            +{achievement.points}
+            {"★".repeat(achievement.tier)}
           </span>
         </div>
         <div className="text-[11px] text-slate-500">

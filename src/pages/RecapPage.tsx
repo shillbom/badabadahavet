@@ -6,11 +6,7 @@ import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { startOfYear, endOfYear } from "@/lib/scoring";
 import { computeMyStats } from "@/lib/stats";
-import {
-  ACHIEVEMENTS,
-  ACHIEVEMENTS_BY_ID,
-  evaluateAchievements,
-} from "@/lib/achievements";
+import { ACHIEVEMENTS_BY_ID, evaluateAchievements } from "@/lib/achievements";
 import { monthShort, useT } from "@/lib/i18n";
 
 const slideVariants = {
@@ -69,14 +65,8 @@ export default function RecapPage() {
   );
   const unlockedYear = useMemo(() => evaluateAchievements(ctxYear), [ctxYear]);
 
-  const yearBonus = useMemo(() => {
-    let pts = 0;
-    for (const a of ACHIEVEMENTS) if (unlockedYear.has(a.id)) pts += a.points;
-    return pts;
-  }, [unlockedYear]);
-
   const slides = useMemo<Slide[]>(() => {
-    const total = stats.totalPoints + yearBonus;
+    const total = stats.totalPoints;
     const fav = stats.favouriteSpot;
     const best = stats.bestMonth;
     const winters = stats.winterSwims;
@@ -97,9 +87,7 @@ export default function RecapPage() {
       {
         kind: "stat",
         title: t("recap.points.title"),
-        subtitle: yearBonus
-          ? t("recap.points.bonus", { n: yearBonus })
-          : t("recap.points.normal"),
+        subtitle: t("recap.points.normal"),
         accent: "🏆",
         big: total.toString(),
         bigLabel: t("recap.points.label"),
@@ -185,7 +173,7 @@ export default function RecapPage() {
         accent: "💧",
       },
     ];
-  }, [stats, yearBonus, year, yearSessions, unlockedYear, t]);
+  }, [stats, year, yearSessions, unlockedYear, t]);
 
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);

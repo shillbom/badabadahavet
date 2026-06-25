@@ -5,10 +5,7 @@ import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
 import { fetchUsers } from "@/lib/data";
-import {
-  bonusPointsForUid,
-  unlockedAchievementsForUid,
-} from "@/lib/achievements";
+import { unlockedAchievementsForUid } from "@/lib/achievements";
 import { resolveBorder, NONE_BORDER, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
@@ -18,7 +15,6 @@ type Row = {
   uid: string;
   displayName: string;
   points: number;
-  bonusPoints: number;
   uniquePlaces: number;
   winters: number;
   sessions: number;
@@ -174,11 +170,6 @@ export default function LeaderboardPage() {
                         ? t("leaderboard.swim")
                         : t("leaderboard.swims", { n: r.sessions })}
                     </span>
-                    {r.bonusPoints > 0 ? (
-                      <span className="text-amber-700">
-                        {t("leaderboard.bonus_hint", { n: r.bonusPoints })}
-                      </span>
-                    ) : null}
                     {r.countriesAbroad > 0 ? (
                       <span className="text-teal-700">
                         {t("leaderboard.countries", { n: r.countriesAbroad })}
@@ -279,7 +270,6 @@ function aggregate(
         uid: s.uid,
         displayName: s.displayName,
         points: 0,
-        bonusPoints: 0,
         uniquePlaces: 0,
         winters: 0,
         sessions: 0,
@@ -303,7 +293,6 @@ function aggregate(
     }
   }
   for (const row of map.values()) {
-    row.bonusPoints = bonusPointsForUid(row.uid, allSessions);
     row.countriesAbroad = abroadCountriesMap.get(row.uid)?.size ?? 0;
     const unlocked = unlockedAchievementsForUid(row.uid, allSessions);
     row.border = resolveBorder(
@@ -314,8 +303,7 @@ function aggregate(
     // Prefer the server-stored yearly score; fall back to the session sum
     // (already accumulated in row.points) for users not yet backfilled.
     const stored = scoreByUid.get(row.uid);
-    const base = typeof stored === "number" ? stored : row.points;
-    row.points = base + row.bonusPoints;
+    if (typeof stored === "number") row.points = stored;
   }
   return [...map.values()];
 }

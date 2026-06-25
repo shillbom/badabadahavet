@@ -43,6 +43,7 @@ import {
   resolveBorder,
   type Border,
 } from "@/lib/borders";
+import { sumScores } from "@/lib/scoring";
 import type { MyStats } from "@/lib/stats";
 import { formatDate, cn } from "@/lib/utils";
 import { monthShort, useT } from "@/lib/i18n";
@@ -75,7 +76,6 @@ export default function ProfilePage() {
   const t = useT();
   const myStats = useStore((s) => s.myStats);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
-  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(profile?.displayName ?? "");
@@ -351,7 +351,9 @@ export default function ProfilePage() {
         <MiniCard
           icon={<Trophy className="h-3.5 w-3.5" />}
           label={t("map.stat.points")}
-          value={myStats.totalPoints + achievementBonusPoints}
+          value={
+            profile?.scores ? sumScores(profile.scores) : myStats.totalPoints
+          }
         />
         <MiniCard
           icon={<Flame className="h-3.5 w-3.5" />}
@@ -444,7 +446,7 @@ export default function ProfilePage() {
               <span
                 key={a.id}
                 className="flex-none rounded-full bg-white/80 px-2.5 py-2 my-1 text-base ring-1 ring-amber-200"
-                title={`${t(`achievement.${a.id}.name`)} · +${a.points}`}
+                title={t(`achievement.${a.id}.name`)}
               >
                 {a.emoji}
               </span>
