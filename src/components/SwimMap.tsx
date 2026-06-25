@@ -10,7 +10,14 @@ import L, { type LatLngExpression } from "leaflet";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import MarkerClusterGroup from "react-leaflet-cluster";
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { Link } from "react-router-dom";
 import { Layers, LocateFixed } from "lucide-react";
 import { MAP_THEMES } from "@/lib/mapThemes";
@@ -108,6 +115,33 @@ function tempIcon(temp: number): L.DivIcon {
   });
   tempIconCache.set(rounded, icon);
   return icon;
+}
+
+// Stable key for a place's position so we can look up its temperature
+// from a cluster's child markers (which only expose lat/lng, not the
+// original PlaceDoc).
+function clusterPosKey(lat: number, lng: number): string {
+  return `${lat.toFixed(6)},${lng.toFixed(6)}`;
+}
+
+// Cluster badge: child count, plus the average of any fresh temps below it.
+function clusterIconHtml(count: number, avgTemp: number | null): string {
+  const size = 40;
+  const tempPill =
+    avgTemp != null
+      ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);
+           background:#0284c7;color:white;font-size:10px;font-weight:700;line-height:1;
+           padding:2px 5px;border-radius:8px;border:1.5px solid white;white-space:nowrap;
+           box-shadow:0 1px 3px rgba(2,100,160,0.5);">💧 ${Math.round(avgTemp)}°</div>`
+      : "";
+  return `<div style="position:relative;width:${size}px;height:${size}px;">
+    <div style="width:${size}px;height:${size}px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      background:linear-gradient(135deg,#019eea,#065684);color:white;
+      font-weight:700;font-size:13px;border:2px solid white;
+      box-shadow:0 3px 8px rgba(2,100,160,0.45);">${count}</div>
+    ${tempPill}
+  </div>`;
 }
 
 const ACTIVE_SIZE = 32;
@@ -263,6 +297,45 @@ export default function SwimMap({
   const mapRef = useRef<L.Map | null>(null);
   const saved = savedViews.get(viewKey);
 
+  // Position → fresh temperature, so a cluster can average the temps of
+  // its child markers. Held in a ref the (stable) cluster icon builder
+  // reads, so updating temps doesn't recreate the cluster group.
+  const tempByPos = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of places) {
+      if (hasFreshTemp(p)) m.set(clusterPosKey(p.lat, p.lng), p.waterTemp);
+    }
+    return m;
+  }, [places]);
+  const tempByPosRef = useRef(tempByPos);
+  tempByPosRef.current = tempByPos;
+
+  const createClusterIcon = useCallback(
+    (cluster: {
+      getAllChildMarkers: () => L.Marker[];
+      getChildCount: () => number;
+    }) => {
+      const lookup = tempByPosRef.current;
+      let sum = 0;
+      let n = 0;
+      for (const m of cluster.getAllChildMarkers()) {
+        const ll = m.getLatLng();
+        const temp = lookup.get(clusterPosKey(ll.lat, ll.lng));
+        if (typeof temp === "number") {
+          sum += temp;
+          n++;
+        }
+      }
+      return L.divIcon({
+        html: clusterIconHtml(cluster.getChildCount(), n ? sum / n : null),
+        className: "swim-cluster",
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      });
+    },
+    [],
+  );
+
   return (
     <div className={cn("relative h-full w-full", className)}>
       <MapContainer
@@ -320,6 +393,7 @@ export default function SwimMap({
           maxClusterRadius={50}
           showCoverageOnHover={false}
           spiderfyOnMaxZoom
+          iconCreateFunction={createClusterIcon}
         >
           {places
             .filter((p) => p.id !== activePlaceId)
