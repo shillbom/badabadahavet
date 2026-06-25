@@ -22,6 +22,7 @@ import { Link } from "react-router-dom";
 import { Layers, LocateFixed } from "lucide-react";
 import { MAP_THEMES } from "@/lib/mapThemes";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
+import { pinRingFor } from "@/lib/borders";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
 import { formatDate, cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
@@ -233,10 +234,6 @@ export type SwimMapProps = {
   /** Stable key used to persist pan/zoom across unmounts (e.g. tab navigation).
    *  Maps with the same key share saved view state. Defaults to "default". */
   viewKey?: string;
-  /** Place ids the current user has swum at — these pins get a border ring. */
-  myPlaceIds?: Set<string>;
-  /** The current user's chosen border ring (null = no ring). */
-  myBorder?: PinRing | null;
 };
 
 const userLocationIcon = L.divIcon({
@@ -286,8 +283,6 @@ export default function SwimMap({
   mapRef: externalMapRef,
   viewKey = "default",
   topRightActions,
-  myPlaceIds,
-  myBorder,
 }: SwimMapProps) {
   const t = useT();
   const [satellite, setSatellite] = useState(false);
@@ -417,7 +412,7 @@ export default function SwimMap({
                   position={[p.lat, p.lng]}
                   icon={pinIcon(
                     hasFreshTemp(p) ? p.waterTemp : null,
-                    myPlaceIds?.has(p.id) ? (myBorder ?? null) : null,
+                    pinRingFor(p.lastSwimBorder),
                   )}
                   eventHandlers={{
                     mouseover: () => maybeRefreshPlaceTemp(p),

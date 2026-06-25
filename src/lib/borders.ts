@@ -141,6 +141,15 @@ export function borderById(id: string | null | undefined): Border | undefined {
   return id ? BORDERS.find((b) => b.id === id) : undefined;
 }
 
+/** A Leaflet pin ring for a stored border id, or null for none/unknown. */
+export function pinRingFor(
+  id: string | null | undefined,
+): { id: string; ring: string; glow: string } | null {
+  const b = borderById(id);
+  if (!b || b.id === "none") return null;
+  return { id: b.id, ring: b.ring, glow: b.glow };
+}
+
 export function isBorderUnlocked(
   b: Border,
   achievementCount: number,

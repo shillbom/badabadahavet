@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Flame, MapPin, Trophy } from "lucide-react";
 import { useStore } from "@/store/sessions";
-import { resolveBorder } from "@/lib/borders";
 import { sumScores } from "@/lib/scoring";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
@@ -15,16 +14,9 @@ export default function MapPage() {
   const t = useT();
   const places = useStore((s) => s.places);
   const myPlaces = useStore((s) => s.myPlaces);
-  const myPlaceIds = useStore((s) => s.myPlaceIds);
-  const unlockedAchievements = useStore((s) => s.unlockedAchievements);
   const sessionsByPlace = useStore((s) => s.sessionsByPlace);
   const myStats = useStore((s) => s.myStats);
 
-  const myBorder = resolveBorder(
-    profile?.selectedBorder,
-    unlockedAchievements.size,
-    unlockedAchievements,
-  );
   const isGuest = !user;
 
   // Seed from Firestore so the map opens at the right place without waiting for GPS
@@ -144,16 +136,6 @@ export default function MapPage() {
               fitToken={fitToken}
               fitBoundsToPlaces={!isGuest && !showAll}
               viewKey="main"
-              myPlaceIds={isGuest ? undefined : myPlaceIds}
-              myBorder={
-                !isGuest && myBorder.id !== "none"
-                  ? {
-                      id: myBorder.id,
-                      ring: myBorder.ring,
-                      glow: myBorder.glow,
-                    }
-                  : null
-              }
               topRightActions={
                 isGuest
                   ? undefined

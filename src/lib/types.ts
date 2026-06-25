@@ -56,6 +56,13 @@ export type PlaceDoc = {
    *  from `tempSource` (the preference) — a "havochvatten" place can end
    *  up with an "open-meteo" reading when the official feed has none. */
   waterTempProvider?: "havochvatten" | "open-meteo";
+  /** Denormalised "last swim here", maintained by the logSession /
+   *  removeSession Cloud Functions. Lets the map outline each pin with the
+   *  most recent swimmer's frame without loading any sessions. */
+  lastSwimAt?: number;
+  lastSwimBy?: string;
+  /** Border id (see lib/borders.ts) of that last swimmer; "none" = no frame. */
+  lastSwimBorder?: string;
 };
 
 export type SessionDoc = {
@@ -77,6 +84,8 @@ export type SessionDoc = {
   isHomeCountry?: boolean;
   /** ISO 3166-1 alpha-2 from reverse geocoding ("SE", "NO", …). */
   country?: string;
+  /** The swimmer's chosen border id at log time (see lib/borders.ts). */
+  border?: string;
   points: number;
   createdAt: number;
   /** Emoji reactions: key = emoji, value = list of UIDs who reacted. */

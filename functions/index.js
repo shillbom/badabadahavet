@@ -494,10 +494,16 @@ export const logSession = onCall(
       typeof d.country === "string" && d.country.length <= 3 ? d.country : null;
     const photoUrl = typeof d.photoUrl === "string" ? d.photoUrl : null;
     const photoPath = typeof d.photoPath === "string" ? d.photoPath : null;
+    // The swimmer's chosen border at log time — denormalised onto the place
+    // so the map can outline each pin with the last swimmer's frame without
+    // loading any sessions. "none" means no frame.
+    const border =
+      typeof d.border === "string" && d.border.length <= 20 ? d.border : "none";
 
     const db = getFirestore();
     const userRef = db.collection("users").doc(uid);
     const sessionsCol = db.collection("sessions");
+    const placeRef = db.collection("places").doc(placeId);
     const newRef = sessionsCol.doc();
     const year = swimYear(date);
     const [yStart, yEnd] = yearBounds(year);
@@ -521,6 +527,7 @@ export const logSession = onCall(
           .where("date", ">=", yStart)
           .where("date", "<", yEnd),
       );
+      const placeSnap = await tx.get(placeRef);
 
       // ── compute ──
       const isUniqueForUser = dupSnap.empty;
@@ -557,6 +564,7 @@ export const logSession = onCall(
       if (country) session.country = country;
       if (photoUrl) session.photoUrl = photoUrl;
       if (photoPath) session.photoPath = photoPath;
+      session.border = border;
 
       // ── writes ──
       tx.set(newRef, {
@@ -564,6 +572,20 @@ export const logSession = onCall(
         createdAtServer: FieldValue.serverTimestamp(),
       });
       tx.update(userRef, { [`scores.${year}`]: yearTotal });
+
+      // Stamp the place with this swim's frame when it's the most recent
+      // swim there (so back-logged older swims don't override a newer one).
+      const prevLast = placeSnap.exists ? placeSnap.data().lastSwimAt : null;
+      if (
+        placeSnap.exists &&
+        (typeof prevLast !== "number" || date >= prevLast)
+      ) {
+        tx.update(placeRef, {
+          lastSwimAt: date,
+          lastSwimBy: uid,
+          lastSwimBorder: border,
+        });
+      }
 
       return { id: newRef.id, points, isUniqueForUser, isWinter };
     });
@@ -636,11 +658,48 @@ export const removeSession = onCall(
           .where("date", "<", yEnd),
       );
 
+      // If this was the place's most recent swim, find the next-latest so we
+      // can restamp the pin's outline. Only query when needed.
+      const placeRef = db.collection("places").doc(session.placeId);
+      const placeSnap = await tx.get(placeRef);
+      const wasLastSwim =
+        placeSnap.exists &&
+        placeSnap.data().lastSwimAt === session.date &&
+        placeSnap.data().lastSwimBy === ownerUid;
+      let nextLast = null;
+      if (wasLastSwim) {
+        const placeSessions = await tx.get(
+          db
+            .collection("sessions")
+            .where("placeId", "==", session.placeId)
+            .orderBy("date", "desc"),
+        );
+        placeSessions.forEach((s) => {
+          if (!nextLast && s.id !== sessionId) nextLast = s.data();
+        });
+      }
+
       // ── writes ──
       const yearTotal = sumYearPoints(yearSnap, sessionId);
       tx.delete(sessionRef);
       if (ownerSnap.exists) {
         tx.update(ownerRef, { [`scores.${year}`]: Math.max(0, yearTotal) });
+      }
+      if (wasLastSwim) {
+        tx.update(
+          placeRef,
+          nextLast
+            ? {
+                lastSwimAt: nextLast.date,
+                lastSwimBy: nextLast.uid,
+                lastSwimBorder: nextLast.border ?? "none",
+              }
+            : {
+                lastSwimAt: FieldValue.delete(),
+                lastSwimBy: FieldValue.delete(),
+                lastSwimBorder: FieldValue.delete(),
+              },
+        );
       }
       return session.photoPath ?? null;
     });

@@ -30,6 +30,7 @@ import {
   isWinterMonth,
   previewPoints,
 } from "@/lib/scoring";
+import { resolveBorder } from "@/lib/borders";
 import type { SessionDoc } from "@/lib/types";
 import { useLocale, useT } from "@/lib/i18n";
 
@@ -49,6 +50,7 @@ export default function LogSessionPage() {
   const places = useStore((s) => s.places);
   const allSessions = useStore((s) => s.allSessions);
   const myPlaceIds = useStore((s) => s.myPlaceIds);
+  const unlockedAchievements = useStore((s) => s.unlockedAchievements);
 
   // Pre-select a place when navigating from SpotPage (?placeId=xxx).
   const preselectedPlaceId = searchParams.get("placeId");
@@ -260,6 +262,11 @@ export default function LogSessionPage() {
         createdBy: user.uid,
         date: ts,
       });
+      const myBorder = resolveBorder(
+        profile.selectedBorder,
+        unlockedAchievements.size,
+        unlockedAchievements,
+      );
       const session = await createSession({
         uid: user.uid,
         place,
@@ -269,6 +276,7 @@ export default function LogSessionPage() {
         note,
         photoFile,
         country,
+        border: myBorder.id,
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
       navigate("/history");

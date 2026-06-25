@@ -242,6 +242,8 @@ export async function createSession(opts: {
   photoFile?: File | null;
   /** Pre-resolved country (ISO alpha-2) — flags home vs. abroad swims. */
   country?: string | null;
+  /** The swimmer's chosen border id — stamped onto the place for the map. */
+  border?: string;
 }): Promise<LoggedSession> {
   let photoUrl: string | undefined;
   let photoPath: string | undefined;
@@ -267,6 +269,7 @@ export async function createSession(opts: {
       country?: string;
       photoUrl?: string;
       photoPath?: string;
+      border?: string;
     },
     LoggedSession
   >("logSession");
@@ -280,6 +283,7 @@ export async function createSession(opts: {
     country: opts.country ?? undefined,
     photoUrl,
     photoPath,
+    border: opts.border,
   });
   return res.data;
 }
