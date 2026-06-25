@@ -75,12 +75,17 @@ service cloud.firestore {
                     && (
                       !('isAdmin' in request.resource.data)
                       || request.resource.data.isAdmin == false
-                    );
+                    )
+                    // Score is server-owned; never set by a client.
+                    && !('scores' in request.resource.data);
 
       allow update: if isSelf(uid)
                     && unchanged('uid')
                     && unchanged('createdAt')
                     && unchanged('isAdmin')
+                    // Score is maintained only by the logSession /
+                    // removeSession Cloud Functions (Admin SDK).
+                    && unchanged('scores')
                     && request.resource.data.uid == uid
                     && request.resource.data.displayName is string
                     && request.resource.data.displayName.size() > 0
@@ -145,24 +150,10 @@ service cloud.firestore {
     match /sessions/{sessionId} {
       allow read: if true;
 
-      allow create: if signedIn()
-                    && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.placeId is string
-                    && request.resource.data.placeId.size() > 0
-                    && request.resource.data.placeName is string
-                    && request.resource.data.placeName.size() <= 80
-                    && validLatLng(request.resource.data.lat,
-                                   request.resource.data.lng)
-                    && request.resource.data.date is number
-                    && request.resource.data.date >= 946684800000
-                    && request.resource.data.date <= request.time.toMillis() + 86400000
-                    && request.resource.data.points is number
-                    && request.resource.data.points >= 0
-                    && request.resource.data.points <= 15
-                    && request.resource.data.isUniqueForUser is bool
-                    && request.resource.data.isWinter is bool
-                    && request.resource.data.displayName is string
-                    && request.resource.data.displayName.size() <= 40;
+      // Sessions are created ONLY by the logSession Cloud Function (Admin
+      // SDK bypasses rules). This keeps points honest — a client can't mint
+      // a session with arbitrary points or skip the score update.
+      allow create: if false;
 
       // Owners can edit cosmetic fields only; admins can moderate (e.g.
       // strip a bad photoUrl, fix a placeName after a rename).
@@ -185,8 +176,10 @@ service cloud.firestore {
         && onlyOwnReactionChanged()
       ) || isAdminUser();
 
-      allow delete: if (signedIn() && resource.data.uid == request.auth.uid)
-                    || isAdminUser();
+      // Removed ONLY via the removeSession Cloud Function, which also fixes
+      // the owner's score. Direct deletes (even by the owner) would let
+      // someone drop a swim while keeping its points.
+      allow delete: if false;
     }
 
     // ============================================================

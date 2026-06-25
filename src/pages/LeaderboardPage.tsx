@@ -35,11 +35,13 @@ export default function LeaderboardPage() {
   const year = new Date().getFullYear();
   const [scope, setScope] = useState<string>("global");
 
-  // Each participant's chosen frame, fetched from their user doc. Sessions
-  // alone don't carry it, so we look up the profiles of everyone on the board.
+  // Each participant's chosen frame + server-stored yearly score, fetched
+  // from their user doc. Sessions alone don't carry either, so we look up
+  // the profiles of everyone on the board.
   const [borderByUid, setBorderByUid] = useState<Map<string, string>>(
     new Map(),
   );
+  const [scoreByUid, setScoreByUid] = useState<Map<string, number>>(new Map());
   const uidsKey = useMemo(
     () => [...new Set(all.map((s) => s.uid))].sort().join(","),
     [all],
@@ -48,34 +50,39 @@ export default function LeaderboardPage() {
     const uids = uidsKey ? uidsKey.split(",") : [];
     if (uids.length === 0) {
       setBorderByUid(new Map());
+      setScoreByUid(new Map());
       return;
     }
     let cancelled = false;
     fetchUsers(uids)
       .then((users) => {
         if (cancelled) return;
-        const map = new Map<string, string>();
+        const borders = new Map<string, string>();
+        const scores = new Map<string, number>();
         for (const u of users) {
-          if (u.selectedBorder) map.set(u.uid, u.selectedBorder);
+          if (u.selectedBorder) borders.set(u.uid, u.selectedBorder);
+          const yearScore = u.scores?.[String(year)];
+          if (typeof yearScore === "number") scores.set(u.uid, yearScore);
         }
-        setBorderByUid(map);
+        setBorderByUid(borders);
+        setScoreByUid(scores);
       })
       .catch(() => {
-        /* fall back to auto tier on failure */
+        /* fall back to session-summed points + auto tier on failure */
       });
     return () => {
       cancelled = true;
     };
-  }, [uidsKey]);
+  }, [uidsKey, year]);
 
   const rows = useMemo<Row[]>(() => {
     const memberFilter: Set<string> | null =
       scope === "global"
         ? null
         : new Set(groups.find((g) => g.id === scope)?.members ?? []);
-    const rows = aggregate(all, memberFilter, all, borderByUid);
+    const rows = aggregate(all, memberFilter, all, borderByUid, scoreByUid);
     return rows.sort((a, b) => b.points - a.points);
-  }, [all, groups, scope, borderByUid]);
+  }, [all, groups, scope, borderByUid, scoreByUid]);
 
   return (
     <div className="px-4 pt-2">
@@ -260,6 +267,7 @@ function aggregate(
   memberFilter: Set<string> | null,
   allSessions: SessionDoc[],
   borderByUid: Map<string, string>,
+  scoreByUid: Map<string, number>,
 ): Row[] {
   const map = new Map<string, Row>();
   const abroadCountriesMap = new Map<string, Set<string>>();
@@ -303,7 +311,11 @@ function aggregate(
       unlocked.size,
       unlocked,
     );
-    row.points += row.bonusPoints;
+    // Prefer the server-stored yearly score; fall back to the session sum
+    // (already accumulated in row.points) for users not yet backfilled.
+    const stored = scoreByUid.get(row.uid);
+    const base = typeof stored === "number" ? stored : row.points;
+    row.points = base + row.bonusPoints;
   }
   return [...map.values()];
 }

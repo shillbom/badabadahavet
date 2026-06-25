@@ -218,9 +218,9 @@ export const useStore = create<State>((set, get) => ({
   deleteAccount: async () => {
     const current = auth.currentUser;
     if (!current) throw new Error("not signed in");
-    // Delete owned data first — once the auth user is gone the client can
-    // no longer satisfy Firestore's owner-only security rules.
-    await deleteAccountData(current.uid);
+    // Delete owned data first (server-side) — once the auth user is gone the
+    // Cloud Function can no longer authenticate the caller.
+    await deleteAccountData();
     await deleteUser(current);
   },
 

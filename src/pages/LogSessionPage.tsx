@@ -262,7 +262,6 @@ export default function LogSessionPage() {
       });
       const session = await createSession({
         uid: user.uid,
-        displayName: profile.displayName,
         place,
         lat: coords.lat,
         lng: coords.lng,
@@ -270,7 +269,6 @@ export default function LogSessionPage() {
         note,
         photoFile,
         country,
-        homeCountry: profile.homeCountry ?? null,
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
       navigate("/history");

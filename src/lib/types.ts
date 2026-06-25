@@ -5,6 +5,10 @@ export type UserDoc = {
   displayName: string;
   emoji?: string;
   achievements?: Record<string, number>; // id -> unlocked timestamp
+  /** Per-year swim points, keyed by calendar year ("2026" -> points).
+   *  Maintained server-side by the logSession / removeSession Cloud
+   *  Functions only — clients can't write it (enforced by rules). */
+  scores?: Record<string, number>;
   /** Chosen cosmetic pin/avatar border id (see lib/borders.ts). Falls back
    *  to the highest earned tier when unset or no longer qualified-for. */
   selectedBorder?: string;
