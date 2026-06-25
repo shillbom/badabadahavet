@@ -5,14 +5,17 @@ on:
     branches: [main]
 
 # Forks can't read repo secrets — skip preview for them.
+#
+# The "Deploy preview channel" step is currently disabled (commented out
+# below) — we just build + type-check PRs here and try changes locally with
+# `npm run dev` instead. To bring preview deploys back, uncomment that step
+# (and restore the `pull-requests`/`checks` write permissions it needs).
 jobs:
   preview:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
-      checks: write
 
     steps:
       - uses: actions/checkout@v5
@@ -38,12 +41,14 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         run: npm run build
-
-      - name: Deploy preview channel
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          # Preview channels auto-expire after 7 days.
-          expires: 7d
+      # Preview deploy disabled — re-enable by uncommenting and restoring the
+      # `pull-requests: write` / `checks: write` job permissions above.
+      #
+      # - name: Deploy preview channel
+      #   uses: FirebaseExtended/action-hosting-deploy@v0
+      #   with:
+      #     repoToken: ${{ secrets.GITHUB_TOKEN }}
+      #     firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      #     projectId: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+      #     # Preview channels auto-expire after 7 days.
+      #     expires: 7d
