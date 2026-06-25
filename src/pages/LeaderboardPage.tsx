@@ -4,8 +4,8 @@ import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
-import { bonusPointsForUid } from "@/lib/achievements";
-import { POINTS_COUNTRY_BONUS } from "@/lib/scoring";
+import { bonusPointsForUid, achievementCountForUid } from "@/lib/achievements";
+import { rankForAchievementCount, type SwimmerRank } from "@/lib/ranks";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
@@ -15,11 +15,11 @@ type Row = {
   displayName: string;
   points: number;
   bonusPoints: number;
-  countryBonusPoints: number;
   uniquePlaces: number;
   winters: number;
   sessions: number;
   countriesAbroad: number;
+  rank: SwimmerRank;
 };
 
 export default function LeaderboardPage() {
@@ -84,13 +84,24 @@ export default function LeaderboardPage() {
                   isMe && "ring-2 ring-wave-400",
                 )}
               >
-                <div
-                  className={cn(
-                    "flex h-9 w-9 flex-none items-center justify-center rounded-full font-display text-lg font-black",
-                    podium.medalClass,
-                  )}
-                >
-                  {podium.medal ?? <span>{i + 1}</span>}
+                <div className="relative flex-none">
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-full font-display text-lg font-black",
+                      podium.medalClass,
+                      r.rank.id !== "none" && `ring-2 ${r.rank.ringClass}`,
+                    )}
+                  >
+                    {podium.medal ?? <span>{i + 1}</span>}
+                  </div>
+                  {r.rank.id !== "none" ? (
+                    <span
+                      className="absolute -right-1 -bottom-1 text-[11px] leading-none drop-shadow-sm"
+                      title={t(`rank.${r.rank.id}`)}
+                    >
+                      {r.rank.emoji}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold text-wave-900">
@@ -223,11 +234,11 @@ function aggregate(
         displayName: s.displayName,
         points: 0,
         bonusPoints: 0,
-        countryBonusPoints: 0,
         uniquePlaces: 0,
         winters: 0,
         sessions: 0,
         countriesAbroad: 0,
+        rank: rankForAchievementCount(0),
       };
       map.set(s.uid, row);
     }
@@ -248,8 +259,10 @@ function aggregate(
   for (const row of map.values()) {
     row.bonusPoints = bonusPointsForUid(row.uid, allSessions);
     row.countriesAbroad = abroadCountriesMap.get(row.uid)?.size ?? 0;
-    row.countryBonusPoints = row.countriesAbroad * POINTS_COUNTRY_BONUS;
-    row.points += row.bonusPoints + row.countryBonusPoints;
+    row.rank = rankForAchievementCount(
+      achievementCountForUid(row.uid, allSessions),
+    );
+    row.points += row.bonusPoints;
   }
   return [...map.values()];
 }

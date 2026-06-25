@@ -395,12 +395,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.field.photo": "Bild (valfritt)",
     "log.add_photo": "Lägg till en bild",
     "log.remove_photo": "Ta bort bild",
-    "log.bracket.A": "Sommarsäsong (maj–sep)",
-    "log.bracket.B": "Mellansäsong (apr & okt)",
-    "log.bracket.C": "Kallt vatten (mar & nov)",
-    "log.bracket.D": "Riktigt vinterdopp (jan, feb, dec)",
-    "log.bracket.abroad": "Utomlands · landbonus räknas separat",
-    "log.xmas_chip": "Julafton — +5 bonus",
+    "log.points.swim": "Bad +1",
+    "log.points.new_spot": "Ny plats +3",
+    "log.points.winter": "Vinter +2",
+    "log.points.total": "+{n} p",
     "log.save": "Spara badet",
     "log.error.generic": "Kunde inte spara",
     "log.error.location":
@@ -527,15 +525,20 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.what.body":
       "Badligan är en lekfull tävling mellan badare. Logga dina dopp, samla poäng, jaga bedrifter och tävla med dina vänner i grupper. Helt gratis, ingen reklam.",
     "about.scoring.title": "Hur poängen funkar",
-    "about.scoring.bracket":
-      "Bad i ditt hemland ger 1–4 poäng beroende på månad: 1 p maj–sep, 2 p apr & okt, 3 p mar & nov, 4 p jan, feb & dec.",
+    "about.scoring.swim": "Varje loggat bad: +1 poäng.",
     "about.scoring.new_place":
-      "Första gången du badar på en ny plats: +2 bonus.",
-    "about.scoring.xmas": "Bada på julafton i ditt hemland: +5 bonus.",
-    "about.scoring.abroad":
-      "Bad utomlands ger +4 poäng per unikt land du badat i (regel G).",
-    "about.scoring.streak":
-      "Streak räknar antalet dagar i rad du badat. Idag eller igår håller den vid liv.",
+      "Första gången du badar på en ny plats: +3 poäng.",
+    "about.scoring.winter": "Vinterdopp (nov–mar): +2 poäng.",
+    "about.scoring.achievements":
+      "Bedrifter ger bonuspoäng och en badarrank — ju fler du klarar, desto finare ram runt dina platser på kartan, din profil och din placering på topplistan.",
+    "rank.none": "Nybörjare",
+    "rank.bronze": "Bronsbadare",
+    "rank.silver": "Silverbadare",
+    "rank.gold": "Guldbadare",
+    "rank.diamond": "Diamantbadare",
+    "rank.next": "{n} till för {rank}",
+    "rank.maxed": "Högsta rangen — snyggt!",
+    "rank.tooltip": "{n}/{total} bedrifter klara",
     "about.data.title": "Datakällor",
     "about.data.body":
       "Svenska badplatser och deras vattentemperaturer kommer från Havs- och vattenmyndighetens öppna data,",
@@ -580,7 +583,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "map.popup.swims_one": "1 bad",
     "map.popup.swims_many": "{n} bad",
-    "map.popup.see_full_history": "Se all historik →",
+    "map.popup.view_spot": "Visa plats",
     "map.popup.use_this_spot": "Använd denna plats",
     "map.popup.no_swims_yet": "Inga bad här ännu",
     "map.popup.age.mins": "för {n} min sedan",
@@ -868,12 +871,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.field.photo": "Photo (optional)",
     "log.add_photo": "Add a photo",
     "log.remove_photo": "Remove photo",
-    "log.bracket.A": "Summer season (May–Sep)",
-    "log.bracket.B": "Shoulder season (Apr & Oct)",
-    "log.bracket.C": "Cold water (Mar & Nov)",
-    "log.bracket.D": "Proper winter dip (Jan, Feb, Dec)",
-    "log.bracket.abroad": "Abroad · country bonus tallied separately",
-    "log.xmas_chip": "Christmas Eve — +5 bonus",
+    "log.points.swim": "Swim +1",
+    "log.points.new_spot": "New spot +3",
+    "log.points.winter": "Winter +2",
+    "log.points.total": "+{n} pts",
     "log.save": "Save swim",
     "log.error.generic": "Couldn't save",
     "log.error.location": "Need a location — tap the map or allow GPS.",
@@ -999,14 +1000,19 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.what.body":
       "Badligan is a playful contest between swimmers. Log your dips, collect points, chase achievements and compete with friends in groups. Free, no ads.",
     "about.scoring.title": "How scoring works",
-    "about.scoring.bracket":
-      "Swims in your home country earn 1–4 points depending on month: 1 pt May–Sep, 2 pt Apr & Oct, 3 pt Mar & Nov, 4 pt Jan, Feb & Dec.",
-    "about.scoring.new_place": "First time swimming at a new spot: +2 bonus.",
-    "about.scoring.xmas": "Christmas Eve swim in your home country: +5 bonus.",
-    "about.scoring.abroad":
-      "Swims abroad earn +4 pts per distinct country visited (rule G).",
-    "about.scoring.streak":
-      "Your streak counts consecutive days with a swim. Today or yesterday keeps it alive.",
+    "about.scoring.swim": "Every logged swim: +1 point.",
+    "about.scoring.new_place": "First swim at a brand-new spot: +3 points.",
+    "about.scoring.winter": "Winter dip (Nov–Mar): +2 points.",
+    "about.scoring.achievements":
+      "Achievements grant bonus points and a swimmer rank — the more you unlock, the fancier the border around your spots on the map, your profile and your leaderboard place.",
+    "rank.none": "Newcomer",
+    "rank.bronze": "Bronze swimmer",
+    "rank.silver": "Silver swimmer",
+    "rank.gold": "Gold swimmer",
+    "rank.diamond": "Diamond swimmer",
+    "rank.next": "{n} more for {rank}",
+    "rank.maxed": "Top rank — nice work!",
+    "rank.tooltip": "{n}/{total} achievements unlocked",
     "about.data.title": "Data sources",
     "about.data.body":
       "Swedish swim spots and their water temperatures come from the Swedish Agency for Marine and Water Management's open data,",
@@ -1050,7 +1056,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "map.popup.swims_one": "1 swim",
     "map.popup.swims_many": "{n} swims",
-    "map.popup.see_full_history": "See full history →",
+    "map.popup.view_spot": "View spot",
     "map.popup.use_this_spot": "Use this spot",
     "map.popup.no_swims_yet": "No swims here yet",
     "map.popup.age.mins": "{n} min ago",

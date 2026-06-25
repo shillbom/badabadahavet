@@ -13,6 +13,8 @@ export default function MapPage() {
   const t = useT();
   const places = useStore((s) => s.places);
   const myPlaces = useStore((s) => s.myPlaces);
+  const myPlaceIds = useStore((s) => s.myPlaceIds);
+  const myRank = useStore((s) => s.myRank);
   const sessionsByPlace = useStore((s) => s.sessionsByPlace);
   const myStats = useStore((s) => s.myStats);
   const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
@@ -136,6 +138,12 @@ export default function MapPage() {
               fitToken={fitToken}
               fitBoundsToPlaces={!isGuest && !showAll}
               viewKey="main"
+              myPlaceIds={isGuest ? undefined : myPlaceIds}
+              myRank={
+                !isGuest && myRank.id !== "none"
+                  ? { id: myRank.id, ring: myRank.ring, glow: myRank.glow }
+                  : null
+              }
               topRightActions={
                 isGuest
                   ? undefined

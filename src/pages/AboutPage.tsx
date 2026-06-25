@@ -49,11 +49,10 @@ export default function AboutPage() {
 
       <Section title={t("about.scoring.title")}>
         <ul className="list-disc space-y-1.5 pl-5">
-          <li>{t("about.scoring.bracket")}</li>
+          <li>{t("about.scoring.swim")}</li>
           <li>{t("about.scoring.new_place")}</li>
-          <li>{t("about.scoring.xmas")}</li>
-          <li>{t("about.scoring.abroad")}</li>
-          <li>{t("about.scoring.streak")}</li>
+          <li>{t("about.scoring.winter")}</li>
+          <li>{t("about.scoring.achievements")}</li>
         </ul>
       </Section>
 

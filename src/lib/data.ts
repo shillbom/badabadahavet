@@ -227,7 +227,7 @@ export async function createSession(opts: {
   photoFile?: File | null;
   /** Pre-resolved country (ISO alpha-2) — passed in so scoring can use it. */
   country?: string | null;
-  /** Home country of the swimmer, used for bracket scoring. */
+  /** Home country of the swimmer — only used to flag home vs. abroad swims. */
   homeCountry?: string | null;
 }): Promise<SessionDoc> {
   // Has this user swum at this place before?
@@ -240,7 +240,7 @@ export async function createSession(opts: {
     ),
   );
   const isUniqueForUser = prev.empty;
-  const { points, isWinter, isHomeCountry, monthCategory } = scoreSession({
+  const { points, isWinter, isHomeCountry } = scoreSession({
     isUniqueForUser,
     date: opts.date,
     country: opts.country ?? null,
@@ -277,7 +277,6 @@ export async function createSession(opts: {
     isWinter,
     isHomeCountry,
     country: opts.country ?? undefined,
-    monthCategory,
     points,
     createdAt: Date.now(),
   };

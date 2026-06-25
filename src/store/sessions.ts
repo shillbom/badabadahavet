@@ -29,6 +29,7 @@ import {
   evaluateAchievements,
   type AchievementContext,
 } from "@/lib/achievements";
+import { rankForAchievementCount, type SwimmerRank } from "@/lib/ranks";
 import { computeMyStats, type MyStats } from "@/lib/stats";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useLocale } from "@/lib/i18n";
@@ -83,6 +84,10 @@ type State = {
   unlockedAchievements: Set<string>;
   /** Total bonus points from unlocked achievements. */
   achievementBonusPoints: number;
+  /** Current user's swimmer rank, derived from their unlocked achievements. */
+  myRank: SwimmerRank;
+  /** Place ids the current user has logged a swim at (for ringing "their" pins). */
+  myPlaceIds: Set<string>;
 
   // ── Auth state ────────────────────────────────────────────────────────
   googleOnboarding: boolean;
@@ -129,6 +134,8 @@ export const useStore = create<State>((set, get) => ({
   achievementCtx: { uid: "", mySessions: [], allSessions: [] },
   unlockedAchievements: new Set(),
   achievementBonusPoints: 0,
+  myRank: rankForAchievementCount(0),
+  myPlaceIds: new Set(),
   googleOnboarding: false,
 
   // ── Auth actions ──────────────────────────────────────────────────────
@@ -404,17 +411,21 @@ function derive(
   }
 
   const myPlaces = places.filter((p) => sessionsByPlace.has(p.id));
+  const myPlaceIds = new Set(sessionsByPlace.keys());
   const achievementCtx: AchievementContext = { uid, mySessions, allSessions };
   const unlockedAchievements = evaluateAchievements(achievementCtx);
   const achievementBonusPoints = bonusPointsFor(achievementCtx);
+  const myRank = rankForAchievementCount(unlockedAchievements.size);
 
   return {
     myStats,
     sessionsByPlace,
     myPlaces,
+    myPlaceIds,
     achievementCtx,
     unlockedAchievements,
     achievementBonusPoints,
+    myRank,
   };
 }
 

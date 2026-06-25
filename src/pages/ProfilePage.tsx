@@ -35,6 +35,7 @@ import {
 import { useLocale } from "@/lib/i18n";
 import { COUNTRIES, flagEmoji } from "@/lib/countries";
 import { ACHIEVEMENTS } from "@/lib/achievements";
+import { rankForAchievementCount } from "@/lib/ranks";
 import type { MyStats } from "@/lib/stats";
 import { formatDate, cn } from "@/lib/utils";
 import { monthShort, useT } from "@/lib/i18n";
@@ -77,6 +78,7 @@ export default function ProfilePage() {
   const [deleting, deleteTransition] = useTransition();
   const locale = useLocale((s) => s.locale);
   const setLocale = useLocale((s) => s.setLocale);
+  const rank = rankForAchievementCount(unlockedAchievements.size);
 
   async function pickLocale(next: "sv" | "en") {
     setLocale(next);
@@ -166,7 +168,15 @@ export default function ProfilePage() {
       <div className="mb-5 flex flex-col items-center gap-3">
         <button
           onClick={() => setEmojiOpen((v) => !v)}
-          className="flex h-20 w-20 items-center justify-center rounded-full bg-wave-100 text-5xl shadow-md ring-4 ring-white transition-transform active:scale-95"
+          className={cn(
+            "flex h-20 w-20 items-center justify-center rounded-full bg-wave-100 text-5xl shadow-md ring-4 transition-transform active:scale-95",
+            rank.id === "none" ? "ring-white" : rank.ringClass,
+          )}
+          style={
+            rank.id === "none"
+              ? undefined
+              : { boxShadow: `0 0 0 1px white, 0 6px 18px ${rank.glow}` }
+          }
           aria-label={t("profile.change_emoji")}
           title={t("profile.change_emoji")}
         >
@@ -239,6 +249,26 @@ export default function ProfilePage() {
             <Pencil className="h-4 w-4 text-slate-400" />
           </button>
         )}
+
+        <Link
+          to="/achievements"
+          className={cn(
+            "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1",
+            rank.id === "none"
+              ? "bg-white/80 text-slate-500 ring-slate-200"
+              : cn(rank.bgClass, "text-white shadow-sm ring-white/40"),
+          )}
+          title={t("rank.tooltip", {
+            n: unlockedAchievements.size,
+            total: ACHIEVEMENTS.length,
+          })}
+        >
+          {rank.id !== "none" ? <span>{rank.emoji}</span> : null}
+          {t(`rank.${rank.id}`)}
+          <span className="opacity-80">
+            · {unlockedAchievements.size}/{ACHIEVEMENTS.length}
+          </span>
+        </Link>
       </div>
 
       {/* Home country */}

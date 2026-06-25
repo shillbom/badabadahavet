@@ -304,5 +304,14 @@ export function bonusPointsForUid(uid: string, allSessions: SessionDoc[]) {
   return bonusPointsFor({ uid, mySessions: mine, allSessions });
 }
 
+/** How many achievements a given user has unlocked (drives their rank). */
+export function achievementCountForUid(
+  uid: string,
+  allSessions: SessionDoc[],
+): number {
+  const mine = allSessions.filter((s) => s.uid === uid);
+  return evaluateAchievements({ uid, mySessions: mine, allSessions }).size;
+}
+
 export const ACHIEVEMENTS_BY_ID: Record<string, Achievement> =
   Object.fromEntries(ACHIEVEMENTS.map((a) => [a.id, a]));

@@ -6,8 +6,8 @@ export type UserDoc = {
   emoji?: string;
   achievements?: Record<string, number>; // id -> unlocked timestamp
   locale?: "sv" | "en";
-  /** ISO 3166-1 alpha-2 (e.g. "SE"). Used to award home-country bracket
-   *  points; non-home swims get country bonuses via rule G. */
+  /** ISO 3166-1 alpha-2 (e.g. "SE"). Used only to tally distinct foreign
+   *  countries for the "countries abroad" stat — it does not affect points. */
   homeCountry?: string;
   createdAt: number;
   /** Set only via direct Firestore write (e.g. `firebase firestore:write`
@@ -70,8 +70,6 @@ export type SessionDoc = {
   isHomeCountry?: boolean;
   /** ISO 3166-1 alpha-2 from reverse geocoding ("SE", "NO", …). */
   country?: string;
-  /** A=May–Sep, B=Apr/Oct, C=Mar/Nov, D=Jan/Feb/Dec — home-country bracket. */
-  monthCategory?: "A" | "B" | "C" | "D";
   points: number;
   createdAt: number;
   /** Emoji reactions: key = emoji, value = list of UIDs who reacted. */
