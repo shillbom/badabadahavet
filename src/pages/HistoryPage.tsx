@@ -5,6 +5,7 @@ import { ChevronRight, MapPin, Snowflake, Sparkles } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { formatDateTime } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
+import Photo from "@/components/Photo";
 import type { SessionDoc } from "@/lib/types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -47,6 +48,7 @@ export default function HistoryPage() {
         count: number;
         lastDate: number;
         photoUrl?: string;
+        photoThumb?: string;
       }
     >();
     for (const s of sessions) {
@@ -55,7 +57,10 @@ export default function HistoryPage() {
         cur.count += 1;
         if (s.date > cur.lastDate) {
           cur.lastDate = s.date;
-          if (s.photoUrl) cur.photoUrl = s.photoUrl;
+          if (s.photoUrl) {
+            cur.photoUrl = s.photoUrl;
+            cur.photoThumb = s.photoThumb;
+          }
         }
       } else {
         m.set(s.placeId, {
@@ -64,6 +69,7 @@ export default function HistoryPage() {
           count: 1,
           lastDate: s.date,
           photoUrl: s.photoUrl,
+          photoThumb: s.photoThumb,
         });
       }
     }
@@ -158,10 +164,10 @@ export default function HistoryPage() {
             >
               <Link to={`/spot/${p.placeId}`} className="flex">
                 {p.photoUrl ? (
-                  <img
+                  <Photo
                     src={p.photoUrl}
-                    alt=""
-                    className="h-20 w-20 flex-none object-cover"
+                    thumb={p.photoThumb}
+                    className="h-20 w-20 flex-none"
                   />
                 ) : (
                   <div className="flex h-20 w-20 flex-none items-center justify-center bg-wave-100 text-3xl">
@@ -203,10 +209,10 @@ export default function HistoryPage() {
             >
               <Link to={`/spot/${s.placeId}`} className="flex">
                 {s.photoUrl ? (
-                  <img
+                  <Photo
                     src={s.photoUrl}
-                    alt=""
-                    className="m-2 h-20 w-20 flex-none rounded-lg object-cover"
+                    thumb={s.photoThumb}
+                    className="m-2 h-20 w-20 flex-none rounded-lg"
                   />
                 ) : (
                   <div className="flex h-20 w-20 flex-none items-center justify-center bg-wave-100 text-3xl">
