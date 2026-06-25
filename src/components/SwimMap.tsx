@@ -233,10 +233,10 @@ export type SwimMapProps = {
   /** Stable key used to persist pan/zoom across unmounts (e.g. tab navigation).
    *  Maps with the same key share saved view state. Defaults to "default". */
   viewKey?: string;
-  /** Place ids the current user has swum at — these pins get a rank ring. */
+  /** Place ids the current user has swum at — these pins get a border ring. */
   myPlaceIds?: Set<string>;
-  /** The current user's achievement-rank ring (null = no ring / rank "none"). */
-  myRank?: PinRing | null;
+  /** The current user's chosen border ring (null = no ring). */
+  myBorder?: PinRing | null;
 };
 
 const userLocationIcon = L.divIcon({
@@ -287,7 +287,7 @@ export default function SwimMap({
   viewKey = "default",
   topRightActions,
   myPlaceIds,
-  myRank,
+  myBorder,
 }: SwimMapProps) {
   const t = useT();
   const [satellite, setSatellite] = useState(false);
@@ -417,7 +417,7 @@ export default function SwimMap({
                   position={[p.lat, p.lng]}
                   icon={pinIcon(
                     hasFreshTemp(p) ? p.waterTemp : null,
-                    myPlaceIds?.has(p.id) ? (myRank ?? null) : null,
+                    myPlaceIds?.has(p.id) ? (myBorder ?? null) : null,
                   )}
                   eventHandlers={{
                     mouseover: () => maybeRefreshPlaceTemp(p),

@@ -9,7 +9,7 @@ import {
   type Achievement,
   type AchievementContext,
 } from "@/lib/achievements";
-import { rankForAchievementCount, nextRank } from "@/lib/ranks";
+import { tierForCount, nextTier } from "@/lib/borders";
 import { cn, formatDate } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
@@ -21,8 +21,8 @@ export default function AchievementsPage() {
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
   const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
 
-  const rank = rankForAchievementCount(unlockedAchievements.size);
-  const next = nextRank(rank);
+  const tier = tierForCount(unlockedAchievements.size);
+  const next = nextTier(unlockedAchievements.size);
 
   const items = useMemo(() => {
     return [...ACHIEVEMENTS].sort((a, b) => {
@@ -62,25 +62,25 @@ export default function AchievementsPage() {
       <div
         className={cn(
           "mb-3 flex items-center gap-3 rounded-2xl p-3 text-white shadow-sm",
-          rank.id === "none"
+          tier.id === "none"
             ? "bg-gradient-to-br from-slate-300 to-slate-500"
-            : rank.bgClass,
+            : tier.bgClass,
         )}
       >
         <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-white/25 text-2xl ring-2 ring-white/50">
-          {rank.id === "none" ? "🌊" : rank.emoji}
+          {tier.id === "none" ? "🌊" : tier.emoji}
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-display text-lg font-black">
-            {t(`rank.${rank.id}`)}
+            {t(`border.${tier.id}`)}
           </div>
           <div className="text-[11px] text-white/90">
             {next
-              ? t("rank.next", {
-                  n: next.min - unlockedAchievements.size,
-                  rank: t(`rank.${next.id}`),
+              ? t("border.next", {
+                  n: next.remaining,
+                  rank: t(`border.${next.border.id}`),
                 })
-              : t("rank.maxed")}
+              : t("border.maxed")}
           </div>
         </div>
       </div>

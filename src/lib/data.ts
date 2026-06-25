@@ -114,6 +114,11 @@ export async function updateUserEmoji(uid: string, emoji: string) {
   await updateDoc(doc(usersCol, uid), { emoji });
 }
 
+/** Set the user's chosen cosmetic border (pass "none" to clear it). */
+export async function updateUserBorder(uid: string, borderId: string) {
+  await updateDoc(doc(usersCol, uid), { selectedBorder: borderId });
+}
+
 export async function updateUserLastLocation(
   uid: string,
   lat: number,

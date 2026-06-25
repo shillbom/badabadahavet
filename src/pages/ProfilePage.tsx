@@ -12,6 +12,7 @@ import {
   Flame,
   History as HistoryIcon,
   Info,
+  Lock,
   LogOut,
   MapPin,
   Pencil,
@@ -27,6 +28,7 @@ import { auth } from "@/firebase";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import {
+  updateUserBorder,
   updateUserDisplayName,
   updateUserEmoji,
   updateUserHomeCountry,
@@ -35,7 +37,12 @@ import {
 import { useLocale } from "@/lib/i18n";
 import { COUNTRIES, flagEmoji } from "@/lib/countries";
 import { ACHIEVEMENTS } from "@/lib/achievements";
-import { rankForAchievementCount } from "@/lib/ranks";
+import {
+  BORDERS,
+  isBorderUnlocked,
+  resolveBorder,
+  type Border,
+} from "@/lib/borders";
 import type { MyStats } from "@/lib/stats";
 import { formatDate, cn } from "@/lib/utils";
 import { monthShort, useT } from "@/lib/i18n";
@@ -78,7 +85,21 @@ export default function ProfilePage() {
   const [deleting, deleteTransition] = useTransition();
   const locale = useLocale((s) => s.locale);
   const setLocale = useLocale((s) => s.setLocale);
-  const rank = rankForAchievementCount(unlockedAchievements.size);
+  const achievementCount = unlockedAchievements.size;
+  const myBorder = resolveBorder(
+    profile?.selectedBorder,
+    achievementCount,
+    unlockedAchievements,
+  );
+
+  async function pickBorder(id: string) {
+    if (!user) return;
+    try {
+      await updateUserBorder(user.uid, id);
+    } catch {
+      toast.error(t("profile.save_error"));
+    }
+  }
 
   async function pickLocale(next: "sv" | "en") {
     setLocale(next);
@@ -170,12 +191,12 @@ export default function ProfilePage() {
           onClick={() => setEmojiOpen((v) => !v)}
           className={cn(
             "flex h-20 w-20 items-center justify-center rounded-full bg-wave-100 text-5xl shadow-md ring-4 transition-transform active:scale-95",
-            rank.id === "none" ? "ring-white" : rank.ringClass,
+            myBorder.id === "none" ? "ring-white" : myBorder.ringClass,
           )}
           style={
-            rank.id === "none"
+            myBorder.id === "none"
               ? undefined
-              : { boxShadow: `0 0 0 1px white, 0 6px 18px ${rank.glow}` }
+              : { boxShadow: `0 0 0 1px white, 0 6px 18px ${myBorder.glow}` }
           }
           aria-label={t("profile.change_emoji")}
           title={t("profile.change_emoji")}
@@ -254,19 +275,19 @@ export default function ProfilePage() {
           to="/achievements"
           className={cn(
             "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1",
-            rank.id === "none"
+            myBorder.id === "none"
               ? "bg-white/80 text-slate-500 ring-slate-200"
-              : cn(rank.bgClass, "text-white shadow-sm ring-white/40"),
+              : cn(myBorder.bgClass, "text-white shadow-sm ring-white/40"),
           )}
-          title={t("rank.tooltip", {
-            n: unlockedAchievements.size,
+          title={t("border.tooltip", {
+            n: achievementCount,
             total: ACHIEVEMENTS.length,
           })}
         >
-          {rank.id !== "none" ? <span>{rank.emoji}</span> : null}
-          {t(`rank.${rank.id}`)}
+          {myBorder.id !== "none" ? <span>{myBorder.emoji}</span> : null}
+          {t(`border.${myBorder.id}`)}
           <span className="opacity-80">
-            · {unlockedAchievements.size}/{ACHIEVEMENTS.length}
+            · {achievementCount}/{ACHIEVEMENTS.length}
           </span>
         </Link>
       </div>
@@ -348,6 +369,17 @@ export default function ProfilePage() {
           value={myStats.winterSwims}
         />
       </div>
+
+      {/* Border picker — choose any frame you've unlocked (or turn it off). */}
+      {achievementCount > 0 ? (
+        <BorderPicker
+          emoji={profile?.emoji ?? "🌊"}
+          selectedId={myBorder.id}
+          achievementCount={achievementCount}
+          unlocked={unlockedAchievements}
+          onPick={pickBorder}
+        />
+      ) : null}
 
       {/* Shortcuts */}
       {myStats.totalSwims > 0 ? (
@@ -483,6 +515,75 @@ export default function ProfilePage() {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function unlockHint(b: Border, t: ReturnType<typeof useT>): string {
+  return b.unlock.kind === "count"
+    ? t("border.unlock.count", { n: b.unlock.min })
+    : t("border.unlock.achievement", {
+        name: t(`achievement.${b.unlock.achievementId}.name`),
+      });
+}
+
+function BorderPicker({
+  emoji,
+  selectedId,
+  achievementCount,
+  unlocked,
+  onPick,
+}: {
+  emoji: string;
+  selectedId: string;
+  achievementCount: number;
+  unlocked: Set<string>;
+  onPick: (id: string) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="mb-4">
+      <h3 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+        {t("border.picker.title")}
+      </h3>
+      <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 py-1">
+        {BORDERS.map((b) => {
+          const earned = isBorderUnlocked(b, achievementCount, unlocked);
+          const active = b.id === selectedId;
+          return (
+            <button
+              key={b.id}
+              type="button"
+              disabled={!earned}
+              onClick={() => onPick(b.id)}
+              title={earned ? t(`border.${b.id}`) : unlockHint(b, t)}
+              className={cn(
+                "flex flex-none flex-col items-center gap-1",
+                !earned && "opacity-60",
+              )}
+            >
+              <span
+                className={cn(
+                  "relative flex h-12 w-12 items-center justify-center rounded-full bg-wave-100 text-2xl ring-4",
+                  b.id === "none" ? "ring-slate-200" : b.ringClass,
+                  active &&
+                    "outline outline-2 outline-offset-2 outline-wave-500",
+                )}
+                style={
+                  b.id === "none"
+                    ? undefined
+                    : { boxShadow: `0 2px 10px ${b.glow}` }
+                }
+              >
+                {earned ? emoji : <Lock className="h-4 w-4 text-slate-400" />}
+              </span>
+              <span className="max-w-[4.5rem] truncate text-[10px] font-semibold text-slate-600">
+                {t(`border.${b.id}`)}
+              </span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

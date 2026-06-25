@@ -5,6 +5,9 @@ export type UserDoc = {
   displayName: string;
   emoji?: string;
   achievements?: Record<string, number>; // id -> unlocked timestamp
+  /** Chosen cosmetic pin/avatar border id (see lib/borders.ts). Falls back
+   *  to the highest earned tier when unset or no longer qualified-for. */
+  selectedBorder?: string;
   locale?: "sv" | "en";
   /** ISO 3166-1 alpha-2 (e.g. "SE"). Used only to tally distinct foreign
    *  countries for the "countries abroad" stat — it does not affect points. */

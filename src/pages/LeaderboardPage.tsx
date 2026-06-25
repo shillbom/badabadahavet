@@ -5,7 +5,7 @@ import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
 import { bonusPointsForUid, achievementCountForUid } from "@/lib/achievements";
-import { rankForAchievementCount, type SwimmerRank } from "@/lib/ranks";
+import { tierForCount, NONE_BORDER, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ type Row = {
   winters: number;
   sessions: number;
   countriesAbroad: number;
-  rank: SwimmerRank;
+  border: Border;
 };
 
 export default function LeaderboardPage() {
@@ -89,17 +89,17 @@ export default function LeaderboardPage() {
                     className={cn(
                       "flex h-9 w-9 items-center justify-center rounded-full font-display text-lg font-black",
                       podium.medalClass,
-                      r.rank.id !== "none" && `ring-2 ${r.rank.ringClass}`,
+                      r.border.id !== "none" && `ring-2 ${r.border.ringClass}`,
                     )}
                   >
                     {podium.medal ?? <span>{i + 1}</span>}
                   </div>
-                  {r.rank.id !== "none" ? (
+                  {r.border.id !== "none" ? (
                     <span
                       className="absolute -right-1 -bottom-1 text-[11px] leading-none drop-shadow-sm"
-                      title={t(`rank.${r.rank.id}`)}
+                      title={t(`border.${r.border.id}`)}
                     >
-                      {r.rank.emoji}
+                      {r.border.emoji}
                     </span>
                   ) : null}
                 </div>
@@ -238,7 +238,7 @@ function aggregate(
         winters: 0,
         sessions: 0,
         countriesAbroad: 0,
-        rank: rankForAchievementCount(0),
+        border: NONE_BORDER,
       };
       map.set(s.uid, row);
     }
@@ -259,9 +259,7 @@ function aggregate(
   for (const row of map.values()) {
     row.bonusPoints = bonusPointsForUid(row.uid, allSessions);
     row.countriesAbroad = abroadCountriesMap.get(row.uid)?.size ?? 0;
-    row.rank = rankForAchievementCount(
-      achievementCountForUid(row.uid, allSessions),
-    );
+    row.border = tierForCount(achievementCountForUid(row.uid, allSessions));
     row.points += row.bonusPoints;
   }
   return [...map.values()];
