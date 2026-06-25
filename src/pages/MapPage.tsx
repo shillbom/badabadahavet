@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Flame, MapPin, Trophy } from "lucide-react";
 import { useStore } from "@/store/sessions";
+import { sumScores } from "@/lib/scoring";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
@@ -15,7 +16,7 @@ export default function MapPage() {
   const myPlaces = useStore((s) => s.myPlaces);
   const sessionsByPlace = useStore((s) => s.sessionsByPlace);
   const myStats = useStore((s) => s.myStats);
-  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
+
   const isGuest = !user;
 
   // Seed from Firestore so the map opens at the right place without waiting for GPS
@@ -42,7 +43,11 @@ export default function MapPage() {
     locationPermission !== "checking" &&
     (locationPermission !== "granted" || myLocation !== null);
 
-  const totalPoints = myStats.totalPoints + achievementBonusPoints;
+  // The server-maintained score is authoritative; fall back to the session
+  // sum only for users not yet backfilled.
+  const totalPoints = profile?.scores
+    ? sumScores(profile.scores)
+    : myStats.totalPoints;
 
   // Stable random seed picked once per mount — prevents re-roll on every render.
   const greetingSeed = useRef(Math.floor(Math.random() * 1000));
@@ -100,11 +105,6 @@ export default function MapPage() {
             label={t("map.stat.points")}
             value={totalPoints}
             icon={<Trophy className="h-4 w-4" />}
-            sub={
-              achievementBonusPoints > 0
-                ? t("map.bonus.subtitle", { n: achievementBonusPoints })
-                : undefined
-            }
           />
           <Stat
             onClick={() => setFitToken((n) => n + 1)}

@@ -5,9 +5,16 @@ export type UserDoc = {
   displayName: string;
   emoji?: string;
   achievements?: Record<string, number>; // id -> unlocked timestamp
+  /** Per-year swim points, keyed by calendar year ("2026" -> points).
+   *  Maintained server-side by the logSession / removeSession Cloud
+   *  Functions only — clients can't write it (enforced by rules). */
+  scores?: Record<string, number>;
+  /** Chosen cosmetic pin/avatar border id (see lib/borders.ts). Falls back
+   *  to the highest earned tier when unset or no longer qualified-for. */
+  selectedBorder?: string;
   locale?: "sv" | "en";
-  /** ISO 3166-1 alpha-2 (e.g. "SE"). Used to award home-country bracket
-   *  points; non-home swims get country bonuses via rule G. */
+  /** ISO 3166-1 alpha-2 (e.g. "SE"). Used only to tally distinct foreign
+   *  countries for the "countries abroad" stat — it does not affect points. */
   homeCountry?: string;
   createdAt: number;
   /** Set only via direct Firestore write (e.g. `firebase firestore:write`
@@ -49,6 +56,13 @@ export type PlaceDoc = {
    *  from `tempSource` (the preference) — a "havochvatten" place can end
    *  up with an "open-meteo" reading when the official feed has none. */
   waterTempProvider?: "havochvatten" | "open-meteo";
+  /** Denormalised "last swim here", maintained by the logSession /
+   *  removeSession Cloud Functions. Lets the map outline each pin with the
+   *  most recent swimmer's frame without loading any sessions. */
+  lastSwimAt?: number;
+  lastSwimBy?: string;
+  /** Border id (see lib/borders.ts) of that last swimmer; "none" = no frame. */
+  lastSwimBorder?: string;
 };
 
 export type SessionDoc = {
@@ -70,8 +84,8 @@ export type SessionDoc = {
   isHomeCountry?: boolean;
   /** ISO 3166-1 alpha-2 from reverse geocoding ("SE", "NO", …). */
   country?: string;
-  /** A=May–Sep, B=Apr/Oct, C=Mar/Nov, D=Jan/Feb/Dec — home-country bracket. */
-  monthCategory?: "A" | "B" | "C" | "D";
+  /** The swimmer's chosen border id at log time (see lib/borders.ts). */
+  border?: string;
   points: number;
   createdAt: number;
   /** Emoji reactions: key = emoji, value = list of UIDs who reacted. */

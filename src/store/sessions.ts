@@ -25,7 +25,6 @@ import {
   watchUserSessions,
 } from "@/lib/data";
 import {
-  bonusPointsFor,
   evaluateAchievements,
   type AchievementContext,
 } from "@/lib/achievements";
@@ -81,8 +80,8 @@ type State = {
   achievementCtx: AchievementContext;
   /** Set of achievement ids the current user has unlocked. */
   unlockedAchievements: Set<string>;
-  /** Total bonus points from unlocked achievements. */
-  achievementBonusPoints: number;
+  /** Place ids the current user has logged a swim at (for ringing "their" pins). */
+  myPlaceIds: Set<string>;
 
   // ── Auth state ────────────────────────────────────────────────────────
   googleOnboarding: boolean;
@@ -128,7 +127,7 @@ export const useStore = create<State>((set, get) => ({
   myPlaces: [],
   achievementCtx: { uid: "", mySessions: [], allSessions: [] },
   unlockedAchievements: new Set(),
-  achievementBonusPoints: 0,
+  myPlaceIds: new Set(),
   googleOnboarding: false,
 
   // ── Auth actions ──────────────────────────────────────────────────────
@@ -215,9 +214,9 @@ export const useStore = create<State>((set, get) => ({
   deleteAccount: async () => {
     const current = auth.currentUser;
     if (!current) throw new Error("not signed in");
-    // Delete owned data first — once the auth user is gone the client can
-    // no longer satisfy Firestore's owner-only security rules.
-    await deleteAccountData(current.uid);
+    // Delete owned data first (server-side) — once the auth user is gone the
+    // Cloud Function can no longer authenticate the caller.
+    await deleteAccountData();
     await deleteUser(current);
   },
 
@@ -404,17 +403,17 @@ function derive(
   }
 
   const myPlaces = places.filter((p) => sessionsByPlace.has(p.id));
+  const myPlaceIds = new Set(sessionsByPlace.keys());
   const achievementCtx: AchievementContext = { uid, mySessions, allSessions };
   const unlockedAchievements = evaluateAchievements(achievementCtx);
-  const achievementBonusPoints = bonusPointsFor(achievementCtx);
 
   return {
     myStats,
     sessionsByPlace,
     myPlaces,
+    myPlaceIds,
     achievementCtx,
     unlockedAchievements,
-    achievementBonusPoints,
   };
 }
 

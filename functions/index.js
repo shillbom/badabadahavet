@@ -1,11 +1,45 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 
 initializeApp();
 
 const PROJECT_REGION = "europe-west1";
+
+// ── Scoring (mirror of src/lib/scoring.ts) ─────────────────────────────────
+// Kept dead simple: +1 per swim, +3 for a brand-new spot, +2 for a winter
+// dip (Nov–Mar). The per-year running total lives on the user doc under
+// `scores[year]` and is only ever written here — clients can't touch it.
+const POINTS_PER_SWIM = 1;
+const POINTS_NEW_SPOT = 3;
+const POINTS_WINTER = 2;
+
+// Year bucket + winter test use UTC so the server is deterministic. The
+// boundary fuzz vs. a browser's local year is a few hours once a year and
+// doesn't matter for a swim contest.
+function swimYear(ts) {
+  return new Date(ts).getUTCFullYear();
+}
+function isWinterMonth(ts) {
+  const m = new Date(ts).getUTCMonth();
+  return m === 10 || m === 11 || m === 0 || m === 1 || m === 2;
+}
+function yearBounds(year) {
+  return [Date.UTC(year, 0, 1), Date.UTC(year + 1, 0, 1)];
+}
+
+/** Sum the points of a user's sessions for a year, optionally excluding one. */
+function sumYearPoints(querySnap, excludeId) {
+  let total = 0;
+  querySnap.forEach((d) => {
+    if (excludeId && d.id === excludeId) return;
+    const p = d.data().points;
+    if (typeof p === "number") total += p;
+  });
+  return total;
+}
 
 // Throttle: how recent a stored reading has to be to be considered
 // "fresh enough" — we won't re-fetch from the upstream API during this
@@ -388,5 +422,374 @@ export const joinGroupByCode = onCall(
       ...data,
       members: [...(data.members ?? []), uid],
     };
+  },
+);
+
+/**
+ * Callable: log a swim. This is the ONLY way a session is created —
+ * Firestore rules forbid clients from writing the sessions collection or
+ * the user's `scores` directly, so points can't be forged.
+ *
+ *   data: { placeId, placeName, lat, lng, date, note?, country?,
+ *           photoUrl?, photoPath? }
+ *   returns: { id, points, isUniqueForUser, isWinter }
+ *
+ * The photo (if any) is uploaded to Storage by the client first; we just
+ * record its URL/path. Scoring + the per-year running total on the user
+ * are updated atomically in a transaction. The year total is *recomputed*
+ * from the user's sessions (not blindly incremented) so it self-heals even
+ * if a previous write was lost.
+ */
+export const logSession = onCall(
+  {
+    region: PROJECT_REGION,
+    cors: true,
+    invoker: "public",
+    maxInstances: 10,
+    memory: "256MiB",
+    timeoutSeconds: 30,
+  },
+  async (req) => {
+    if (!req.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const uid = req.auth.uid;
+    const d = req.data ?? {};
+
+    const placeId = d.placeId;
+    const placeName = d.placeName;
+    const { lat, lng, date } = d;
+    if (typeof placeId !== "string" || !placeId) {
+      throw new HttpsError("invalid-argument", "placeId is required.");
+    }
+    if (
+      typeof placeName !== "string" ||
+      !placeName.trim() ||
+      placeName.length > 80
+    ) {
+      throw new HttpsError("invalid-argument", "placeName looks invalid.");
+    }
+    if (
+      typeof lat !== "number" ||
+      typeof lng !== "number" ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      throw new HttpsError("invalid-argument", "Coordinates look invalid.");
+    }
+    if (
+      typeof date !== "number" ||
+      date < 946684800000 || // 2000-01-01
+      date > Date.now() + 86400000
+    ) {
+      throw new HttpsError("invalid-argument", "date looks invalid.");
+    }
+    const note =
+      typeof d.note === "string" && d.note.trim()
+        ? d.note.trim().slice(0, 500)
+        : null;
+    const country =
+      typeof d.country === "string" && d.country.length <= 3 ? d.country : null;
+    const photoUrl = typeof d.photoUrl === "string" ? d.photoUrl : null;
+    const photoPath = typeof d.photoPath === "string" ? d.photoPath : null;
+    // The swimmer's chosen border at log time — denormalised onto the place
+    // so the map can outline each pin with the last swimmer's frame without
+    // loading any sessions. "none" means no frame.
+    const border =
+      typeof d.border === "string" && d.border.length <= 20 ? d.border : "none";
+
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const sessionsCol = db.collection("sessions");
+    const placeRef = db.collection("places").doc(placeId);
+    const newRef = sessionsCol.doc();
+    const year = swimYear(date);
+    const [yStart, yEnd] = yearBounds(year);
+
+    const result = await db.runTransaction(async (tx) => {
+      // ── reads (all before any writes) ──
+      const userSnap = await tx.get(userRef);
+      if (!userSnap.exists) {
+        throw new HttpsError("failed-precondition", "No profile yet.");
+      }
+      const user = userSnap.data();
+      const dupSnap = await tx.get(
+        sessionsCol
+          .where("uid", "==", uid)
+          .where("placeId", "==", placeId)
+          .limit(1),
+      );
+      const yearSnap = await tx.get(
+        sessionsCol
+          .where("uid", "==", uid)
+          .where("date", ">=", yStart)
+          .where("date", "<", yEnd),
+      );
+      const placeSnap = await tx.get(placeRef);
+
+      // ── compute ──
+      const isUniqueForUser = dupSnap.empty;
+      const isWinter = isWinterMonth(date);
+      const points =
+        POINTS_PER_SWIM +
+        (isUniqueForUser ? POINTS_NEW_SPOT : 0) +
+        (isWinter ? POINTS_WINTER : 0);
+      const homeCountry = user.homeCountry ?? null;
+      const isHomeCountry = !!(
+        homeCountry &&
+        homeCountry !== "OTHER" &&
+        country &&
+        country === homeCountry
+      );
+      const yearTotal = sumYearPoints(yearSnap) + points;
+
+      const session = {
+        id: newRef.id,
+        uid,
+        displayName: user.displayName ?? "Swimmer",
+        placeId,
+        placeName: placeName.trim(),
+        lat,
+        lng,
+        date,
+        points,
+        isUniqueForUser,
+        isWinter,
+        isHomeCountry,
+        createdAt: Date.now(),
+      };
+      if (note) session.note = note;
+      if (country) session.country = country;
+      if (photoUrl) session.photoUrl = photoUrl;
+      if (photoPath) session.photoPath = photoPath;
+      session.border = border;
+
+      // ── writes ──
+      tx.set(newRef, {
+        ...session,
+        createdAtServer: FieldValue.serverTimestamp(),
+      });
+      tx.update(userRef, { [`scores.${year}`]: yearTotal });
+
+      // Stamp the place with this swim's frame when it's the most recent
+      // swim there (so back-logged older swims don't override a newer one).
+      const prevLast = placeSnap.exists ? placeSnap.data().lastSwimAt : null;
+      if (
+        placeSnap.exists &&
+        (typeof prevLast !== "number" || date >= prevLast)
+      ) {
+        tx.update(placeRef, {
+          lastSwimAt: date,
+          lastSwimBy: uid,
+          lastSwimBorder: border,
+        });
+      }
+
+      return { id: newRef.id, points, isUniqueForUser, isWinter };
+    });
+
+    return result;
+  },
+);
+
+/**
+ * Callable: remove a swim. The owner may remove their own; an admin may
+ * remove anyone's (moderation). Deletes the session, recomputes the
+ * owner's per-year score, and removes the photo from Storage.
+ *
+ *   data: { sessionId: string }
+ *   returns: { ok: true }
+ */
+export const removeSession = onCall(
+  {
+    region: PROJECT_REGION,
+    cors: true,
+    invoker: "public",
+    maxInstances: 10,
+    memory: "256MiB",
+    timeoutSeconds: 30,
+  },
+  async (req) => {
+    if (!req.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const callerUid = req.auth.uid;
+    const sessionId = req.data?.sessionId;
+    if (typeof sessionId !== "string" || !sessionId) {
+      throw new HttpsError("invalid-argument", "sessionId is required.");
+    }
+
+    const db = getFirestore();
+    const sessionRef = db.collection("sessions").doc(sessionId);
+
+    const photoPath = await db.runTransaction(async (tx) => {
+      // ── reads ──
+      const sessionSnap = await tx.get(sessionRef);
+      if (!sessionSnap.exists) {
+        throw new HttpsError("not-found", "Session not found.");
+      }
+      const session = sessionSnap.data();
+      const ownerUid = session.uid;
+      const isOwner = ownerUid === callerUid;
+
+      let allowed = isOwner;
+      if (!isOwner) {
+        const callerSnap = await tx.get(db.collection("users").doc(callerUid));
+        allowed = callerSnap.exists && callerSnap.data().isAdmin === true;
+      }
+      if (!allowed) {
+        throw new HttpsError(
+          "permission-denied",
+          "Not allowed to remove this session.",
+        );
+      }
+
+      const ownerRef = db.collection("users").doc(ownerUid);
+      const ownerSnap = await tx.get(ownerRef);
+      const year = swimYear(session.date);
+      const [yStart, yEnd] = yearBounds(year);
+      const yearSnap = await tx.get(
+        db
+          .collection("sessions")
+          .where("uid", "==", ownerUid)
+          .where("date", ">=", yStart)
+          .where("date", "<", yEnd),
+      );
+
+      // If this was the place's most recent swim, find the next-latest so we
+      // can restamp the pin's outline. Only query when needed.
+      const placeRef = db.collection("places").doc(session.placeId);
+      const placeSnap = await tx.get(placeRef);
+      const wasLastSwim =
+        placeSnap.exists &&
+        placeSnap.data().lastSwimAt === session.date &&
+        placeSnap.data().lastSwimBy === ownerUid;
+      let nextLast = null;
+      if (wasLastSwim) {
+        const placeSessions = await tx.get(
+          db
+            .collection("sessions")
+            .where("placeId", "==", session.placeId)
+            .orderBy("date", "desc"),
+        );
+        placeSessions.forEach((s) => {
+          if (!nextLast && s.id !== sessionId) nextLast = s.data();
+        });
+      }
+
+      // ── writes ──
+      const yearTotal = sumYearPoints(yearSnap, sessionId);
+      tx.delete(sessionRef);
+      if (ownerSnap.exists) {
+        tx.update(ownerRef, { [`scores.${year}`]: Math.max(0, yearTotal) });
+      }
+      if (wasLastSwim) {
+        tx.update(
+          placeRef,
+          nextLast
+            ? {
+                lastSwimAt: nextLast.date,
+                lastSwimBy: nextLast.uid,
+                lastSwimBorder: nextLast.border ?? "none",
+              }
+            : {
+                lastSwimAt: FieldValue.delete(),
+                lastSwimBy: FieldValue.delete(),
+                lastSwimBorder: FieldValue.delete(),
+              },
+        );
+      }
+      return session.photoPath ?? null;
+    });
+
+    // Best-effort photo cleanup, outside the transaction.
+    if (photoPath) {
+      try {
+        await getStorage().bucket().file(photoPath).delete();
+      } catch (e) {
+        logger.warn("photo delete failed", { sessionId, error: String(e) });
+      }
+    }
+
+    return { ok: true };
+  },
+);
+
+/**
+ * Callable: delete the caller's account data. Removes all their sessions
+ * (and photos), drops them from every group (transferring ownership or
+ * deleting the group when needed), and deletes the user doc. The client
+ * still calls Firebase Auth's deleteUser afterwards. Sessions can't be
+ * deleted client-side anymore (rules forbid it), so this runs server-side.
+ */
+export const deleteAccount = onCall(
+  {
+    region: PROJECT_REGION,
+    cors: true,
+    invoker: "public",
+    maxInstances: 5,
+    memory: "256MiB",
+    timeoutSeconds: 120,
+  },
+  async (req) => {
+    if (!req.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const uid = req.auth.uid;
+    const db = getFirestore();
+
+    // Sessions (+ collect photo paths for cleanup).
+    const sessions = await db
+      .collection("sessions")
+      .where("uid", "==", uid)
+      .get();
+    const photoPaths = [];
+    let batch = db.batch();
+    let ops = 0;
+    for (const doc of sessions.docs) {
+      const path = doc.data().photoPath;
+      if (typeof path === "string") photoPaths.push(path);
+      batch.delete(doc.ref);
+      if (++ops >= 450) {
+        await batch.commit();
+        batch = db.batch();
+        ops = 0;
+      }
+    }
+    if (ops > 0) await batch.commit();
+
+    // Group memberships — mirror leaveGroup's 3-case handling per group.
+    const groups = await db
+      .collection("groups")
+      .where("members", "array-contains", uid)
+      .get();
+    for (const g of groups.docs) {
+      const data = g.data();
+      const remaining = (data.members ?? []).filter((m) => m !== uid);
+      if (remaining.length === 0) {
+        await g.ref.delete();
+      } else if (data.createdBy === uid) {
+        await g.ref.update({ members: remaining, createdBy: remaining[0] });
+      } else {
+        await g.ref.update({ members: FieldValue.arrayRemove(uid) });
+      }
+    }
+
+    await db.collection("users").doc(uid).delete();
+
+    // Best-effort photo cleanup.
+    await Promise.all(
+      photoPaths.map((p) =>
+        getStorage()
+          .bucket()
+          .file(p)
+          .delete()
+          .catch(() => {}),
+      ),
+    );
+
+    return { ok: true };
   },
 );

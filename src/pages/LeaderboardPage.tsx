@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
-import { bonusPointsForUid } from "@/lib/achievements";
-import { POINTS_COUNTRY_BONUS } from "@/lib/scoring";
+import { fetchUsers } from "@/lib/data";
+import { unlockedAchievementsForUid } from "@/lib/achievements";
+import { resolveBorder, NONE_BORDER, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
@@ -14,12 +15,11 @@ type Row = {
   uid: string;
   displayName: string;
   points: number;
-  bonusPoints: number;
-  countryBonusPoints: number;
   uniquePlaces: number;
   winters: number;
   sessions: number;
   countriesAbroad: number;
+  border: Border;
 };
 
 export default function LeaderboardPage() {
@@ -31,14 +31,54 @@ export default function LeaderboardPage() {
   const year = new Date().getFullYear();
   const [scope, setScope] = useState<string>("global");
 
+  // Each participant's chosen frame + server-stored yearly score, fetched
+  // from their user doc. Sessions alone don't carry either, so we look up
+  // the profiles of everyone on the board.
+  const [borderByUid, setBorderByUid] = useState<Map<string, string>>(
+    new Map(),
+  );
+  const [scoreByUid, setScoreByUid] = useState<Map<string, number>>(new Map());
+  const uidsKey = useMemo(
+    () => [...new Set(all.map((s) => s.uid))].sort().join(","),
+    [all],
+  );
+  useEffect(() => {
+    const uids = uidsKey ? uidsKey.split(",") : [];
+    if (uids.length === 0) {
+      setBorderByUid(new Map());
+      setScoreByUid(new Map());
+      return;
+    }
+    let cancelled = false;
+    fetchUsers(uids)
+      .then((users) => {
+        if (cancelled) return;
+        const borders = new Map<string, string>();
+        const scores = new Map<string, number>();
+        for (const u of users) {
+          if (u.selectedBorder) borders.set(u.uid, u.selectedBorder);
+          const yearScore = u.scores?.[String(year)];
+          if (typeof yearScore === "number") scores.set(u.uid, yearScore);
+        }
+        setBorderByUid(borders);
+        setScoreByUid(scores);
+      })
+      .catch(() => {
+        /* fall back to session-summed points + auto tier on failure */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uidsKey, year]);
+
   const rows = useMemo<Row[]>(() => {
     const memberFilter: Set<string> | null =
       scope === "global"
         ? null
         : new Set(groups.find((g) => g.id === scope)?.members ?? []);
-    const rows = aggregate(all, memberFilter, all);
+    const rows = aggregate(all, memberFilter, all, borderByUid, scoreByUid);
     return rows.sort((a, b) => b.points - a.points);
-  }, [all, groups, scope]);
+  }, [all, groups, scope, borderByUid, scoreByUid]);
 
   return (
     <div className="px-4 pt-2">
@@ -84,13 +124,24 @@ export default function LeaderboardPage() {
                   isMe && "ring-2 ring-wave-400",
                 )}
               >
-                <div
-                  className={cn(
-                    "flex h-9 w-9 flex-none items-center justify-center rounded-full font-display text-lg font-black",
-                    podium.medalClass,
-                  )}
-                >
-                  {podium.medal ?? <span>{i + 1}</span>}
+                <div className="relative flex-none">
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-full font-display text-lg font-black",
+                      podium.medalClass,
+                      r.border.id !== "none" && `ring-2 ${r.border.ringClass}`,
+                    )}
+                  >
+                    {podium.medal ?? <span>{i + 1}</span>}
+                  </div>
+                  {r.border.id !== "none" ? (
+                    <span
+                      className="absolute -right-1 -bottom-1 text-[11px] leading-none drop-shadow-sm"
+                      title={t(`border.${r.border.id}`)}
+                    >
+                      {r.border.emoji}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold text-wave-900">
@@ -119,11 +170,6 @@ export default function LeaderboardPage() {
                         ? t("leaderboard.swim")
                         : t("leaderboard.swims", { n: r.sessions })}
                     </span>
-                    {r.bonusPoints > 0 ? (
-                      <span className="text-amber-700">
-                        {t("leaderboard.bonus_hint", { n: r.bonusPoints })}
-                      </span>
-                    ) : null}
                     {r.countriesAbroad > 0 ? (
                       <span className="text-teal-700">
                         {t("leaderboard.countries", { n: r.countriesAbroad })}
@@ -211,6 +257,8 @@ function aggregate(
   sessions: SessionDoc[],
   memberFilter: Set<string> | null,
   allSessions: SessionDoc[],
+  borderByUid: Map<string, string>,
+  scoreByUid: Map<string, number>,
 ): Row[] {
   const map = new Map<string, Row>();
   const abroadCountriesMap = new Map<string, Set<string>>();
@@ -222,12 +270,11 @@ function aggregate(
         uid: s.uid,
         displayName: s.displayName,
         points: 0,
-        bonusPoints: 0,
-        countryBonusPoints: 0,
         uniquePlaces: 0,
         winters: 0,
         sessions: 0,
         countriesAbroad: 0,
+        border: NONE_BORDER,
       };
       map.set(s.uid, row);
     }
@@ -246,10 +293,17 @@ function aggregate(
     }
   }
   for (const row of map.values()) {
-    row.bonusPoints = bonusPointsForUid(row.uid, allSessions);
     row.countriesAbroad = abroadCountriesMap.get(row.uid)?.size ?? 0;
-    row.countryBonusPoints = row.countriesAbroad * POINTS_COUNTRY_BONUS;
-    row.points += row.bonusPoints + row.countryBonusPoints;
+    const unlocked = unlockedAchievementsForUid(row.uid, allSessions);
+    row.border = resolveBorder(
+      borderByUid.get(row.uid),
+      unlocked.size,
+      unlocked,
+    );
+    // Prefer the server-stored yearly score; fall back to the session sum
+    // (already accumulated in row.points) for users not yet backfilled.
+    const stored = scoreByUid.get(row.uid);
+    if (typeof stored === "number") row.points = stored;
   }
   return [...map.values()];
 }

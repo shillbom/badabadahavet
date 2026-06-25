@@ -23,11 +23,14 @@ import {
   findOrCreatePlace,
   updateUserLastLocation,
 } from "@/lib/data";
-import { isChristmasEve, resolveHomeBracket } from "@/lib/scoring";
 import { reverseGeocodeCountry } from "@/lib/geocode";
-import { flagEmoji } from "@/lib/countries";
 import { haversineMeters } from "@/lib/utils";
-import { PLACE_RADIUS_METERS } from "@/lib/scoring";
+import {
+  PLACE_RADIUS_METERS,
+  isWinterMonth,
+  previewPoints,
+} from "@/lib/scoring";
+import { resolveBorder } from "@/lib/borders";
 import type { SessionDoc } from "@/lib/types";
 import { useLocale, useT } from "@/lib/i18n";
 
@@ -46,6 +49,8 @@ export default function LogSessionPage() {
   const inputLang = locale === "sv" ? "sv-SE" : "en-GB";
   const places = useStore((s) => s.places);
   const allSessions = useStore((s) => s.allSessions);
+  const myPlaceIds = useStore((s) => s.myPlaceIds);
+  const unlockedAchievements = useStore((s) => s.unlockedAchievements);
 
   // Pre-select a place when navigating from SpotPage (?placeId=xxx).
   const preselectedPlaceId = searchParams.get("placeId");
@@ -257,9 +262,13 @@ export default function LogSessionPage() {
         createdBy: user.uid,
         date: ts,
       });
+      const myBorder = resolveBorder(
+        profile.selectedBorder,
+        unlockedAchievements.size,
+        unlockedAchievements,
+      );
       const session = await createSession({
         uid: user.uid,
-        displayName: profile.displayName,
         place,
         lat: coords.lat,
         lng: coords.lng,
@@ -267,7 +276,7 @@ export default function LogSessionPage() {
         note,
         photoFile,
         country,
-        homeCountry: profile.homeCountry ?? null,
+        border: myBorder.id,
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
       navigate("/history");
@@ -279,11 +288,15 @@ export default function LogSessionPage() {
   }
 
   const dateObj = new Date(date);
-  const homeCountry = profile?.homeCountry ?? null;
-  const bracket = resolveHomeBracket(homeCountry, country, dateObj.getMonth());
-  const isHome = bracket.isHome;
-  const xmasBonus =
-    isHome && homeCountry !== "OTHER" && isChristmasEve(dateObj);
+  const isWinterSwim = isWinterMonth(dateObj);
+  // "New spot" = a place the user hasn't logged before. A brand-new pin
+  // (no pickedPlaceId) is always new; a picked existing place is new only
+  // if it's not already in the user's own history.
+  const isNewSpot = !pickedPlaceId || !myPlaceIds.has(pickedPlaceId);
+  const pointsPreview = previewPoints({
+    isNewSpot,
+    isWinter: isWinterSwim,
+  });
   const sessionsByPlace = useMemo(() => {
     const m = new Map<string, SessionDoc[]>();
     for (const s of allSessions) {
@@ -540,32 +553,23 @@ export default function LogSessionPage() {
                 {t("log.field.when.now_hint")}
               </div>
             ) : null}
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {isHome ? (
-                <div
-                  className={
-                    bracket.category === "D"
-                      ? "chip bg-sky-100 text-sky-800 ring-sky-200"
-                      : bracket.category === "C"
-                        ? "chip bg-indigo-100 text-indigo-800 ring-indigo-200"
-                        : bracket.category === "B"
-                          ? "chip bg-amber-100 text-amber-800 ring-amber-200"
-                          : "chip bg-emerald-100 text-emerald-800 ring-emerald-200"
-                  }
-                >
-                  {t(`log.bracket.${bracket.category}`)} · +{bracket.basePoints}
-                </div>
-              ) : (
-                <div className="chip bg-slate-100 text-slate-700 ring-slate-200">
-                  {country ? `${flagEmoji(country)} ` : ""}
-                  {t("log.bracket.abroad")}
-                </div>
-              )}
-              {xmasBonus ? (
-                <div className="chip bg-rose-100 text-rose-800 ring-rose-200">
-                  🎄 {t("log.xmas_chip")}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <div className="chip bg-wave-100 text-wave-800 ring-wave-200">
+                💧 {t("log.points.swim")}
+              </div>
+              {isNewSpot ? (
+                <div className="chip bg-emerald-100 text-emerald-800 ring-emerald-200">
+                  ✨ {t("log.points.new_spot")}
                 </div>
               ) : null}
+              {isWinterSwim ? (
+                <div className="chip bg-sky-100 text-sky-800 ring-sky-200">
+                  ❄️ {t("log.points.winter")}
+                </div>
+              ) : null}
+              <span className="ml-auto font-display text-sm font-black text-wave-700">
+                {t("log.points.total", { n: pointsPreview })}
+              </span>
             </div>
           </div>
 

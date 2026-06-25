@@ -14,6 +14,7 @@
     "seed:badplatser": "node scripts/seed-badplatser.mjs",
     "seed:eea": "node scripts/seed-eea-bathing.mjs",
     "update:temperatures": "node scripts/update-temperatures.mjs",
+    "backfill:scores": "node scripts/backfill-scores.mjs",
     "prepare": "husky"
   },
   "dependencies": {

@@ -168,7 +168,7 @@ function AchievementSplash({
           </div>
         </div>
         <div className="mt-3 inline-flex items-center gap-1 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white">
-          {t("achievements.bonus_pts", { n: data.achievement.points })}
+          {"★".repeat(data.achievement.tier)}
         </div>
       </div>
     </motion.div>

@@ -22,6 +22,7 @@ import { Link } from "react-router-dom";
 import { Layers, LocateFixed } from "lucide-react";
 import { MAP_THEMES } from "@/lib/mapThemes";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
+import { pinRingFor } from "@/lib/borders";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
 import { formatDate, cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
@@ -48,9 +49,14 @@ function pinHtml(opts: {
   border: number;
   content?: string;
   tailHeight?: number;
+  /** Optional achievement-rank ring drawn just outside the white border. */
+  ring?: { ring: string; glow: string } | null;
 }): string {
   const tailH = opts.tailHeight ?? 12;
   const total = opts.size + tailH;
+  const ringShadow = opts.ring
+    ? `0 0 0 3px ${opts.ring.ring},0 0 9px 1px ${opts.ring.glow},`
+    : "";
   return `<div style="position:relative;width:${opts.size}px;height:${total}px;">
     <div style="
       position:absolute;left:0;top:0;
@@ -58,7 +64,7 @@ function pinHtml(opts: {
       border-radius:50%;
       background:${opts.bg};
       border:${opts.border}px solid white;
-      box-shadow:0 4px 12px ${opts.shadow};
+      box-shadow:${ringShadow}0 4px 12px ${opts.shadow};
       display:flex;align-items:center;justify-content:center;
       color:white;font-weight:900;font-size:${Math.round(opts.size * 0.55)}px;line-height:1;
     ">${opts.content ?? ""}</div>
@@ -77,43 +83,38 @@ const PIN_SIZE = 28;
 const PIN_TAIL = 12;
 const PIN_TOTAL = PIN_SIZE + PIN_TAIL;
 
-const dropletIcon = L.divIcon({
-  className: "swim-pin",
-  iconSize: [PIN_SIZE, PIN_TOTAL],
-  iconAnchor: [PIN_SIZE / 2, PIN_TOTAL],
-  popupAnchor: [0, -PIN_SIZE],
-  html: pinHtml({
-    size: PIN_SIZE,
-    bg: "linear-gradient(135deg,#019eea,#065684)",
-    tail: "#065684",
-    shadow: "rgba(2,100,160,0.45)",
-    border: 2,
-  }),
-});
+/** An achievement-rank ring applied to the current user's own pins. */
+export type PinRing = { id: string; ring: string; glow: string };
 
-// Cache temp-labelled pins keyed by integer °C so we don't rebuild
-// the icon for every marker on every render.
-const tempIconCache = new Map<number, L.DivIcon>();
+// Cache pins keyed by "<temp-or-plain>|<rankId>" so we don't rebuild an
+// icon for every marker on every render.
+const pinIconCache = new Map<string, L.DivIcon>();
 
-function tempIcon(temp: number): L.DivIcon {
-  const rounded = Math.round(temp);
-  const cached = tempIconCache.get(rounded);
+function pinIcon(temp: number | null, ring: PinRing | null): L.DivIcon {
+  const key = `${temp != null ? Math.round(temp) : "plain"}|${ring?.id ?? "none"}`;
+  const cached = pinIconCache.get(key);
   if (cached) return cached;
+  const hasTemp = temp != null;
   const icon = L.divIcon({
-    className: "swim-pin-temp",
+    className: hasTemp ? "swim-pin-temp" : "swim-pin",
     iconSize: [PIN_SIZE, PIN_TOTAL],
     iconAnchor: [PIN_SIZE / 2, PIN_TOTAL],
     popupAnchor: [0, -PIN_SIZE],
     html: pinHtml({
       size: PIN_SIZE,
-      bg: "linear-gradient(135deg,#0284c7,#075985)",
-      tail: "#075985",
+      bg: hasTemp
+        ? "linear-gradient(135deg,#0284c7,#075985)"
+        : "linear-gradient(135deg,#019eea,#065684)",
+      tail: hasTemp ? "#075985" : "#065684",
       shadow: "rgba(2,100,160,0.45)",
       border: 2,
-      content: `<span style="font-size:11px;line-height:1;">${rounded}°</span>`,
+      ring,
+      content: hasTemp
+        ? `<span style="font-size:11px;line-height:1;">${Math.round(temp)}°</span>`
+        : undefined,
     }),
   });
-  tempIconCache.set(rounded, icon);
+  pinIconCache.set(key, icon);
   return icon;
 }
 
@@ -409,7 +410,10 @@ export default function SwimMap({
                 <Marker
                   key={p.id}
                   position={[p.lat, p.lng]}
-                  icon={hasFreshTemp(p) ? tempIcon(p.waterTemp) : dropletIcon}
+                  icon={pinIcon(
+                    hasFreshTemp(p) ? p.waterTemp : null,
+                    pinRingFor(p.lastSwimBorder),
+                  )}
                   eventHandlers={{
                     mouseover: () => maybeRefreshPlaceTemp(p),
                     click: () => {
@@ -484,14 +488,12 @@ export default function SwimMap({
                           ))}
                         </ul>
                         {linkToSpot ? (
-                          <div className="mt-1.5">
-                            <Link
-                              to={`/spot/${p.id}`}
-                              className="text-[11px] font-semibold text-wave-700 hover:underline"
-                            >
-                              {t("map.popup.see_full_history")}
-                            </Link>
-                          </div>
+                          <Link
+                            to={`/spot/${p.id}`}
+                            className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
+                          >
+                            {t("map.popup.view_spot")}
+                          </Link>
                         ) : null}
                       </div>
                     </Popup>
@@ -587,14 +589,12 @@ export default function SwimMap({
                             ))}
                           </ul>
                           {linkToSpot ? (
-                            <div className="mt-1.5">
-                              <Link
-                                to={`/spot/${p.id}`}
-                                className="text-[11px] font-semibold text-wave-700 hover:underline"
-                              >
-                                {t("map.popup.see_full_history")}
-                              </Link>
-                            </div>
+                            <Link
+                              to={`/spot/${p.id}`}
+                              className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
+                            >
+                              {t("map.popup.view_spot")}
+                            </Link>
                           ) : null}
                         </div>
                       </Popup>

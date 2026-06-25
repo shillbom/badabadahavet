@@ -9,6 +9,7 @@ import {
   type Achievement,
   type AchievementContext,
 } from "@/lib/achievements";
+import { tierForCount, nextTier } from "@/lib/borders";
 import { cn, formatDate } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
@@ -18,7 +19,9 @@ export default function AchievementsPage() {
   const t = useT();
   const achievementCtx = useStore((s) => s.achievementCtx);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
-  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
+
+  const tier = tierForCount(unlockedAchievements.size);
+  const next = nextTier(unlockedAchievements.size);
 
   const items = useMemo(() => {
     return [...ACHIEVEMENTS].sort((a, b) => {
@@ -47,9 +50,36 @@ export default function AchievementsPage() {
             {t("achievements.summary", {
               n: unlockedAchievements.size,
               total: ACHIEVEMENTS.length,
-              pts: achievementBonusPoints,
             })}
           </p>
+        </div>
+      </div>
+
+      {/* Rank banner — turns achievement count into a visible badge that
+          also decorates the user's pins and profile. */}
+      <div
+        className={cn(
+          "mb-3 flex items-center gap-3 rounded-2xl p-3 text-white shadow-sm",
+          tier.id === "none"
+            ? "bg-gradient-to-br from-slate-300 to-slate-500"
+            : tier.bgClass,
+        )}
+      >
+        <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-white/25 text-2xl ring-2 ring-white/50">
+          {tier.id === "none" ? "🌊" : tier.emoji}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-display text-lg font-black">
+            {t(`border.${tier.id}`)}
+          </div>
+          <div className="text-[11px] text-white/90">
+            {next
+              ? t("border.next", {
+                  n: next.remaining,
+                  rank: t(`border.${next.border.id}`),
+                })
+              : t("border.maxed")}
+          </div>
         </div>
       </div>
 
@@ -134,8 +164,9 @@ function Row({
                   ? "bg-wave-100 text-wave-800"
                   : "bg-slate-100 text-slate-600",
             )}
+            title={t("achievements.tier", { n: achievement.tier })}
           >
-            +{achievement.points}
+            {"★".repeat(achievement.tier)}
           </span>
         </div>
         <div className="text-[11px] text-slate-500">

@@ -11,10 +11,8 @@ import {
   where,
   orderBy,
   onSnapshot,
-  serverTimestamp,
   arrayRemove,
   arrayUnion,
-  limit,
   writeBatch,
   Unsubscribe,
 } from "firebase/firestore";
@@ -27,7 +25,7 @@ import {
 import { cloudFn, db, storage } from "@/firebase";
 import { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
-import { PLACE_RADIUS_METERS, scoreSession } from "./scoring";
+import { PLACE_RADIUS_METERS } from "./scoring";
 import { compressImage } from "./image";
 
 const usersCol = collection(db, "users");
@@ -112,6 +110,11 @@ export async function updateUserDisplayName(uid: string, displayName: string) {
 
 export async function updateUserEmoji(uid: string, emoji: string) {
   await updateDoc(doc(usersCol, uid), { emoji });
+}
+
+/** Set the user's chosen cosmetic border (pass "none" to clear it). */
+export async function updateUserBorder(uid: string, borderId: string) {
+  await updateDoc(doc(usersCol, uid), { selectedBorder: borderId });
 }
 
 export async function updateUserLastLocation(
@@ -216,37 +219,32 @@ export function watchPlaces(cb: (places: PlaceDoc[]) => void): Unsubscribe {
 
 // ---------- Sessions ----------
 
+export type LoggedSession = {
+  id: string;
+  points: number;
+  isUniqueForUser: boolean;
+  isWinter: boolean;
+};
+
+/**
+ * Log a swim. The session doc and the user's score are written server-side
+ * by the `logSession` Cloud Function (clients can't write either directly),
+ * so scoring can't be forged. We only upload the photo here — the function
+ * records its URL/path and computes points + uniqueness + winter.
+ */
 export async function createSession(opts: {
   uid: string;
-  displayName: string;
   place: PlaceDoc;
   lat: number;
   lng: number;
   date: number;
   note?: string;
   photoFile?: File | null;
-  /** Pre-resolved country (ISO alpha-2) — passed in so scoring can use it. */
+  /** Pre-resolved country (ISO alpha-2) — flags home vs. abroad swims. */
   country?: string | null;
-  /** Home country of the swimmer, used for bracket scoring. */
-  homeCountry?: string | null;
-}): Promise<SessionDoc> {
-  // Has this user swum at this place before?
-  const prev = await getDocs(
-    query(
-      sessionsCol,
-      where("uid", "==", opts.uid),
-      where("placeId", "==", opts.place.id),
-      limit(1),
-    ),
-  );
-  const isUniqueForUser = prev.empty;
-  const { points, isWinter, isHomeCountry, monthCategory } = scoreSession({
-    isUniqueForUser,
-    date: opts.date,
-    country: opts.country ?? null,
-    homeCountry: opts.homeCountry ?? null,
-  });
-
+  /** The swimmer's chosen border id — stamped onto the place for the map. */
+  border?: string;
+}): Promise<LoggedSession> {
   let photoUrl: string | undefined;
   let photoPath: string | undefined;
   if (opts.photoFile) {
@@ -260,31 +258,46 @@ export async function createSession(opts: {
     photoUrl = await getDownloadURL(r);
   }
 
-  const ref = doc(sessionsCol);
-  const data: SessionDoc = {
-    id: ref.id,
-    uid: opts.uid,
-    displayName: opts.displayName,
+  const callable = cloudFn<
+    {
+      placeId: string;
+      placeName: string;
+      lat: number;
+      lng: number;
+      date: number;
+      note?: string;
+      country?: string;
+      photoUrl?: string;
+      photoPath?: string;
+      border?: string;
+    },
+    LoggedSession
+  >("logSession");
+  const res = await callable({
     placeId: opts.place.id,
     placeName: opts.place.name,
     lat: opts.lat,
     lng: opts.lng,
     date: opts.date,
     note: opts.note?.trim() || undefined,
+    country: opts.country ?? undefined,
     photoUrl,
     photoPath,
-    isUniqueForUser,
-    isWinter,
-    isHomeCountry,
-    country: opts.country ?? undefined,
-    monthCategory,
-    points,
-    createdAt: Date.now(),
-  };
-  // strip undefineds for Firestore
-  const clean = JSON.parse(JSON.stringify(data));
-  await setDoc(ref, { ...clean, createdAtServer: serverTimestamp() });
-  return data;
+    border: opts.border,
+  });
+  return res.data;
+}
+
+/**
+ * Remove a swim via the `removeSession` Cloud Function, which deletes the
+ * session, fixes the owner's score, and cleans up the photo. The owner may
+ * remove their own; admins may remove anyone's.
+ */
+export async function removeSession(sessionId: string): Promise<void> {
+  const callable = cloudFn<{ sessionId: string }, { ok: true }>(
+    "removeSession",
+  );
+  await callable({ sessionId });
 }
 
 export function watchUserSessions(
@@ -499,37 +512,16 @@ export function watchPlaceSessions(
 // ---------- Account deletion ----------
 
 /**
- * Tear down everything a user owns: their sessions (and photos), their
- * group memberships, and the user doc itself. Call before deleting the
- * Firebase Auth user — once the auth user is gone the client can't
- * authenticate the deletes.
+ * Tear down everything the caller owns: their sessions (and photos), their
+ * group memberships, and the user doc itself. Runs server-side via the
+ * `deleteAccount` Cloud Function — sessions can no longer be deleted by the
+ * client (rules forbid it). Call before deleting the Firebase Auth user.
  */
-export async function deleteAccountData(uid: string): Promise<void> {
-  // Sessions (with their storage photos) — only the owner's docs.
-  const sessions = await getDocs(query(sessionsCol, where("uid", "==", uid)));
-  await Promise.all(
-    sessions.docs.map(async (s) => {
-      const data = s.data() as SessionDoc;
-      if (data.photoPath) {
-        try {
-          await deleteObject(storageRef(storage, data.photoPath));
-        } catch {
-          // photo may already be gone — ignore.
-        }
-      }
-      await deleteDoc(s.ref);
-    }),
+export async function deleteAccountData(): Promise<void> {
+  const callable = cloudFn<Record<string, never>, { ok: true }>(
+    "deleteAccount",
   );
-
-  // Drop the user from every group they're a member of.
-  const memberOf = await getDocs(
-    query(groupsCol, where("members", "array-contains", uid)),
-  );
-  await Promise.all(
-    memberOf.docs.map((g) => updateDoc(g.ref, { members: arrayRemove(uid) })),
-  );
-
-  await deleteDoc(doc(usersCol, uid));
+  await callable({});
 }
 
 // ---------- Admin / moderation ----------
@@ -570,20 +562,12 @@ export async function adminClearSessionPhoto(sessionId: string) {
   });
 }
 
-/** Delete a single session and its photo, if any. */
+/**
+ * Delete a single session. Routes through the removeSession Cloud Function
+ * (Admin SDK) so the owner's score and the photo are cleaned up too.
+ */
 export async function adminDeleteSession(sessionId: string) {
-  const snap = await getDoc(doc(sessionsCol, sessionId));
-  if (snap.exists()) {
-    const data = snap.data() as SessionDoc;
-    if (data.photoPath) {
-      try {
-        await deleteObject(storageRef(storage, data.photoPath));
-      } catch {
-        // ignore
-      }
-    }
-  }
-  await deleteDoc(doc(sessionsCol, sessionId));
+  await removeSession(sessionId);
 }
 
 /** Delete a place and cascade-delete every session at it. */
@@ -591,6 +575,8 @@ export async function adminDeletePlace(placeId: string) {
   const sessions = await getDocs(
     query(sessionsCol, where("placeId", "==", placeId)),
   );
-  await Promise.all(sessions.docs.map((s) => adminDeleteSession(s.id)));
+  // removeSession fixes each owner's score; do them sequentially to avoid
+  // hammering the function with a burst.
+  for (const s of sessions.docs) await removeSession(s.id);
   await deleteDoc(doc(placesCol, placeId));
 }

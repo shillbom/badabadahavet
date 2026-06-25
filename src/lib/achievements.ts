@@ -5,8 +5,8 @@ export type Achievement = {
   name: string;
   description: string;
   emoji: string;
-  points: number;
-  /** Bigger numbers feel more impressive. */
+  /** Bigger numbers feel more impressive. Purely cosmetic — achievements
+   *  grant no points; they unlock badges and border frames only. */
   tier: 1 | 2 | 3;
   /** Returns true if the achievement is unlocked for the given context. */
   test: (ctx: AchievementContext) => boolean;
@@ -119,7 +119,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Ice breaker",
     description: "Log your first swim",
     emoji: "🌊",
-    points: 1,
     tier: 1,
     test: (c) => c.mySessions.length >= 1,
     progress: (c) => Math.min(1, c.mySessions.length / 1),
@@ -129,7 +128,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Habit forming",
     description: "Five swims in the books",
     emoji: "🐬",
-    points: 2,
     tier: 1,
     test: (c) => c.mySessions.length >= 5,
     progress: (c) => Math.min(1, c.mySessions.length / 5),
@@ -139,7 +137,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Half-century",
     description: "50 swims logged",
     emoji: "🦭",
-    points: 15,
     tier: 3,
     test: (c) => c.mySessions.length >= 50,
     progress: (c) => Math.min(1, c.mySessions.length / 50),
@@ -149,7 +146,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Spot collector",
     description: "Five unique spots",
     emoji: "📍",
-    points: 3,
     tier: 1,
     test: (c) => uniquePlaces(c.mySessions) >= 5,
     progress: (c) => Math.min(1, uniquePlaces(c.mySessions) / 5),
@@ -159,7 +155,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Explorer",
     description: "Fifteen unique spots",
     emoji: "🗺️",
-    points: 10,
     tier: 2,
     test: (c) => uniquePlaces(c.mySessions) >= 15,
     progress: (c) => Math.min(1, uniquePlaces(c.mySessions) / 15),
@@ -169,7 +164,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Polar bear",
     description: "First winter dip",
     emoji: "❄️",
-    points: 1,
     tier: 1,
     test: (c) => winterCount(c.mySessions) >= 1,
     progress: (c) => Math.min(1, winterCount(c.mySessions) / 1),
@@ -179,7 +173,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Cold purist",
     description: "Five winter dips",
     emoji: "🧊",
-    points: 5,
     tier: 2,
     test: (c) => winterCount(c.mySessions) >= 5,
     progress: (c) => Math.min(1, winterCount(c.mySessions) / 5),
@@ -189,7 +182,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Winter warrior",
     description: "Ten winter dips",
     emoji: "🥶",
-    points: 10,
     tier: 3,
     test: (c) => winterCount(c.mySessions) >= 10,
     progress: (c) => Math.min(1, winterCount(c.mySessions) / 10),
@@ -199,7 +191,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "On a roll",
     description: "Three weeks in a row",
     emoji: "🔥",
-    points: 3,
     tier: 1,
     test: (c) => bestWeekStreak(c.mySessions) >= 3,
     progress: (c) => Math.min(1, bestWeekStreak(c.mySessions) / 3),
@@ -209,7 +200,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Unstoppable",
     description: "Six weeks in a row",
     emoji: "🔥",
-    points: 10,
     tier: 3,
     test: (c) => bestWeekStreak(c.mySessions) >= 6,
     progress: (c) => Math.min(1, bestWeekStreak(c.mySessions) / 6),
@@ -219,7 +209,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Globetrotter",
     description: "Spots span 50 km",
     emoji: "🌍",
-    points: 5,
     tier: 2,
     test: (c) => rangeKm(c.mySessions) >= 50,
     progress: (c) => Math.min(1, rangeKm(c.mySessions) / 50),
@@ -229,7 +218,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Wanderlust",
     description: "Spots span 250 km",
     emoji: "✈️",
-    points: 15,
     tier: 3,
     test: (c) => rangeKm(c.mySessions) >= 250,
     progress: (c) => Math.min(1, rangeKm(c.mySessions) / 250),
@@ -239,7 +227,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Buddy up",
     description: "Share a spot with another swimmer",
     emoji: "🤝",
-    points: 2,
     tier: 1,
     test: (c) => distinctSwimmersAtMyPlaces(c) >= 1,
     progress: (c) => Math.min(1, distinctSwimmersAtMyPlaces(c) / 1),
@@ -249,7 +236,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Social butterfly",
     description: "Share a spot with 3+ others",
     emoji: "🦋",
-    points: 5,
     tier: 2,
     test: (c) => distinctSwimmersAtMyPlaces(c) >= 3,
     progress: (c) => Math.min(1, distinctSwimmersAtMyPlaces(c) / 3),
@@ -259,7 +245,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Dawn patrol",
     description: "Three swims before 7 am",
     emoji: "🌅",
-    points: 3,
     tier: 2,
     test: (c) => countByHour(c.mySessions, (h) => h < 7) >= 3,
     progress: (c) => Math.min(1, countByHour(c.mySessions, (h) => h < 7) / 3),
@@ -269,7 +254,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "Night owl",
     description: "Three swims after 8 pm",
     emoji: "🌙",
-    points: 3,
     tier: 2,
     test: (c) => countByHour(c.mySessions, (h) => h >= 20) >= 3,
     progress: (c) => Math.min(1, countByHour(c.mySessions, (h) => h >= 20) / 3),
@@ -279,7 +263,6 @@ export const ACHIEVEMENTS: Achievement[] = [
     name: "All seasons",
     description: "A dip in winter, spring, summer, autumn",
     emoji: "🍂",
-    points: 5,
     tier: 2,
     test: (c) => distinctSeasons(c.mySessions) === 4,
     progress: (c) => distinctSeasons(c.mySessions) / 4,
@@ -292,16 +275,21 @@ export function evaluateAchievements(ctx: AchievementContext): Set<string> {
   return out;
 }
 
-export function bonusPointsFor(ctx: AchievementContext): number {
-  const unlocked = evaluateAchievements(ctx);
-  let pts = 0;
-  for (const a of ACHIEVEMENTS) if (unlocked.has(a.id)) pts += a.points;
-  return pts;
+/** The set of achievement ids a given user has unlocked. */
+export function unlockedAchievementsForUid(
+  uid: string,
+  allSessions: SessionDoc[],
+): Set<string> {
+  const mine = allSessions.filter((s) => s.uid === uid);
+  return evaluateAchievements({ uid, mySessions: mine, allSessions });
 }
 
-export function bonusPointsForUid(uid: string, allSessions: SessionDoc[]) {
-  const mine = allSessions.filter((s) => s.uid === uid);
-  return bonusPointsFor({ uid, mySessions: mine, allSessions });
+/** How many achievements a given user has unlocked (drives their rank). */
+export function achievementCountForUid(
+  uid: string,
+  allSessions: SessionDoc[],
+): number {
+  return unlockedAchievementsForUid(uid, allSessions).size;
 }
 
 export const ACHIEVEMENTS_BY_ID: Record<string, Achievement> =
