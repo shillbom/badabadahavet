@@ -44,7 +44,11 @@ import { readFileSync } from "node:fs";
 const args = parseArgs(process.argv.slice(2));
 const WRITE = args.has("--write");
 const FIXTURE = args.get("--fixture");
-const LAYER_ID = Number(args.get("--layer") ?? 6);
+// Layer 0 is the full per-site point dataset (fields: bathingWaterName,
+// bathingWaterIdentifier, countryCode, lon/lat, Point geometry). Layers
+// 1–5 are multi-scale duplicates of it; layer 6 is country-aggregate
+// polygons (countryName only) — don't use those for per-spot seeding.
+const LAYER_ID = Number(args.get("--layer") ?? 0);
 const COUNTRIES = (args.get("--countries") ?? "DK,FI")
   .split(",")
   .map((c) => c.trim().toUpperCase())
