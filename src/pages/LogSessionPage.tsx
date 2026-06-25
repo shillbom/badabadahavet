@@ -349,6 +349,10 @@ export default function LogSessionPage() {
         </button>
       </div>
 
+      <p className="mt-2 px-1 text-center text-[11px] text-slate-500">
+        {mode === "now" ? t("log.mode.now.hint") : t("log.mode.pick.hint")}
+      </p>
+
       <AnimatePresence mode="wait">
         <motion.div
           key={mode}
@@ -487,26 +491,41 @@ export default function LogSessionPage() {
 
           <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-white/60">
             <div className="flex items-center gap-2 text-xs text-slate-600">
-              <MapPin className="h-3.5 w-3.5 text-wave-600" />
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-wave-600" />
               {coords ? (
-                <span>
-                  {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
-                  {suggestion ? (
-                    <span className="ml-2 text-wave-700">
-                      · {t("log.coords.near", { name: suggestion })}
+                <span className="flex flex-1 items-center gap-2">
+                  {pickedPlaceId ? (
+                    <span className="chip bg-slate-100 text-slate-700 ring-slate-200">
+                      📍 {t("log.badge.existing_spot")}
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="chip bg-emerald-100 text-emerald-800 ring-emerald-200">
+                      ✨ {t("log.badge.new_spot")}
+                    </span>
+                  )}
+                  <span className="text-slate-500">
+                    {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+                    {suggestion ? (
+                      <span className="ml-1 text-wave-700">
+                        · {t("log.coords.near", { name: suggestion })}
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
               ) : mode === "now" ? (
                 <span>{t("log.coords.reading")}</span>
               ) : (
-                <span>{t("log.coords.tap_map")}</span>
+                <span>{t("log.empty.pick")}</span>
               )}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="name">{t("log.field.spot_name")}</Label>
+            <Label htmlFor="name">
+              {coords && !pickedPlaceId
+                ? t("log.field.spot_name.new")
+                : t("log.field.spot_name")}
+            </Label>
             <div className="relative">
               <Input
                 id="name"
@@ -532,6 +551,11 @@ export default function LogSessionPage() {
                 </button>
               ) : null}
             </div>
+            {pickedPlaceId ? (
+              <p className="text-[11px] text-slate-500">
+                {t("log.field.spot_name.locked_hint")}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
