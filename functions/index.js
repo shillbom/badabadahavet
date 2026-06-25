@@ -13,6 +13,11 @@ const PROJECT_REGION = "europe-west1";
 // (which the UI does at 60 min).
 const FRESH_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 
+// The app only *displays* temps younger than a week (WEEK_MS in the
+// client). When an official reading is older than this we prefer a fresh
+// Open-Meteo reading so the spot keeps showing a temperature.
+const DISPLAY_FRESH_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 // Per-user soft cap on refresh calls so a misbehaving client can't spin
 // the upstream API for free.
 const PER_USER_PER_HOUR = 60;
@@ -111,9 +116,7 @@ export const refreshPlaceTemp = onCall(
       (place.source === "havochvatten.se" ? "havochvatten" : "open-meteo");
 
     // Try the official SE feed first when that's the preferred source.
-    // Open-Meteo is always the fallback below if this yields nothing —
-    // Hav och Vatten doesn't have a reading for every bathing spot.
-    let reading = null;
+    let official = null;
     if (tempSource === "havochvatten" && place.externalId) {
       try {
         const res = await fetch(DETAIL_URL(place.externalId), {
@@ -144,7 +147,7 @@ export const refreshPlaceTemp = onCall(
             stamp &&
             !Number.isNaN(stamp)
           ) {
-            reading = { temp, stamp, source: "havochvatten" };
+            official = { temp, stamp, source: "havochvatten" };
           }
         }
       } catch (e) {
@@ -152,7 +155,13 @@ export const refreshPlaceTemp = onCall(
       }
     }
 
-    // Fallback: Open-Meteo marine satellite temperature.
+    // A fresh official reading wins. But the app only displays temps
+    // younger than a week, so when the official sample is missing or stale
+    // we fall back to Open-Meteo (always "now") to keep the spot showing a
+    // temp. Inland lakes get nothing from Open-Meteo, so a stale official
+    // reading is kept as a last resort.
+    let reading =
+      official && now - official.stamp <= DISPLAY_FRESH_MS ? official : null;
     if (
       !reading &&
       typeof place.lat === "number" &&
@@ -164,6 +173,7 @@ export const refreshPlaceTemp = onCall(
         logger.warn("open-meteo fetch failed", { placeId, error: String(e) });
       }
     }
+    if (!reading) reading = official; // stale official as last resort
 
     if (!reading) {
       // Still record the attempt so we don't hammer immediately again.

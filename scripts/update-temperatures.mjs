@@ -49,6 +49,11 @@ const OPEN_METEO_URL = (lat, lng) =>
 // of age — the popup/tooltip surfaces "X days ago" so users can judge.
 const MAX_AGE_DAYS = 365;
 
+// The app (SwimMap / SpotPage) only *displays* temps younger than a week.
+// When an official reading is older than this we prefer Open-Meteo so the
+// spot keeps showing a fresh temp. Keep in sync with WEEK_MS in the app.
+const FRESH_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
 // Small pause between requests so we don't hammer the API.
 const REQUEST_DELAY_MS = 100;
 
@@ -129,21 +134,29 @@ async function fetchOpenMeteo(lat, lng) {
 }
 
 /**
- * Resolve the best reading for a place: official feed first when that's
- * the preferred source, then Open-Meteo as the universal fallback.
+ * Resolve the best reading for a place. A *fresh* official reading wins
+ * (it's a real measured water temp); but the app only displays temps
+ * younger than a week, so when the official sample is missing or stale we
+ * fall back to Open-Meteo (always "now") to keep the spot showing a temp.
+ * Inland lakes get nothing from Open-Meteo, so a stale official reading is
+ * still returned as a last resort.
  */
 async function resolveReading(data) {
   const tempSource =
     data.tempSource ??
     (data.source === "havochvatten.se" ? "havochvatten" : "open-meteo");
+  let official = null;
   if (tempSource === "havochvatten" && data.externalId) {
-    const official = await fetchTemp(data.externalId);
-    if (official) return official;
+    official = await fetchTemp(data.externalId);
+    if (official && Date.now() - official.stamp <= FRESH_WINDOW_MS) {
+      return official;
+    }
   }
   if (typeof data.lat === "number" && typeof data.lng === "number") {
-    return fetchOpenMeteo(data.lat, data.lng);
+    const meteo = await fetchOpenMeteo(data.lat, data.lng);
+    if (meteo) return meteo;
   }
-  return null;
+  return official; // stale official (or null) as last resort
 }
 
 async function main() {
