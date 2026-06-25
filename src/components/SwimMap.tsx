@@ -490,7 +490,7 @@ export default function SwimMap({
                         {linkToSpot ? (
                           <Link
                             to={`/spot/${p.id}`}
-                            className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-wave-700"
+                            className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
                           >
                             {t("map.popup.view_spot")}
                           </Link>
@@ -591,7 +591,7 @@ export default function SwimMap({
                           {linkToSpot ? (
                             <Link
                               to={`/spot/${p.id}`}
-                              className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition hover:bg-wave-700"
+                              className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
                             >
                               {t("map.popup.view_spot")}
                             </Link>
