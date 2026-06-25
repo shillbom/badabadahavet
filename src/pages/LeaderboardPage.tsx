@@ -1,11 +1,15 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
-import { bonusPointsForUid, achievementCountForUid } from "@/lib/achievements";
-import { tierForCount, NONE_BORDER, type Border } from "@/lib/borders";
+import { fetchUsers } from "@/lib/data";
+import {
+  bonusPointsForUid,
+  unlockedAchievementsForUid,
+} from "@/lib/achievements";
+import { resolveBorder, NONE_BORDER, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
@@ -31,14 +35,47 @@ export default function LeaderboardPage() {
   const year = new Date().getFullYear();
   const [scope, setScope] = useState<string>("global");
 
+  // Each participant's chosen frame, fetched from their user doc. Sessions
+  // alone don't carry it, so we look up the profiles of everyone on the board.
+  const [borderByUid, setBorderByUid] = useState<Map<string, string>>(
+    new Map(),
+  );
+  const uidsKey = useMemo(
+    () => [...new Set(all.map((s) => s.uid))].sort().join(","),
+    [all],
+  );
+  useEffect(() => {
+    const uids = uidsKey ? uidsKey.split(",") : [];
+    if (uids.length === 0) {
+      setBorderByUid(new Map());
+      return;
+    }
+    let cancelled = false;
+    fetchUsers(uids)
+      .then((users) => {
+        if (cancelled) return;
+        const map = new Map<string, string>();
+        for (const u of users) {
+          if (u.selectedBorder) map.set(u.uid, u.selectedBorder);
+        }
+        setBorderByUid(map);
+      })
+      .catch(() => {
+        /* fall back to auto tier on failure */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [uidsKey]);
+
   const rows = useMemo<Row[]>(() => {
     const memberFilter: Set<string> | null =
       scope === "global"
         ? null
         : new Set(groups.find((g) => g.id === scope)?.members ?? []);
-    const rows = aggregate(all, memberFilter, all);
+    const rows = aggregate(all, memberFilter, all, borderByUid);
     return rows.sort((a, b) => b.points - a.points);
-  }, [all, groups, scope]);
+  }, [all, groups, scope, borderByUid]);
 
   return (
     <div className="px-4 pt-2">
@@ -222,6 +259,7 @@ function aggregate(
   sessions: SessionDoc[],
   memberFilter: Set<string> | null,
   allSessions: SessionDoc[],
+  borderByUid: Map<string, string>,
 ): Row[] {
   const map = new Map<string, Row>();
   const abroadCountriesMap = new Map<string, Set<string>>();
@@ -259,7 +297,12 @@ function aggregate(
   for (const row of map.values()) {
     row.bonusPoints = bonusPointsForUid(row.uid, allSessions);
     row.countriesAbroad = abroadCountriesMap.get(row.uid)?.size ?? 0;
-    row.border = tierForCount(achievementCountForUid(row.uid, allSessions));
+    const unlocked = unlockedAchievementsForUid(row.uid, allSessions);
+    row.border = resolveBorder(
+      borderByUid.get(row.uid),
+      unlocked.size,
+      unlocked,
+    );
     row.points += row.bonusPoints;
   }
   return [...map.values()];

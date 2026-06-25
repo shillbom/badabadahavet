@@ -304,13 +304,21 @@ export function bonusPointsForUid(uid: string, allSessions: SessionDoc[]) {
   return bonusPointsFor({ uid, mySessions: mine, allSessions });
 }
 
+/** The set of achievement ids a given user has unlocked. */
+export function unlockedAchievementsForUid(
+  uid: string,
+  allSessions: SessionDoc[],
+): Set<string> {
+  const mine = allSessions.filter((s) => s.uid === uid);
+  return evaluateAchievements({ uid, mySessions: mine, allSessions });
+}
+
 /** How many achievements a given user has unlocked (drives their rank). */
 export function achievementCountForUid(
   uid: string,
   allSessions: SessionDoc[],
 ): number {
-  const mine = allSessions.filter((s) => s.uid === uid);
-  return evaluateAchievements({ uid, mySessions: mine, allSessions }).size;
+  return unlockedAchievementsForUid(uid, allSessions).size;
 }
 
 export const ACHIEVEMENTS_BY_ID: Record<string, Achievement> =
