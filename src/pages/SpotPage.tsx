@@ -46,7 +46,6 @@ import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import SwimMap from "@/components/SwimMap";
 import Photo from "@/components/Photo";
 import { useAuth } from "@/auth/AuthContext";
-import { useStore } from "@/store/sessions";
 import { useT } from "@/lib/i18n";
 import { toast } from "@/components/ui/Toast";
 
@@ -56,11 +55,9 @@ export default function SpotPage() {
   const { user, profile } = useAuth();
   const isAdmin = profile?.isAdmin === true;
   const t = useT();
-  const groups = useStore((s) => s.groups);
   const [place, setPlace] = useState<PlaceDoc | null>(null);
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scope, setScope] = useState<"all" | string>("all");
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [searchParams] = useSearchParams();
   const focusedSessionId = searchParams.get("session");
@@ -88,13 +85,7 @@ export default function SpotPage() {
     };
   }, [placeId]);
 
-  const visibleSessions = useMemo(() => {
-    if (scope === "all") return sessions;
-    const g = groups.find((g) => g.id === scope);
-    if (!g) return sessions;
-    const memberSet = new Set(g.members);
-    return sessions.filter((s) => memberSet.has(s.uid));
-  }, [sessions, scope, groups]);
+  const visibleSessions = sessions;
 
   const stats = useMemo(
     () => buildStats(visibleSessions, user?.uid),
@@ -344,24 +335,6 @@ export default function SpotPage() {
         </div>
       ) : null}
 
-      {groups.length > 0 ? (
-        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
-          <ScopeChip
-            label={t("spot.scope.everyone")}
-            active={scope === "all"}
-            onClick={() => setScope("all")}
-          />
-          {groups.map((g) => (
-            <ScopeChip
-              key={g.id}
-              label={`👥 ${g.name}`}
-              active={scope === g.id}
-              onClick={() => setScope(g.id)}
-            />
-          ))}
-        </div>
-      ) : null}
-
       {photoSessions.length > 0 ? (
         <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
           {photoSessions.map((s, idx) => (
@@ -431,7 +404,7 @@ export default function SpotPage() {
       ) : null}
 
       <h3 className="mt-5 mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-        {scope === "all" ? t("spot.recent_dips") : t("spot.group_dips")}
+        {t("spot.recent_dips")}
       </h3>
       <ul className="space-y-2">
         {visibleSessions.map((s, i) => (
@@ -514,7 +487,7 @@ export default function SpotPage() {
         ))}
         {visibleSessions.length === 0 ? (
           <li className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
-            {scope === "all" ? t("spot.empty.all") : t("spot.empty.group")}
+            {t("spot.empty.all")}
           </li>
         ) : null}
       </ul>
@@ -545,26 +518,6 @@ export default function SpotPage() {
         onClose={() => setLightboxIdx(null)}
       />
     </div>
-  );
-}
-
-function ScopeChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      data-active={active}
-      className="chip whitespace-nowrap data-[active=true]:bg-wave-600 data-[active=true]:text-white data-[active=true]:ring-wave-700"
-    >
-      {label}
-    </button>
   );
 }
 
