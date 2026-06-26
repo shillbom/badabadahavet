@@ -9,6 +9,7 @@ import {
   deleteUser,
   GoogleAuthProvider,
   signInWithRedirect,
+  signInWithPopup,
   type User,
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -162,6 +163,26 @@ export const useStore = create<State>((set, get) => ({
   },
 
   loginWithGoogle: () => {
+    const provider = new GoogleAuthProvider();
+    // On localhost, signInWithRedirect round-trips through the Firebase
+    // authDomain (*.firebaseapp.com) and relies on cross-site storage that
+    // modern browsers block, so getRedirectResult comes back null and
+    // sign-in silently fails. Use a popup in local dev; keep the redirect
+    // flow in production (it's the right one for the installed mobile PWA).
+    const host = typeof window !== "undefined" ? window.location.hostname : "";
+    if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") {
+      signInWithPopup(auth, provider).catch((e) => {
+        const code = (e as { code?: string })?.code ?? "";
+        // Ignore the user dismissing the popup; log the rest.
+        if (
+          code !== "auth/popup-closed-by-user" &&
+          code !== "auth/cancelled-popup-request"
+        ) {
+          console.error("Google popup sign-in failed:", e);
+        }
+      });
+      return;
+    }
     // Preserve any deep link (e.g. /spot/abc?session=xyz) across the
     // Google redirect so the user lands back where they started. If the
     // caller already stashed a path (the "Sign in" button does this), keep
@@ -189,7 +210,7 @@ export const useStore = create<State>((set, get) => ({
     // window.location.href as the return URL, so this makes it land on
     // /auth/google after auth — without bouncing there first.
     window.history.replaceState(null, "", "/auth/google");
-    signInWithRedirect(auth, new GoogleAuthProvider());
+    signInWithRedirect(auth, provider);
   },
 
   completeGoogleOnboarding: async (displayName, homeCountry) => {
