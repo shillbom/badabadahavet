@@ -536,7 +536,10 @@ export const logSession = onCall(
         sessionsCol
           .where("uid", "==", uid)
           .where("date", ">=", yStart)
-          .where("date", "<", yEnd),
+          .where("date", "<", yEnd)
+          // orderBy matches the existing (uid, date DESC) composite index;
+          // without it Firestore demands a separate (uid, date ASC) index.
+          .orderBy("date", "desc"),
       );
       const placeSnap = await tx.get(placeRef);
 
@@ -667,7 +670,9 @@ export const removeSession = onCall(
           .collection("sessions")
           .where("uid", "==", ownerUid)
           .where("date", ">=", yStart)
-          .where("date", "<", yEnd),
+          .where("date", "<", yEnd)
+          // Reuse the existing (uid, date DESC) index — see logSession.
+          .orderBy("date", "desc"),
       );
 
       // If this was the place's most recent swim, find the next-latest so we
