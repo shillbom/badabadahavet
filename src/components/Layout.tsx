@@ -41,72 +41,81 @@ export default function Layout() {
 
   return (
     <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm">
-      <header className="sticky top-0 z-[1000] flex items-center justify-between bg-gradient-to-b from-white/80 to-transparent px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 backdrop-blur-sm">
-        {isGuest ? (
-          <Link
-            to="/login"
-            onClick={rememberReturnPath}
-            className="flex items-center gap-2"
-          >
-            <motion.div
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ type: "spring", stiffness: 220, damping: 22 }}
+      <header className="sticky top-0 z-[1000] px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3">
+        {/* Backdrop fade — a blurred white gradient that extends past the
+            header and is masked to dissolve into the content, so there's no
+            hard blur/colour seam. Content above stays fully crisp. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[calc(100%+1.75rem)] bg-gradient-to-b from-white/90 via-white/55 to-transparent [mask-image:linear-gradient(to_bottom,black,black_45%,transparent)] backdrop-blur-sm [-webkit-mask-image:linear-gradient(to_bottom,black,black_45%,transparent)]"
+        />
+        <div className="flex items-center justify-between">
+          {isGuest ? (
+            <Link
+              to="/login"
+              onClick={rememberReturnPath}
               className="flex items-center gap-2"
             >
-              <span className="text-2xl">🌊</span>
-              <div>
-                <div className="font-display text-base leading-none font-bold text-wave-900">
-                  {t("layout.guest")}
-                </div>
-                <div className="text-[11px] text-wave-700/70">
-                  {t("layout.guest.subtitle")}
-                </div>
-              </div>
-            </motion.div>
-          </Link>
-        ) : (
-          <Link to="/profile" className="flex items-center gap-2">
-            <motion.div
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ type: "spring", stiffness: 220, damping: 22 }}
-              className="flex items-center gap-2"
-            >
-              <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
-              <div>
-                <div className="flex items-center gap-1.5">
+              <motion.div
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                className="flex items-center gap-2"
+              >
+                <span className="text-2xl">🌊</span>
+                <div>
                   <div className="font-display text-base leading-none font-bold text-wave-900">
-                    {profile?.displayName ?? t("layout.swimmer")}
+                    {t("layout.guest")}
                   </div>
-                  {profile?.isAdmin ? (
-                    <span
-                      className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-white uppercase shadow"
-                      title={t("admin.label")}
-                    >
-                      {t("admin.label")}
-                    </span>
-                  ) : null}
+                  <div className="text-[11px] text-wave-700/70">
+                    {t("layout.guest.subtitle")}
+                  </div>
                 </div>
-                <div className="text-[11px] text-wave-700/70">
-                  {groupSubtitle}
+              </motion.div>
+            </Link>
+          ) : (
+            <Link to="/profile" className="flex items-center gap-2">
+              <motion.div
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                className="flex items-center gap-2"
+              >
+                <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="font-display text-base leading-none font-bold text-wave-900">
+                      {profile?.displayName ?? t("layout.swimmer")}
+                    </div>
+                    {profile?.isAdmin ? (
+                      <span
+                        className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-white uppercase shadow"
+                        title={t("admin.label")}
+                      >
+                        {t("admin.label")}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="text-[11px] text-wave-700/70">
+                    {groupSubtitle}
+                  </div>
                 </div>
-              </div>
-            </motion.div>
-          </Link>
-        )}
-        {isGuest ? (
-          <Link
-            to="/login"
-            onClick={rememberReturnPath}
-            className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-wave-700"
-          >
-            <LogIn className="h-3.5 w-3.5" />
-            {t("layout.sign_in")}
-          </Link>
-        ) : (
-          <div className="w-8" aria-hidden />
-        )}
+              </motion.div>
+            </Link>
+          )}
+          {isGuest ? (
+            <Link
+              to="/login"
+              onClick={rememberReturnPath}
+              className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-wave-700"
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              {t("layout.sign_in")}
+            </Link>
+          ) : (
+            <div className="w-8" aria-hidden />
+          )}
+        </div>
       </header>
 
       <main

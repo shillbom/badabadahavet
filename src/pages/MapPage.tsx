@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Flame, MapPin, Trophy } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { sumScores } from "@/lib/scoring";
+import { cn } from "@/lib/utils";
 import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
@@ -105,18 +106,21 @@ export default function MapPage() {
             label={t("map.stat.points")}
             value={totalPoints}
             icon={<Trophy className="h-4 w-4" />}
+            sub={t("map.stat.points.sub", { n: myStats.swimsLastWeek })}
           />
           <Stat
             onClick={() => setFitToken((n) => n + 1)}
             label={t("map.stat.spots")}
             value={myStats.uniquePlaces}
             icon={<MapPin className="h-4 w-4" />}
+            sub={t("map.stat.spots.sub", { n: myStats.swimsLastMonth })}
           />
           <Stat
             to="/history?view=streak"
             label={t("map.stat.streak")}
             value={myStats.currentDayStreak}
             icon={<Flame className="h-4 w-4" />}
+            subTone="warn"
             sub={
               myStats.currentDayStreak > 0 && myStats.daysSinceLast === 1
                 ? t("map.streak.at_risk")
@@ -169,6 +173,7 @@ function Stat({
   value,
   icon,
   sub,
+  subTone = "muted",
 }: {
   to?: string;
   onClick?: () => void;
@@ -176,6 +181,7 @@ function Stat({
   value: number;
   icon: React.ReactNode;
   sub?: string;
+  subTone?: "muted" | "warn";
 }) {
   const inner = (
     <>
@@ -187,7 +193,16 @@ function Stat({
         value={value}
         className="font-display text-2xl font-black text-wave-900"
       />
-      {sub ? <div className="text-[10px] text-amber-700">{sub}</div> : null}
+      {sub ? (
+        <div
+          className={cn(
+            "text-[10px]",
+            subTone === "warn" ? "text-amber-700" : "text-slate-500",
+          )}
+        >
+          {sub}
+        </div>
+      ) : null}
     </>
   );
   return (
@@ -197,11 +212,12 @@ function Stat({
       transition={{ type: "spring", stiffness: 280, damping: 24 }}
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.98 }}
+      className="h-full"
     >
       {to ? (
         <Link
           to={to}
-          className="glass flex flex-col items-start gap-1 px-3 py-2.5"
+          className="glass flex h-full flex-col items-start gap-1 px-3 py-2.5"
         >
           {inner}
         </Link>
@@ -209,7 +225,7 @@ function Stat({
         <button
           type="button"
           onClick={onClick}
-          className="glass flex w-full flex-col items-start gap-1 px-3 py-2.5 text-left"
+          className="glass flex h-full w-full flex-col items-start gap-1 px-3 py-2.5 text-left"
         >
           {inner}
         </button>
