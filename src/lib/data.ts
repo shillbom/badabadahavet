@@ -26,7 +26,7 @@ import { cloudFn, db, storage } from "@/firebase";
 import { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS } from "./scoring";
-import { compressImage } from "./image";
+import { compressImage, makeThumbDataUrl } from "./image";
 
 const usersCol = collection(db, "users");
 const placesCol = collection(db, "places");
@@ -247,8 +247,15 @@ export async function createSession(opts: {
 }): Promise<LoggedSession> {
   let photoUrl: string | undefined;
   let photoPath: string | undefined;
+  let photoThumb: string | undefined;
   if (opts.photoFile) {
-    const compressed = await compressImage(opts.photoFile);
+    // Generate the tiny inline placeholder from the original (best detail)
+    // in parallel with compressing the full image for upload.
+    const [compressed, thumb] = await Promise.all([
+      compressImage(opts.photoFile),
+      makeThumbDataUrl(opts.photoFile),
+    ]);
+    photoThumb = thumb;
     const ext = compressed.name.split(".").pop()?.toLowerCase() ?? "jpg";
     photoPath = `sessions/${opts.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const r = storageRef(storage, photoPath);
@@ -269,6 +276,7 @@ export async function createSession(opts: {
       country?: string;
       photoUrl?: string;
       photoPath?: string;
+      photoThumb?: string;
       border?: string;
     },
     LoggedSession
@@ -283,6 +291,7 @@ export async function createSession(opts: {
     country: opts.country ?? undefined,
     photoUrl,
     photoPath,
+    photoThumb,
     border: opts.border,
   });
   return res.data;
