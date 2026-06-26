@@ -3,43 +3,17 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
+import {
+  swimYear,
+  isWinterMonth,
+  yearBounds,
+  swimPoints,
+  sumYearPoints,
+} from "./scoring.js";
 
 initializeApp();
 
 const PROJECT_REGION = "europe-west1";
-
-// ── Scoring (mirror of src/lib/scoring.ts) ─────────────────────────────────
-// Kept dead simple: +1 per swim, +3 for a brand-new spot, +2 for a winter
-// dip (Nov–Mar). The per-year running total lives on the user doc under
-// `scores[year]` and is only ever written here — clients can't touch it.
-const POINTS_PER_SWIM = 1;
-const POINTS_NEW_SPOT = 3;
-const POINTS_WINTER = 2;
-
-// Year bucket + winter test use UTC so the server is deterministic. The
-// boundary fuzz vs. a browser's local year is a few hours once a year and
-// doesn't matter for a swim contest.
-function swimYear(ts) {
-  return new Date(ts).getUTCFullYear();
-}
-function isWinterMonth(ts) {
-  const m = new Date(ts).getUTCMonth();
-  return m === 10 || m === 11 || m === 0 || m === 1 || m === 2;
-}
-function yearBounds(year) {
-  return [Date.UTC(year, 0, 1), Date.UTC(year + 1, 0, 1)];
-}
-
-/** Sum the points of a user's sessions for a year, optionally excluding one. */
-function sumYearPoints(querySnap, excludeId) {
-  let total = 0;
-  querySnap.forEach((d) => {
-    if (excludeId && d.id === excludeId) return;
-    const p = d.data().points;
-    if (typeof p === "number") total += p;
-  });
-  return total;
-}
 
 // Throttle: how recent a stored reading has to be to be considered
 // "fresh enough" — we won't re-fetch from the upstream API during this
@@ -546,10 +520,7 @@ export const logSession = onCall(
       // ── compute ──
       const isUniqueForUser = dupSnap.empty;
       const isWinter = isWinterMonth(date);
-      const points =
-        POINTS_PER_SWIM +
-        (isUniqueForUser ? POINTS_NEW_SPOT : 0) +
-        (isWinter ? POINTS_WINTER : 0);
+      const points = swimPoints(isUniqueForUser, isWinter);
       const homeCountry = user.homeCountry ?? null;
       const isHomeCountry = !!(
         homeCountry &&
