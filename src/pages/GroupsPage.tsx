@@ -9,7 +9,6 @@ import {
   Share2,
   X,
   UserMinus,
-  MapPin,
   Waves,
   Pencil,
   Check,
@@ -32,7 +31,57 @@ import {
 } from "@/lib/data";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import SwimMap from "@/components/SwimMap";
+
+const DAY_MS = 86_400_000;
+
+function dayStart(ts: number): number {
+  const d = new Date(ts);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
+/** Current consecutive-day swim streak ending today or yesterday. */
+function currentDayStreak(dates: number[]): number {
+  if (dates.length === 0) return 0;
+  const days = new Set(dates.map(dayStart));
+  let cursor = dayStart(Date.now());
+  if (!days.has(cursor)) cursor -= DAY_MS; // yesterday still keeps it alive
+  let streak = 0;
+  while (days.has(cursor)) {
+    streak++;
+    cursor -= DAY_MS;
+  }
+  return streak;
+}
+
+/** Short "last swim" recency label + colour, for the competitive at-a-glance. */
+function recency(
+  lastSwim: number,
+  t: ReturnType<typeof useT>,
+): { label: string; cls: string } {
+  if (!lastSwim)
+    return {
+      label: t("groups.last.never"),
+      cls: "bg-slate-100 text-slate-400",
+    };
+  const days = Math.round((dayStart(Date.now()) - dayStart(lastSwim)) / DAY_MS);
+  if (days <= 0)
+    return {
+      label: t("groups.last.today"),
+      cls: "bg-emerald-100 text-emerald-700",
+    };
+  if (days === 1)
+    return {
+      label: t("groups.last.yesterday"),
+      cls: "bg-wave-100 text-wave-700",
+    };
+  return {
+    label: t("groups.last.days_ago", { n: days }),
+    cls:
+      days <= 6 ? "bg-wave-100 text-wave-700" : "bg-slate-100 text-slate-500",
+  };
+}
 
 export default function GroupsPage() {
   const { user } = useAuth();
@@ -412,6 +461,9 @@ function GroupDetailSheet({
 }) {
   const t = useT();
   const [allSessions, setAllSessions] = useState<SessionDoc[]>([]);
+  const [sortBy, setSortBy] = useState<"points" | "recent" | "streak">(
+    "points",
+  );
   const dragControls = useDragControls();
 
   useEffect(() => {
@@ -490,29 +542,67 @@ function GroupDetailSheet({
 
   const memberStats = useMemo(() => {
     const memberSet = new Set(group.members);
-    const map = new Map<
+    const acc = new Map<
       string,
-      { points: number; swims: number; spots: Set<string> }
+      {
+        points: number;
+        swims: number;
+        spots: Set<string>;
+        lastSwim: number;
+        dates: number[];
+      }
     >();
     for (const uid of group.members)
-      map.set(uid, { points: 0, swims: 0, spots: new Set() });
+      acc.set(uid, {
+        points: 0,
+        swims: 0,
+        spots: new Set(),
+        lastSwim: 0,
+        dates: [],
+      });
     for (const s of allSessions) {
       if (!memberSet.has(s.uid)) continue;
-      const entry = map.get(s.uid)!;
+      const entry = acc.get(s.uid)!;
       entry.points += s.points;
       entry.swims += 1;
       entry.spots.add(s.placeId);
+      if (s.date > entry.lastSwim) entry.lastSwim = s.date;
+      entry.dates.push(s.date);
     }
+    const map = new Map<
+      string,
+      {
+        points: number;
+        swims: number;
+        spots: Set<string>;
+        lastSwim: number;
+        streak: number;
+      }
+    >();
+    for (const [uid, e] of acc)
+      map.set(uid, {
+        points: e.points,
+        swims: e.swims,
+        spots: e.spots,
+        lastSwim: e.lastSwim,
+        streak: currentDayStreak(e.dates),
+      });
     return map;
   }, [allSessions, group.members]);
 
   const sortedMembers = useMemo(() => {
     return [...profiles].sort((a, b) => {
-      const pa = memberStats.get(a.uid)?.points ?? 0;
-      const pb = memberStats.get(b.uid)?.points ?? 0;
-      return pb - pa;
+      const sa = memberStats.get(a.uid);
+      const sb = memberStats.get(b.uid);
+      if (sortBy === "recent") return (sb?.lastSwim ?? 0) - (sa?.lastSwim ?? 0);
+      if (sortBy === "streak")
+        return (
+          (sb?.streak ?? 0) - (sa?.streak ?? 0) ||
+          (sb?.lastSwim ?? 0) - (sa?.lastSwim ?? 0)
+        );
+      return (sb?.points ?? 0) - (sa?.points ?? 0);
     });
-  }, [profiles, memberStats]);
+  }, [profiles, memberStats, sortBy]);
 
   async function onKick(member: UserDoc) {
     if (
@@ -750,6 +840,29 @@ function GroupDetailSheet({
           <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
             {t("groups.detail.members")}
           </h4>
+          <div className="mb-3 flex rounded-full bg-slate-100 p-0.5 text-[11px] font-semibold">
+            {(
+              [
+                ["points", t("groups.sort.points")],
+                ["recent", t("groups.sort.recent")],
+                ["streak", t("groups.sort.streak")],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSortBy(key)}
+                className={cn(
+                  "flex-1 rounded-full px-2 py-1 transition",
+                  sortBy === key
+                    ? "bg-white text-wave-800 shadow-sm"
+                    : "text-slate-500",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {loadingProfiles ? (
             <div className="flex h-20 items-center justify-center">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-wave-600 border-r-transparent" />
@@ -760,9 +873,12 @@ function GroupDetailSheet({
                 const stats = memberStats.get(member.uid) ?? {
                   points: 0,
                   swims: 0,
-                  spots: new Set(),
+                  spots: new Set<string>(),
+                  lastSwim: 0,
+                  streak: 0,
                 };
                 const isMe = member.uid === myUid;
+                const last = recency(stats.lastSwim, t);
                 return (
                   <li
                     key={member.uid}
@@ -771,7 +887,7 @@ function GroupDetailSheet({
                   >
                     <div className="relative flex h-8 w-8 flex-none items-center justify-center rounded-full bg-wave-100 text-lg">
                       {member.emoji ?? "🌊"}
-                      {i === 0 && (
+                      {i === 0 && sortBy === "points" && (
                         <span className="absolute -top-1 -right-1 text-[10px]">
                           🥇
                         </span>
@@ -801,12 +917,25 @@ function GroupDetailSheet({
                           {t("groups.detail.swims")}
                         </span>
                         <span>·</span>
-                        <span className="flex items-center gap-0.5">
-                          <MapPin className="h-2.5 w-2.5" /> {stats.spots.size}{" "}
-                          {t("groups.detail.spots")}
+                        <span
+                          className={cn(
+                            "flex items-center gap-0.5",
+                            stats.streak > 0 && "font-semibold text-orange-600",
+                          )}
+                        >
+                          🔥 {stats.streak}
                         </span>
                       </div>
                     </div>
+                    <span
+                      className={cn(
+                        "flex-none rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap",
+                        last.cls,
+                      )}
+                      title={t("groups.last.tooltip")}
+                    >
+                      {last.label}
+                    </span>
                     {isLeader && !isMe ? (
                       <button
                         onClick={(e) => {
