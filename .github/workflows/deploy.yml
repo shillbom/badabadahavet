@@ -32,6 +32,9 @@ jobs:
       - name: Type-check
         run: npm run lint
 
+      - name: Test
+        run: npm run test
+
       - name: Build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
