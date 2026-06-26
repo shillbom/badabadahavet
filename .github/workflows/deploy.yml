@@ -46,10 +46,23 @@ jobs:
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         run: npm run build
 
-      - name: Deploy to Firebase Hosting (live)
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          channelId: live
+      # Cloud Functions gen-2 deploys load the source to discover functions,
+      # so their deps must be installed on the runner first.
+      - name: Install functions dependencies
+        run: npm ci
+        working-directory: functions
+
+      # Deploy everything via the Firebase CLI (the old hosting-only action
+      # couldn't ship functions/rules and 400'd on unchanged content).
+      # Auth uses the service-account secret via GOOGLE_APPLICATION_CREDENTIALS.
+      - name: Deploy to Firebase
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx --yes firebase-tools@15 deploy \
+            --only hosting,functions,firestore,storage \
+            --project "$FIREBASE_PROJECT" \
+            --non-interactive --force
