@@ -71,7 +71,7 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
     morning: [
       "Morgondopp, {name}? 🌅",
       "God morgon, {name}! Vattnet väntar 🌊",
-      "Rise and swim, {name} ☀️",
+      "Upp och hoppa i, {name}! ☀️",
       "Ny dag, nytt dopp, {name}! 🏊",
       "Tidigt upp, tidigt i, {name}! 🌤️",
     ],
@@ -312,7 +312,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "leaderboard.group_code": "Gruppkod",
     "leaderboard.spots": "{n} platser",
     "leaderboard.spot": "1 plats",
-    "leaderboard.winters": "{n} vinter",
+    "leaderboard.winters": "{n} vintrar",
     "leaderboard.winter": "1 vinter",
     "leaderboard.swims": "· {n} bad",
     "leaderboard.swim": "· 1 bad",
@@ -458,7 +458,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "toswim.tab.todo": "Att göra ({n})",
     "toswim.tab.done": "Klara ({n})",
     "toswim.empty.todo":
-      "Din lista är tom — sök efter en plats nedan eller tryck på Lägg till på en plats karta.",
+      "Din lista är tom — sök efter en plats nedan eller tryck på Lägg till på valfri platssida.",
     "toswim.empty.done": "Inga avbockade än. Dags att hoppa i!",
     "toswim.search.label": "Sök plats att lägga till",
     "toswim.search.placeholder": "Skriv platsens namn",
