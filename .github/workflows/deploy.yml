@@ -56,10 +56,26 @@ jobs:
         run: |
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
-          npx --yes firebase-tools@15 deploy \
-            --only hosting,firestore,storage \
-            --project "$FIREBASE_PROJECT" \
-            --non-interactive --force
+
+          # Rules are idempotent (skip-if-unchanged), so deploy them directly.
+          npx --yes firebase-tools@15 deploy --only firestore,storage \
+            --project "$FIREBASE_PROJECT" --non-interactive --force
+
+          # Hosting rejects re-releasing a byte-identical version with a 400
+          # ("is the current active version"). That's a no-op, not a failure —
+          # swallow only that specific case so an unchanged build stays green.
+          set +e
+          out=$(npx --yes firebase-tools@15 deploy --only hosting \
+            --project "$FIREBASE_PROJECT" --non-interactive --force 2>&1)
+          code=$?
+          echo "$out"
+          if [ $code -ne 0 ]; then
+            if echo "$out" | grep -q "is the current active version"; then
+              echo "Hosting already up to date — nothing to release."
+            else
+              exit $code
+            fi
+          fi
 
       # Functions deploy needs the deploy service account to have
       # "Service Account User" (iam.serviceAccounts.actAs) on the runtime SA
