@@ -277,8 +277,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "vibes.title": "Stämningen",
     "vibes.streak": "Streak",
-    "vibes.streak.weeks_one": "1 vecka",
-    "vibes.streak.weeks_many": "{n} veckor",
+    "vibes.streak.weeks_one": "1 vecka i rad",
+    "vibes.streak.weeks_many": "{n} veckor i rad",
     "vibes.streak.best": "Bäst: {n} veckor",
     "vibes.streak.on_fire": "På topp!",
     "vibes.last_swim": "Senaste bad",
@@ -782,8 +782,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "vibes.title": "Vibes",
     "vibes.streak": "Streak",
-    "vibes.streak.weeks_one": "1 week",
-    "vibes.streak.weeks_many": "{n} weeks",
+    "vibes.streak.weeks_one": "1 week in a row",
+    "vibes.streak.weeks_many": "{n} weeks in a row",
     "vibes.streak.best": "Best: {n} weeks",
     "vibes.streak.on_fire": "On fire",
     "vibes.last_swim": "Last swim",
