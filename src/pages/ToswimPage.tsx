@@ -100,7 +100,7 @@ export default function ToswimPage() {
   }
 
   return (
-    <div className="px-4 pt-2 pb-12">
+    <div className="px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1rem)]">
       <div className="mb-3 flex items-center gap-2">
         <ListChecks className="h-5 w-5 text-wave-700" />
         <h2 className="font-display text-2xl font-black text-wave-900">
@@ -125,9 +125,9 @@ export default function ToswimPage() {
           className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"
         />
         {search.trim() ? (
-          <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto">
+          <ul className="mt-2.5 max-h-64 space-y-1.5 overflow-y-auto">
             {searchResults.length === 0 ? (
-              <li className="rounded-lg bg-white/60 p-3 text-center text-xs text-slate-500">
+              <li className="rounded-xl bg-white/60 p-3 text-center text-xs text-slate-500 ring-1 ring-slate-200/60">
                 {t("toswim.search.empty")}
               </li>
             ) : (
@@ -136,25 +136,26 @@ export default function ToswimPage() {
                 return (
                   <li
                     key={p.id}
-                    className="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-3 py-2 ring-1 ring-slate-200"
+                    className="flex items-center justify-between gap-2 rounded-xl bg-white/70 px-3 py-2.5 shadow-sm ring-1 ring-white/60"
                   >
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-wave-900">
                         {p.name}
                       </div>
-                      <div className="text-[10px] text-slate-500">
+                      <div className="flex items-center gap-1 text-[10px] text-slate-500">
+                        <MapPin className="h-2.5 w-2.5" />
                         {p.lat.toFixed(3)}, {p.lng.toFixed(3)}
                       </div>
                     </div>
                     {already ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
+                      <span className="inline-flex flex-none items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
                         <Check className="h-3 w-3" />
                         {t("toswim.on_list")}
                       </span>
                     ) : (
                       <button
                         onClick={() => onAdd(p.id, p.name)}
-                        className="inline-flex items-center gap-1 rounded-full bg-wave-600 px-2.5 py-1 text-[11px] font-semibold text-white shadow hover:bg-wave-700"
+                        className="inline-flex flex-none items-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm shadow-wave-700/30 transition hover:bg-wave-700 active:scale-95"
                       >
                         <Plus className="h-3 w-3" />
                         {t("toswim.add")}
@@ -207,7 +208,13 @@ export default function ToswimPage() {
                     to={`/spot/${e.place.id}`}
                     className="flex flex-1 items-center gap-3 p-3"
                   >
-                    <div className="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
+                    <div
+                      className={`flex h-12 w-12 flex-none items-center justify-center rounded-xl text-2xl ${
+                        e.doneAt !== undefined
+                          ? "bg-emerald-100 ring-1 ring-emerald-200"
+                          : "bg-wave-100 ring-1 ring-wave-200"
+                      }`}
+                    >
                       {e.doneAt !== undefined ? "🏆" : "📍"}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -220,7 +227,8 @@ export default function ToswimPage() {
                         {e.place.lat.toFixed(3)}, {e.place.lng.toFixed(3)}
                       </div>
                       {e.doneAt !== undefined ? (
-                        <div className="mt-0.5 text-[11px] font-semibold text-emerald-700">
+                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 ring-1 ring-emerald-200">
+                          <Check className="h-2.5 w-2.5" />
                           {t("toswim.done_on", {
                             date: formatDate(e.doneAt),
                           })}
@@ -236,7 +244,7 @@ export default function ToswimPage() {
                   </Link>
                 ) : (
                   <div className="flex flex-1 items-center gap-3 p-3 opacity-60">
-                    <div className="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-slate-100 text-2xl">
+                    <div className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-slate-100 text-2xl ring-1 ring-slate-200">
                       ❓
                     </div>
                     <div className="min-w-0 flex-1">
@@ -255,7 +263,7 @@ export default function ToswimPage() {
                   onClick={() =>
                     onRemove(e.placeId, e.place?.name ?? t("toswim.this_spot"))
                   }
-                  className="flex w-12 flex-none items-center justify-center text-rose-500 hover:bg-rose-50"
+                  className="flex w-12 flex-none items-center justify-center border-l border-white/60 text-rose-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
                   aria-label={t("toswim.remove")}
                   title={t("toswim.remove")}
                 >

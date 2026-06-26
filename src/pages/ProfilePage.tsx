@@ -549,7 +549,7 @@ function BorderPicker({
       <h3 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
         {t("border.picker.title")}
       </h3>
-      <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 py-1">
+      <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 py-2">
         {BORDERS.map((b) => {
           const earned = isBorderUnlocked(b, achievementCount, unlocked);
           const active = b.id === selectedId;

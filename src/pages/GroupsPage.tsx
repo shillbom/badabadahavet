@@ -346,7 +346,7 @@ export default function GroupsPage() {
                 if (!busy && (info.offset.y > 120 || info.velocity.y > 500))
                   setPendingJoin(null);
               }}
-              className="fixed inset-x-0 bottom-0 z-[1200] mx-auto max-w-md touch-none rounded-t-3xl bg-white/95 p-6 shadow-2xl backdrop-blur-sm"
+              className="fixed inset-x-0 bottom-0 z-[1200] mx-auto max-w-md touch-none rounded-t-3xl bg-white/95 px-6 pt-6 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)] shadow-2xl backdrop-blur-sm"
             >
               {/* Handle */}
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200" />
@@ -585,18 +585,18 @@ function GroupDetailSheet({
         onDragEnd={(_e, info) => {
           if (info.offset.y > 120 || info.velocity.y > 500) onClose();
         }}
-        className="fixed inset-x-0 bottom-0 z-[1200] mx-auto max-w-md overflow-hidden rounded-t-3xl bg-white/95 shadow-2xl backdrop-blur-sm"
+        className="fixed inset-x-0 bottom-0 z-[1200] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-3xl bg-white/95 shadow-2xl backdrop-blur-sm"
         style={{ maxHeight: "85dvh" }}
       >
-        {/* Handle */}
+        {/* Handle (drag from here to dismiss; keeps list scrollable) */}
         <div
           onPointerDown={(e) => dragControls.start(e)}
-          className="flex cursor-grab touch-none justify-center pt-4 pb-3 active:cursor-grabbing"
+          className="flex flex-none cursor-grab touch-none justify-center pt-4 pb-3 active:cursor-grabbing"
         >
           <div className="h-1 w-10 rounded-full bg-slate-300" />
         </div>
         {/* Header */}
-        <div className="flex items-start justify-between gap-3 px-5 pt-1 pb-3">
+        <div className="flex flex-none items-start justify-between gap-3 px-5 pt-1 pb-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {/* Group emoji / picker trigger */}
             <div className="relative flex-none">
@@ -746,7 +746,7 @@ function GroupDetailSheet({
         </div>
 
         {/* Member list */}
-        <div className="overflow-y-auto px-4 pb-[max(env(safe-area-inset-bottom),1.5rem)]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
           <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
             {t("groups.detail.members")}
           </h4>
@@ -828,7 +828,7 @@ function GroupDetailSheet({
           {/* Leave button at bottom */}
           <button
             onClick={onLeave}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 hover:bg-rose-100"
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 hover:bg-rose-100"
           >
             <LogOut className="h-4 w-4" />
             {t("groups.leave_title")}
