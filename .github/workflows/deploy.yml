@@ -46,16 +46,10 @@ jobs:
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         run: npm run build
 
-      # Cloud Functions gen-2 deploys load the source to discover functions,
-      # so their deps must be installed on the runner first.
-      - name: Install functions dependencies
-        run: npm ci
-        working-directory: functions
-
-      # Deploy everything via the Firebase CLI (the old hosting-only action
-      # couldn't ship functions/rules and 400'd on unchanged content).
+      # Deploy the client + Firestore/Storage rules via the Firebase CLI
+      # (replaces the hosting-only action that 400'd on unchanged content).
       # Auth uses the service-account secret via GOOGLE_APPLICATION_CREDENTIALS.
-      - name: Deploy to Firebase
+      - name: Deploy hosting + rules
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
@@ -63,6 +57,34 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           npx --yes firebase-tools@15 deploy \
-            --only hosting,functions,firestore,storage \
+            --only hosting,firestore,storage \
+            --project "$FIREBASE_PROJECT" \
+            --non-interactive --force
+
+      # Functions deploy needs the deploy service account to have
+      # "Service Account User" (iam.serviceAccounts.actAs) on the runtime SA
+      # <project>@appspot.gserviceaccount.com, plus Cloud Functions / Cloud
+      # Build / Artifact Registry roles. Until that's granted, deploy
+      # functions manually:
+      #   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
+      #     npx firebase-tools deploy --only functions --project badligan
+      # Once the SA has the roles, set repo variable DEPLOY_FUNCTIONS=true
+      # (Settings → Secrets and variables → Actions → Variables) to enable
+      # the two steps below — no workflow edit needed.
+      - name: Install functions dependencies
+        if: vars.DEPLOY_FUNCTIONS == 'true'
+        run: npm ci
+        working-directory: functions
+
+      - name: Deploy functions
+        if: vars.DEPLOY_FUNCTIONS == 'true'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx --yes firebase-tools@15 deploy \
+            --only functions \
             --project "$FIREBASE_PROJECT" \
             --non-interactive --force
