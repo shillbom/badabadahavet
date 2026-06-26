@@ -77,11 +77,24 @@ if (
 }
 
 /**
- * Create a callable that routes through Firebase Hosting rewrites in production
- * (same-origin, no CORS) and through the emulator in local dev.
+ * Create a callable for a Cloud Function.
+ *
+ *  - Emulator: the SDK talks to the local Functions emulator.
+ *  - Local dev (Vite, not Firebase Hosting): there's no `/api/*` rewrite, so
+ *    call the deployed function directly (its CORS is enabled). Without this,
+ *    `${origin}/api/<name>` just hits the dev server and every callable —
+ *    logging a swim, joining a group, refreshing temps — silently fails.
+ *  - Production (served by Firebase Hosting): route through the same-origin
+ *    `/api/*` rewrite to avoid CORS and keep it first-party.
  */
 export function cloudFn<Req, Res>(name: string): HttpsCallable<Req, Res> {
   if (useEmulators) {
+    return httpsCallable<Req, Res>(functions, name);
+  }
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const isLocalhost =
+    host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  if (isLocalhost) {
     return httpsCallable<Req, Res>(functions, name);
   }
   return httpsCallableFromURL<Req, Res>(

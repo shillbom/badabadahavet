@@ -636,11 +636,13 @@ export default function LogSessionPage() {
                 {t("log.add_photo")}
               </button>
             )}
+            {/* No `capture` attribute — that would force the camera. Leaving
+                it off lets mobile users choose the photo library OR take a
+                new photo. */}
             <input
               ref={photoInput}
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={onPhotoChange}
             />
