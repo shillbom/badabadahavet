@@ -51,6 +51,8 @@ const EMPTY_STATS: MyStats = {
   range: null,
   onThisDay: null,
   countriesAbroad: 0,
+  swimsLastWeek: 0,
+  swimsLastMonth: 0,
 };
 
 type State = {
