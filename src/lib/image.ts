@@ -71,6 +71,49 @@ export async function compressImage(
   }
 }
 
+/**
+ * Generate a tiny base64 JPEG (LQIP — "low-quality image placeholder")
+ * from a photo. Only a few hundred bytes; stored on the session and shown
+ * blurred under the real image until it loads, so there's no blank/empty
+ * frame and no layout shift.
+ *
+ * Returns `undefined` (never throws) when the file can't be decoded — the
+ * caller simply skips the placeholder and shows the full image directly.
+ */
+export async function makeThumbDataUrl(
+  file: File,
+  opts: { maxEdge?: number; quality?: number } = {},
+): Promise<string | undefined> {
+  const maxEdge = opts.maxEdge ?? 28;
+  const quality = opts.quality ?? 0.4;
+
+  if (!file.type.startsWith("image/")) return undefined;
+  if (/heic|heif/.test(file.type)) return undefined;
+
+  try {
+    const bitmap = await loadBitmap(file);
+    const { width, height } = scaleToFit(bitmap.width, bitmap.height, maxEdge);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, width);
+    canvas.height = Math.max(1, height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      if ("close" in bitmap) bitmap.close();
+      return undefined;
+    }
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    if ("close" in bitmap) bitmap.close();
+    const dataUrl = canvas.toDataURL("image/jpeg", quality);
+    // Guard against anything unexpectedly large; the function rejects
+    // thumbs over ~4000 chars, so keep ourselves comfortably under that.
+    if (!dataUrl.startsWith("data:image/jpeg") || dataUrl.length > 4000)
+      return undefined;
+    return dataUrl;
+  } catch {
+    return undefined;
+  }
+}
+
 async function loadBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {
   // createImageBitmap is much faster and handles EXIF orientation in
   // modern browsers. Fall back to a plain <img> if unavailable.

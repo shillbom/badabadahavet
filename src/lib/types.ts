@@ -78,6 +78,8 @@ export type SessionDoc = {
   photoUrl?: string;
   /** Storage path the photo was uploaded to, used for clean-up. */
   photoPath?: string;
+  /** Tiny inline base64 JPEG (LQIP) shown blurred until photoUrl loads. */
+  photoThumb?: string;
   isUniqueForUser: boolean;
   isWinter: boolean;
   /** True if the swim was in the user's registered home country. */

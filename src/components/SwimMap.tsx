@@ -21,6 +21,7 @@ import {
 import { Link } from "react-router-dom";
 import { Layers, LocateFixed } from "lucide-react";
 import { MAP_THEMES } from "@/lib/mapThemes";
+import Photo from "@/components/Photo";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import { pinRingFor } from "@/lib/borders";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
@@ -469,12 +470,11 @@ export default function SwimMap({
                         {photos.length ? (
                           <div className="mt-1.5 flex gap-1 overflow-x-auto">
                             {photos.map((s) => (
-                              <img
+                              <Photo
                                 key={s.id}
-                                src={s.photoUrl}
-                                alt=""
-                                loading="lazy"
-                                className="h-12 w-12 flex-none rounded-md object-cover ring-1 ring-slate-200"
+                                src={s.photoUrl!}
+                                thumb={s.photoThumb}
+                                className="h-12 w-12 flex-none rounded-md ring-1 ring-slate-200"
                               />
                             ))}
                           </div>
@@ -570,12 +570,11 @@ export default function SwimMap({
                           {photos.length ? (
                             <div className="mt-1.5 flex gap-1 overflow-x-auto">
                               {photos.map((s) => (
-                                <img
+                                <Photo
                                   key={s.id}
-                                  src={s.photoUrl}
-                                  alt=""
-                                  loading="lazy"
-                                  className="h-12 w-12 flex-none rounded-md object-cover ring-1 ring-slate-200"
+                                  src={s.photoUrl!}
+                                  thumb={s.photoThumb}
+                                  className="h-12 w-12 flex-none rounded-md ring-1 ring-slate-200"
                                 />
                               ))}
                             </div>

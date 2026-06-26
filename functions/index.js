@@ -431,7 +431,7 @@ export const joinGroupByCode = onCall(
  * the user's `scores` directly, so points can't be forged.
  *
  *   data: { placeId, placeName, lat, lng, date, note?, country?,
- *           photoUrl?, photoPath? }
+ *           photoUrl?, photoPath?, photoThumb? }
  *   returns: { id, points, isUniqueForUser, isWinter }
  *
  * The photo (if any) is uploaded to Storage by the client first; we just
@@ -494,6 +494,17 @@ export const logSession = onCall(
       typeof d.country === "string" && d.country.length <= 3 ? d.country : null;
     const photoUrl = typeof d.photoUrl === "string" ? d.photoUrl : null;
     const photoPath = typeof d.photoPath === "string" ? d.photoPath : null;
+    // Tiny inline LQIP placeholder (base64 data URL). Optional; reject
+    // anything that isn't a short string so a client can't bloat the doc.
+    if (d.photoThumb !== undefined && d.photoThumb !== null) {
+      if (typeof d.photoThumb !== "string" || d.photoThumb.length > 4000) {
+        throw new HttpsError("invalid-argument", "photoThumb looks invalid.");
+      }
+    }
+    const photoThumb =
+      typeof d.photoThumb === "string" && d.photoThumb.length <= 4000
+        ? d.photoThumb
+        : null;
     // The swimmer's chosen border at log time — denormalised onto the place
     // so the map can outline each pin with the last swimmer's frame without
     // loading any sessions. "none" means no frame.
@@ -564,6 +575,7 @@ export const logSession = onCall(
       if (country) session.country = country;
       if (photoUrl) session.photoUrl = photoUrl;
       if (photoPath) session.photoPath = photoPath;
+      if (photoThumb) session.photoThumb = photoThumb;
       session.border = border;
 
       // ── writes ──

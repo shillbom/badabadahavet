@@ -44,6 +44,7 @@ import {
 } from "@/lib/utils";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import SwimMap from "@/components/SwimMap";
+import Photo from "@/components/Photo";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import { useT } from "@/lib/i18n";
@@ -373,10 +374,11 @@ export default function SpotPage() {
                 className="block h-full w-full"
                 aria-label={`${s.displayName}`}
               >
-                <img
+                <Photo
                   src={s.photoUrl!}
-                  alt=""
-                  className="h-full w-full object-cover transition-transform hover:scale-110"
+                  thumb={s.photoThumb}
+                  className="h-full w-full"
+                  imgClassName="transition-transform hover:scale-110"
                 />
                 <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
                   {s.displayName}
@@ -447,10 +449,10 @@ export default function SpotPage() {
             }`}
           >
             {s.photoUrl ? (
-              <img
+              <Photo
                 src={s.photoUrl}
-                alt=""
-                className="h-14 w-14 flex-none rounded-lg object-cover"
+                thumb={s.photoThumb}
+                className="h-14 w-14 flex-none rounded-lg"
               />
             ) : (
               <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">

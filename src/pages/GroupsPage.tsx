@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import {
   Copy,
   LogOut,
@@ -339,7 +339,14 @@ export default function GroupsPage() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.93, y: 12 }}
               transition={{ type: "spring", stiffness: 340, damping: 28 }}
-              className="fixed inset-x-0 bottom-0 z-[1200] mx-auto max-w-md rounded-t-3xl bg-white/95 px-6 pt-6 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)] shadow-2xl backdrop-blur-sm"
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.4 }}
+              onDragEnd={(_e, info) => {
+                if (!busy && (info.offset.y > 120 || info.velocity.y > 500))
+                  setPendingJoin(null);
+              }}
+              className="fixed inset-x-0 bottom-0 z-[1200] mx-auto max-w-md touch-none rounded-t-3xl bg-white/95 px-6 pt-6 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)] shadow-2xl backdrop-blur-sm"
             >
               {/* Handle */}
               <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200" />
@@ -405,6 +412,7 @@ function GroupDetailSheet({
 }) {
   const t = useT();
   const [allSessions, setAllSessions] = useState<SessionDoc[]>([]);
+  const dragControls = useDragControls();
 
   useEffect(() => {
     return watchMemberSessions(group.members, setAllSessions);
@@ -569,11 +577,22 @@ function GroupDetailSheet({
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", stiffness: 320, damping: 32 }}
+        drag="y"
+        dragControls={dragControls}
+        dragListener={false}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.4 }}
+        onDragEnd={(_e, info) => {
+          if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+        }}
         className="fixed inset-x-0 bottom-0 z-[1200] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-3xl bg-white/95 shadow-2xl backdrop-blur-sm"
         style={{ maxHeight: "85dvh" }}
       >
-        {/* Handle */}
-        <div className="flex flex-none justify-center pt-3 pb-1">
+        {/* Handle (drag from here to dismiss; keeps list scrollable) */}
+        <div
+          onPointerDown={(e) => dragControls.start(e)}
+          className="flex flex-none cursor-grab touch-none justify-center pt-4 pb-3 active:cursor-grabbing"
+        >
           <div className="h-1 w-10 rounded-full bg-slate-300" />
         </div>
         {/* Header */}
