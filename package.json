@@ -15,6 +15,7 @@
     "seed:eea": "node scripts/seed-eea-bathing.mjs",
     "update:temperatures": "node scripts/update-temperatures.mjs",
     "backfill:scores": "node scripts/backfill-scores.mjs",
+    "backfill:thumbnails": "node scripts/backfill-thumbnails.mjs",
     "prepare": "husky"
   },
   "dependencies": {
@@ -43,6 +44,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "firebase-admin": "^13.10.0",
     "husky": "^9.1.7",
+    "jimp": "^1.6.1",
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
