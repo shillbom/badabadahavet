@@ -75,7 +75,7 @@
       "source": "functions",
       "codebase": "default",
       "runtime": "nodejs24",
-      "ignore": ["node_modules", ".git", "*.log"]
+      "ignore": ["node_modules", ".git", "*.log", "*.test.js"]
     }
   ],
   "emulators": {
