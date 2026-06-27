@@ -6,16 +6,28 @@ on:
 
 # Forks can't read repo secrets — skip preview for them.
 #
-# The "Deploy preview channel" step is currently disabled (commented out
-# below) — we just build + type-check PRs here and try changes locally with
-# `npm run dev` instead. To bring preview deploys back, uncomment that step
-# (and restore the `pull-requests`/`checks` write permissions it needs).
+# Builds + type-checks + tests the PR, then deploys it to a Firebase Hosting
+# preview channel (pr-<number>, auto-expires 7d) and comments the URL on the
+# PR so changes can be tried on a real device before merge.
+#
+# Deploys via the Firebase CLI rather than action-hosting-deploy because the
+# action 409/400'd on GitHub runners: flaky IPv6 routes to googleapis cause
+# "premature close" errors, firebase-tools retries the dropped POSTs, and the
+# already-succeeded create/release then errors. NODE_OPTIONS forces IPv4 to
+# avoid that, and we tolerate the "already the current active version" no-op
+# (same approach as deploy.yml).
+#
+# NOTE: preview URLs (badligan--pr-<n>-<hash>.web.app) are a different origin
+# than prod, so signing in on a preview needs the Firebase web API key's
+# HTTP-referrer allow-list to include `https://badligan--*.web.app/*`.
 jobs:
   preview:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
+      issues: write
 
     steps:
       - uses: actions/checkout@v5
@@ -44,14 +56,72 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         run: npm run build
-      # Preview deploy disabled — re-enable by uncommenting and restoring the
-      # `pull-requests: write` / `checks: write` job permissions above.
-      #
-      # - name: Deploy preview channel
-      #   uses: FirebaseExtended/action-hosting-deploy@v0
-      #   with:
-      #     repoToken: ${{ secrets.GITHUB_TOKEN }}
-      #     firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      #     projectId: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-      #     # Preview channels auto-expire after 7 days.
-      #     expires: 7d
+
+      - name: Deploy preview channel
+        id: preview
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          # GitHub runners have flaky IPv6 routes to googleapis, which cause
+          # firebase-tools "premature close" errors. Prefer IPv4 to keep the
+          # connection stable so non-idempotent POSTs aren't retried.
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          CHANNEL: pr-${{ github.event.pull_request.number }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          FB="npx --yes firebase-tools@15"
+          # channel:deploy can transiently 409 ("already exists") on the
+          # create path; on retry the channel exists, so it takes the update
+          # path and publishes content. "current active version" means the
+          # identical build is already live — a successful no-op.
+          status=fail
+          for attempt in 1 2 3 4; do
+            echo "::group::channel:deploy attempt $attempt"
+            set +e
+            out=$($FB hosting:channel:deploy "$CHANNEL" \
+              --project "$FIREBASE_PROJECT" --expires 7d --json 2>&1)
+            code=$?
+            set -e
+            echo "$out"
+            echo "::endgroup::"
+            if [ $code -eq 0 ]; then status=ok; break; fi
+            if echo "$out" | grep -qi "current active version"; then
+              echo "No content change — channel already current."
+              status=ok; break
+            fi
+            echo "Attempt $attempt failed (exit $code); retrying after backoff…"
+            sleep $((attempt * 5))
+          done
+          if [ "$status" != ok ]; then
+            echo "Preview deploy failed after retries"; exit 1
+          fi
+          # Read the channel URL back (idempotent GET, safe to retry).
+          url=$($FB hosting:channel:list --project "$FIREBASE_PROJECT" --json \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);const r=j.result||{};const cs=Array.isArray(r)?r:(r.channels||[]);const c=cs.find(c=>c.name&&c.name.endsWith('/'+process.env.CHANNEL));console.log(c?c.url:'')})")
+          echo "Preview URL: $url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview URL on PR
+        if: steps.preview.outputs.url != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = '${{ steps.preview.outputs.url }}';
+            const marker = '<!-- pr-preview-url -->';
+            const body = [
+              marker,
+              `🔎 **Preview deploy:** ${url}`,
+              '',
+              '_Auto-updates on each push; the channel expires in 7 days. Signing in on the preview needs the Firebase web API key\'s referrer allow-list to include `badligan--*.web.app`._',
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: context.issue.number,
+            });
+            const prev = comments.find((c) => c.body && c.body.includes(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
