@@ -7,11 +7,19 @@ on:
 # Forks can't read repo secrets — skip preview for them.
 #
 # Builds + type-checks + tests the PR, then deploys it to a Firebase Hosting
-# preview channel and comments the URL on the PR. Channels auto-expire after
-# 7 days. NOTE: preview channel URLs (badligan--pr-<n>-<hash>.web.app) are a
-# different origin than prod, so signing in on a preview requires the Firebase
-# web API key's HTTP-referrer allow-list to include
-# `https://badligan--*.web.app/*` (the key is restricted to prod by default).
+# preview channel (pr-<number>, auto-expires 7d) and comments the URL on the
+# PR so changes can be tried on a real device before merge.
+#
+# Deploys via the Firebase CLI rather than action-hosting-deploy because the
+# action 409/400'd on GitHub runners: flaky IPv6 routes to googleapis cause
+# "premature close" errors, firebase-tools retries the dropped POSTs, and the
+# already-succeeded create/release then errors. NODE_OPTIONS forces IPv4 to
+# avoid that, and we tolerate the "already the current active version" no-op
+# (same approach as deploy.yml).
+#
+# NOTE: preview URLs (badligan--pr-<n>-<hash>.web.app) are a different origin
+# than prod, so signing in on a preview needs the Firebase web API key's
+# HTTP-referrer allow-list to include `https://badligan--*.web.app/*`.
 jobs:
   preview:
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -19,7 +27,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-      checks: write
+      issues: write
 
     steps:
       - uses: actions/checkout@v5
@@ -50,10 +58,55 @@ jobs:
         run: npm run build
 
       - name: Deploy preview channel
-        uses: FirebaseExtended/action-hosting-deploy@v0
+        id: preview
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          # GitHub runners have flaky IPv6 routes to googleapis, which cause
+          # firebase-tools "premature close" errors. Prefer IPv4 to keep the
+          # connection stable so non-idempotent POSTs aren't retried.
+          NODE_OPTIONS: --dns-result-order=ipv4first
+          CHANNEL: pr-${{ github.event.pull_request.number }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          FB="npx --yes firebase-tools@15"
+          set +e
+          out=$($FB hosting:channel:deploy "$CHANNEL" \
+            --project "$FIREBASE_PROJECT" --expires 7d --json 2>&1)
+          code=$?
+          set -e
+          echo "$out"
+          # Tolerate redeploying identical content to an existing channel.
+          if [ $code -ne 0 ] && ! echo "$out" | grep -qi "current active version"; then
+            exit $code
+          fi
+          # Read the channel URL back (idempotent GET, safe to retry).
+          url=$($FB hosting:channel:list --project "$FIREBASE_PROJECT" --json \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const j=JSON.parse(s);const r=j.result||{};const cs=Array.isArray(r)?r:(r.channels||[]);const c=cs.find(c=>c.name&&c.name.endsWith('/'+process.env.CHANNEL));console.log(c?c.url:'')})")
+          echo "Preview URL: $url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview URL on PR
+        if: steps.preview.outputs.url != ''
+        uses: actions/github-script@v7
         with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          # Per-PR channel; auto-expires after 7 days.
-          expires: 7d
+          script: |
+            const url = '${{ steps.preview.outputs.url }}';
+            const marker = '<!-- pr-preview-url -->';
+            const body = [
+              marker,
+              `🔎 **Preview deploy:** ${url}`,
+              '',
+              '_Auto-updates on each push; the channel expires in 7 days. Signing in on the preview needs the Firebase web API key\'s referrer allow-list to include `badligan--*.web.app`._',
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo,
+              issue_number: context.issue.number,
+            });
+            const prev = comments.find((c) => c.body && c.body.includes(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
