@@ -374,6 +374,7 @@ export default function SwimMap({
             opacity={1}
           />
         )}
+        <AutoInvalidateSize />
         <MapZoomLock locked={!!lockPan} />
         <SaveView viewKey={viewKey} skip={!!saved} />
         <FitToPlaces
@@ -675,6 +676,38 @@ function KeepCentered({ target }: { target: { lat: number; lng: number } }) {
   return null;
 }
 
+/**
+ * Keeps Leaflet's cached viewport size in sync with the actual container.
+ *
+ * Leaflet measures the container once at init and caches it. When a map is
+ * created inside something that sizes up *after* mount — a sliding sheet, a
+ * tab that was display:none, an orientation change — that cached size is
+ * stale, and every fitBounds/setView is computed against the wrong viewport
+ * (the classic "map doesn't fit the pins" / grey-tile state). A
+ * ResizeObserver re-running invalidateSize() on every container resize fixes
+ * the whole class of bugs; invalidateSize keeps the centre, so it never
+ * fights a user's manual pan.
+ */
+function AutoInvalidateSize() {
+  const map = useMap();
+  useEffect(() => {
+    const container = map.getContainer();
+    let raf = 0;
+    const invalidate = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => map.invalidateSize({ animate: false }));
+    };
+    invalidate(); // catch a wrong size from the very first layout pass
+    const ro = new ResizeObserver(invalidate);
+    ro.observe(container);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
+  }, [map]);
+  return null;
+}
+
 /** Disables / re-enables all zoom interactions reactively. */
 function MapZoomLock({ locked }: { locked: boolean }) {
   const map = useMap();
@@ -761,17 +794,39 @@ function FitToPlaces({
       return;
     }
 
-    if (fitBoundsToPlaces && places.length) {
+    // Make sure Leaflet knows the real viewport size before we fit — the
+    // map may have mounted before its container settled (sheet animation,
+    // tab switch), in which case the cached size is wrong and the fit lands
+    // on the wrong zoom/centre.
+    map.invalidateSize({ animate: false });
+
+    if (fitBoundsToPlaces) {
+      // Pins may still be loading from Firestore. Don't lock in a "fitted"
+      // view yet — center provisionally and let a later, non-empty render
+      // actually fit the bounds.
+      if (!places.length) {
+        if (userLocation)
+          map.setView([userLocation.lat, userLocation.lng], 11, {
+            animate: false,
+          });
+        return;
+      }
       const pts: [number, number][] = places.map((p) => [p.lat, p.lng]);
       if (userLocation) pts.push([userLocation.lat, userLocation.lng]);
-      const bounds = L.latLngBounds(pts);
-      map.fitBounds(bounds.pad(0.25), { animate: true, maxZoom: 13 });
+      if (pts.length === 1) {
+        // A single point has zero-area bounds, which makes fitBounds snap to
+        // an extreme zoom — use a sensible fixed zoom instead.
+        map.setView(pts[0], 13, { animate: true });
+      } else {
+        const bounds = L.latLngBounds(pts);
+        map.fitBounds(bounds.pad(0.25), { animate: true, maxZoom: 13 });
+      }
       fittedMaps.add(container);
     } else if (userLocation) {
       map.setView([userLocation.lat, userLocation.lng], 11, { animate: true });
       fittedMaps.add(container);
     }
-  }, [places, userLocation, map, fitToken]);
+  }, [places, userLocation, map, fitToken, fitBoundsToPlaces, skipInitialFit]);
   return null;
 }
 

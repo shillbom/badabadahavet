@@ -159,7 +159,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "common.you": "du",
     "common.back": "Tillbaka",
     "common.close": "Stäng",
-    "update.ready": "Ny version — laddar om…",
+    "update.prompt": "En ny version finns.",
+    "update.reload": "Ladda om",
     "common.previous": "Föregående",
     "common.next": "Nästa",
     "common.cancel": "Avbryt",
@@ -426,6 +427,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Vi behöver en plats — tryck på kartan eller tillåt platsdelning.",
     "log.error.name": "Ge platsen ett namn.",
     "log.error.date": "Datumet ser inte rätt ut.",
+    "log.error.image_too_large": "Bilden är för stor — välj en mindre bild.",
+    "log.error.image_failed": "Kunde inte läsa bilden — prova en annan.",
 
     "spot.first_dipped": "första doppet {date}",
     "spot.scope.everyone": "🌍 Alla",
@@ -666,7 +669,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "common.you": "you",
     "common.back": "Back",
     "common.close": "Close",
-    "update.ready": "New version — reloading…",
+    "update.prompt": "A new version is available.",
+    "update.reload": "Reload",
     "common.previous": "Previous",
     "common.next": "Next",
     "common.cancel": "Cancel",
@@ -929,6 +933,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.error.location": "Need a location — tap the map or allow GPS.",
     "log.error.name": "Give the spot a name.",
     "log.error.date": "That date doesn't look right.",
+    "log.error.image_too_large":
+      "That image is too large — pick a smaller one.",
+    "log.error.image_failed": "Couldn't read that image — try another.",
 
     "spot.first_dipped": "first dipped {date}",
     "spot.scope.everyone": "🌍 Everyone",

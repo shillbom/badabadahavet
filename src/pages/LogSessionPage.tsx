@@ -23,6 +23,7 @@ import {
   findOrCreatePlace,
   updateUserLastLocation,
 } from "@/lib/data";
+import { checkImageFile, ImageProcessingError } from "@/lib/image";
 import { reverseGeocodeCountry } from "@/lib/geocode";
 import { haversineMeters } from "@/lib/utils";
 import {
@@ -222,9 +223,23 @@ export default function LogSessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
+    // Reject oversized / unsupported images right away so the user gets a
+    // clear message instead of a failed (or hung) upload at submit time.
+    const reason = await checkImageFile(f);
+    if (reason) {
+      toast.error(
+        t(
+          reason === "too-large"
+            ? "log.error.image_too_large"
+            : "log.error.image_failed",
+        ),
+      );
+      if (photoInput.current) photoInput.current.value = "";
+      return;
+    }
     setPhotoFile(f);
     setPhotoPreview(URL.createObjectURL(f));
   }
@@ -280,8 +295,20 @@ export default function LogSessionPage() {
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
       navigate("/history");
-    } catch {
-      toast.error(t("log.error.generic"));
+    } catch (err) {
+      // A too-large / unreadable photo gets a specific message; everything
+      // else falls back to the generic "couldn't save".
+      if (err instanceof ImageProcessingError) {
+        toast.error(
+          t(
+            err.reason === "too-large"
+              ? "log.error.image_too_large"
+              : "log.error.image_failed",
+          ),
+        );
+      } else {
+        toast.error(t("log.error.generic"));
+      }
     } finally {
       setBusy(false);
     }
