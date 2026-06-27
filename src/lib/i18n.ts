@@ -580,6 +580,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Badplatser i Danmark och Finland kommer från Europeiska miljöbyrån (EEA),",
     "about.data.meteo":
       "För platser utan en officiell mätning uppskattas vattentemperaturen från satellitdata via Open-Meteo,",
+    "about.data.maps":
+      "Kartbilder kommer från OpenStreetMap och CARTO, satellitvyn från Esri, och vilket land ett bad ligger i slås upp med BigDataCloud.",
     "about.privacy.title": "Integritet",
     "about.privacy.body":
       "Din e-post används bara om du behöver återställa lösenordet. Vi delar inte din data, skickar ingen reklam och du kan radera kontot när som helst från profilen.",
@@ -1088,6 +1090,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Swim spots in Denmark and Finland come from the European Environment Agency (EEA),",
     "about.data.meteo":
       "For spots without an official reading, water temperature is estimated from satellite data via Open-Meteo,",
+    "about.data.maps":
+      "Map tiles come from OpenStreetMap and CARTO, satellite imagery from Esri, and each swim's country is looked up via BigDataCloud.",
     "about.privacy.title": "Privacy",
     "about.privacy.body":
       "Your email is only used so you can reset your password. We never share your data, send marketing, and you can delete your account any time from your profile.",
