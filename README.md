@@ -170,5 +170,4 @@ scripts/        seed / temperature / backfill utilities
 
 ## License
 
-Not yet licensed — all rights reserved. Add a `LICENSE` file before publishing
-if you want others to reuse the code.
+[MIT](LICENSE) © Simon Hillbom
