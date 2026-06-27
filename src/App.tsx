@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useStore } from "@/store/sessions";
 import { ACHIEVEMENTS_BY_ID } from "@/lib/achievements";
 import { Pages, preloadAllPages } from "@/lib/pages";
@@ -8,11 +8,17 @@ import LoginPage from "@/pages/LoginPage";
 import GoogleAuthPage from "@/pages/GoogleAuthPage";
 import Layout from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toast";
-import { toast } from "@/components/ui/Toast";
-import { t } from "@/lib/i18n";
+import UpdatePrompt from "@/components/UpdatePrompt";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
 import { FullSplash } from "@/components/Splash";
 import { rememberReturnPath } from "@/lib/utils";
+
+// A new version found this soon after the app opens is treated as "first
+// load" and applied automatically. Anything later is an in-session update
+// and only prompts, so we never reload out from under an active user.
+const STARTUP_GRACE_MS = 10_000;
+// How often a long-lived (kept-open) session re-checks for a new deploy.
+const UPDATE_CHECK_MS = 60 * 60 * 1000; // hourly
 
 /** Navigate to /login while saving the current path so post-login can return. */
 function LoginRedirect() {
@@ -32,12 +38,31 @@ export default function App() {
   // Boot auth listener + data subscriptions once for the lifetime of the app.
   useEffect(() => useStore.getState()._startListening(), []);
 
-  // When the service worker has activated a new version, show a brief
-  // toast then reload so the fresh assets are used.
+  // Service worker update handling. On first load we apply a waiting update
+  // automatically so the user always lands on the latest version; if a new
+  // version is published while they're using the app, we show a reload
+  // prompt instead of yanking the page out from under them.
+  const appOpenedAt = useRef(Date.now());
+  const autoApplied = useRef(false);
+  const [updateReady, setUpdateReady] = useState(false);
   const { updateServiceWorker } = useRegisterSW({
+    onRegisteredSW(_swUrl, registration) {
+      // Keep checking for new deploys while a session stays open (e.g. an
+      // installed PWA the user never fully closes).
+      if (registration)
+        setInterval(
+          () => registration.update().catch(() => {}),
+          UPDATE_CHECK_MS,
+        );
+    },
     onNeedRefresh() {
-      toast.info(t("update.ready"));
-      setTimeout(() => updateServiceWorker(true), 1200);
+      const atStartup = Date.now() - appOpenedAt.current < STARTUP_GRACE_MS;
+      if (atStartup && !autoApplied.current) {
+        autoApplied.current = true;
+        void updateServiceWorker(true); // reloads to the fresh version
+      } else {
+        setUpdateReady(true);
+      }
     },
   });
 
@@ -92,6 +117,11 @@ export default function App() {
   return (
     <>
       <Toaster />
+      <UpdatePrompt
+        show={updateReady}
+        onReload={() => updateServiceWorker(true)}
+        onDismiss={() => setUpdateReady(false)}
+      />
       <CelebrationOverlay />
       {googleOnboarding ? (
         <Suspense fallback={<FullSplash />}>

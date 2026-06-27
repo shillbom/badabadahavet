@@ -249,12 +249,14 @@ export async function createSession(opts: {
   let photoPath: string | undefined;
   let photoThumb: string | undefined;
   if (opts.photoFile) {
-    // Generate the tiny inline placeholder from the original (best detail)
-    // in parallel with compressing the full image for upload.
-    const [compressed, thumb] = await Promise.all([
-      compressImage(opts.photoFile),
-      makeThumbDataUrl(opts.photoFile),
-    ]);
+    // Compress first, then derive the tiny inline placeholder from the
+    // already-downscaled file. Doing it sequentially (rather than decoding
+    // the full-resolution original twice in parallel) keeps peak memory low
+    // so large photos don't OOM the tab. `compressImage` throws an
+    // ImageProcessingError for images too big to handle; we let that
+    // propagate so the caller can show a specific message.
+    const compressed = await compressImage(opts.photoFile);
+    const thumb = await makeThumbDataUrl(compressed);
     photoThumb = thumb;
     const ext = compressed.name.split(".").pop()?.toLowerCase() ?? "jpg";
     photoPath = `sessions/${opts.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;

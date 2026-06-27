@@ -10,8 +10,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      // New SW activates and takes over immediately on next navigation.
-      registerType: "autoUpdate",
+      // We control activation ourselves (see App.tsx): apply a new version
+      // automatically on first load, but only *prompt* to reload when an
+      // update lands mid-session so we never interrupt an in-progress log.
+      registerType: "prompt",
       // index.html already links /site.webmanifest — don't inject another one.
       manifest: false,
       includeAssets: [
