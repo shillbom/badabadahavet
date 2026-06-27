@@ -41,9 +41,8 @@ import {
 } from "@/lib/utils";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import SwimMap from "@/components/SwimMap";
-import Photo from "@/components/Photo";
+import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
-import Lightbox from "@/components/Lightbox";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
 import { toast } from "@/components/ui/Toast";
@@ -57,7 +56,6 @@ export default function SpotPage() {
   const [place, setPlace] = useState<PlaceDoc | null>(null);
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [searchParams] = useSearchParams();
   const focusedSessionId = searchParams.get("session");
   // Track which sessions have been highlighted once so we don't replay
@@ -336,26 +334,15 @@ export default function SpotPage() {
 
       {photoSessions.length > 0 ? (
         <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
-          {photoSessions.map((s, idx) => (
+          {photoSessions.map((s) => (
             <div
               key={s.id}
               className="relative h-24 w-24 flex-none overflow-hidden rounded-xl ring-1 ring-white/60"
             >
-              <button
-                onClick={() => setLightboxIdx(idx)}
-                className="block h-full w-full"
-                aria-label={`${s.displayName}`}
-              >
-                <Photo
-                  src={s.photoUrl!}
-                  thumb={s.photoThumb}
-                  className="h-full w-full"
-                  imgClassName="transition-transform hover:scale-110"
-                />
-                <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                  {s.displayName}
-                </span>
-              </button>
+              <SwimPhoto session={s} className="h-full w-full" />
+              <span className="pointer-events-none absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                {s.displayName}
+              </span>
               {isAdmin ? (
                 <button
                   onClick={(e) => {
@@ -421,9 +408,8 @@ export default function SpotPage() {
             }`}
           >
             {s.photoUrl ? (
-              <Photo
-                src={s.photoUrl}
-                thumb={s.photoThumb}
+              <SwimPhoto
+                session={s}
                 className="h-14 w-14 flex-none rounded-lg"
               />
             ) : (
@@ -510,12 +496,6 @@ export default function SpotPage() {
           </Link>
         )}
       </div>
-
-      <Lightbox
-        sessions={photoSessions}
-        index={lightboxIdx}
-        onClose={() => setLightboxIdx(null)}
-      />
     </div>
   );
 }
