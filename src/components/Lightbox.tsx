@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import type { SessionDoc } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
+import Photo from "@/components/Photo";
 
 /**
  * Full-screen photo viewer for a swim. Tapping a swim photo (on the Spot page
@@ -46,10 +47,12 @@ export default function Lightbox({
             onClick={(e) => e.stopPropagation()}
             className="max-h-[85dvh] max-w-full"
           >
-            <img
+            <Photo
               src={s.photoUrl!}
-              alt=""
-              className="max-h-[80dvh] max-w-full rounded-xl"
+              thumb={s.photoThumb}
+              fit="contain"
+              className="rounded-xl"
+              imgClassName="max-h-[80dvh] max-w-full"
             />
             <div className="mt-2 text-center text-xs text-white/80">
               {s.displayName} · {formatDate(s.date)}
