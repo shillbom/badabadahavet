@@ -13,6 +13,9 @@ import {
   Pencil,
   Check,
   Merge,
+  Calendar,
+  List as ListIcon,
+  Map as MapIcon,
 } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
@@ -31,8 +34,10 @@ import {
 } from "@/lib/data";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import SwimMap from "@/components/SwimMap";
+import Photo from "@/components/Photo";
+import ReactionBar from "@/components/ReactionBar";
 
 const DAY_MS = 86_400_000;
 
@@ -1019,6 +1024,14 @@ function MemberMapSheet({
     }
     return m;
   }, [memberSessions]);
+  // Most-recent swim first for the list view.
+  const memberSwims = useMemo(
+    () => [...memberSessions].sort((a, b) => b.date - a.date),
+    [memberSessions],
+  );
+
+  const { user } = useAuth();
+  const [view, setView] = useState<"map" | "list">("map");
 
   return (
     <>
@@ -1067,22 +1080,110 @@ function MemberMapSheet({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="relative px-3 pb-[max(env(safe-area-inset-bottom),1rem)]">
-          {memberPlaces.length === 0 ? (
+        {memberPlaces.length === 0 ? (
+          <div className="px-3 pb-[max(env(safe-area-inset-bottom),1rem)]">
             <div className="flex h-[60dvh] items-center justify-center rounded-2xl bg-white/60 text-sm text-slate-500">
               {t("groups.member.no_swims")}
             </div>
-          ) : (
-            <div className="h-[60dvh] overflow-hidden rounded-2xl ring-1 ring-white/60">
-              <SwimMap
-                places={memberPlaces}
-                sessionsByPlace={sessionsByPlace}
-                fitBoundsToPlaces
-                linkToSpot
-              />
+          </div>
+        ) : (
+          <>
+            {/* Map | List toggle — list makes it easy to react to each swim. */}
+            <div className="flex justify-center px-3 pb-2">
+              <div className="inline-flex rounded-full bg-slate-100 p-0.5 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setView("map")}
+                  aria-pressed={view === "map"}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors",
+                    view === "map"
+                      ? "bg-white text-wave-800 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700",
+                  )}
+                >
+                  <MapIcon className="h-3.5 w-3.5" />
+                  {t("groups.member.view.map")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("list")}
+                  aria-pressed={view === "list"}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors",
+                    view === "list"
+                      ? "bg-white text-wave-800 shadow-sm"
+                      : "text-slate-500 hover:text-slate-700",
+                  )}
+                >
+                  <ListIcon className="h-3.5 w-3.5" />
+                  {t("groups.member.view.list")}
+                </button>
+              </div>
             </div>
-          )}
-        </div>
+
+            <div className="px-3 pb-[max(env(safe-area-inset-bottom),1rem)]">
+              {view === "map" ? (
+                <div className="h-[60dvh] overflow-hidden rounded-2xl ring-1 ring-white/60">
+                  <SwimMap
+                    places={memberPlaces}
+                    sessionsByPlace={sessionsByPlace}
+                    fitBoundsToPlaces
+                    linkToSpot
+                  />
+                </div>
+              ) : (
+                <ul className="h-[60dvh] space-y-2 overflow-y-auto pr-0.5">
+                  {memberSwims.map((s, i) => (
+                    <motion.li
+                      key={s.id}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: Math.min(i, 8) * 0.03 }}
+                      className="glass flex items-start gap-3 p-3"
+                    >
+                      {s.photoUrl ? (
+                        <Photo
+                          src={s.photoUrl}
+                          thumb={s.photoThumb}
+                          className="h-14 w-14 flex-none rounded-lg"
+                        />
+                      ) : (
+                        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
+                          🌊
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="truncate font-semibold text-wave-900">
+                            {s.placeName}
+                          </div>
+                          <div className="flex-none font-display text-base font-black text-wave-700">
+                            +{s.points}
+                          </div>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
+                          <Calendar className="h-3 w-3" />
+                          {formatDateTime(s.date)}
+                          {s.isWinter ? <span className="ml-1">❄️</span> : null}
+                          {s.isUniqueForUser ? (
+                            <span className="ml-0.5">✨</span>
+                          ) : null}
+                        </div>
+                        {s.note ? (
+                          <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
+                            {s.note}
+                          </p>
+                        ) : null}
+                        <ReactionBar session={s} myUid={user?.uid} />
+                      </div>
+                    </motion.li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </>
+        )}
       </motion.div>
     </>
   );
