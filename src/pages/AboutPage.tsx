@@ -93,6 +93,44 @@ export default function AboutPage() {
           </a>
           .
         </p>
+        <p className="mt-2">{t("about.data.maps")}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-wave-700"
+          >
+            © OpenStreetMap
+          </a>
+          {" · "}
+          <a
+            href="https://carto.com/attributions"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-wave-700"
+          >
+            CARTO
+          </a>
+          {" · "}
+          <a
+            href="https://www.esri.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-wave-700"
+          >
+            Esri
+          </a>
+          {" · "}
+          <a
+            href="https://www.bigdatacloud.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-wave-700"
+          >
+            BigDataCloud
+          </a>
+        </p>
       </Section>
 
       <Section title={t("about.privacy.title")}>

@@ -18,8 +18,10 @@ on:
 # (same approach as deploy.yml).
 #
 # NOTE: preview URLs (badligan--pr-<n>-<hash>.web.app) are a different origin
-# than prod, so signing in on a preview needs the Firebase web API key's
-# HTTP-referrer allow-list to include `https://badligan--*.web.app/*`.
+# than prod. Login still works on them: the Firebase web API key has no
+# HTTP-referrer restriction, and Firebase auto-adds preview-channel domains to
+# Auth's authorized domains. (If the key is ever locked down to referrers,
+# include `https://badligan--*.web.app/*` so previews keep working.)
 jobs:
   preview:
     if: github.event.pull_request.head.repo.full_name == github.repository
