@@ -38,6 +38,7 @@ import { cn, formatDateTime } from "@/lib/utils";
 import SwimMap from "@/components/SwimMap";
 import Photo from "@/components/Photo";
 import ReactionBar from "@/components/ReactionBar";
+import Lightbox from "@/components/Lightbox";
 
 const DAY_MS = 86_400_000;
 
@@ -1032,6 +1033,7 @@ function MemberMapSheet({
 
   const { user } = useAuth();
   const [view, setView] = useState<"map" | "list">("map");
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
 
   return (
     <>
@@ -1143,11 +1145,19 @@ function MemberMapSheet({
                       className="glass flex items-start gap-3 p-3"
                     >
                       {s.photoUrl ? (
-                        <Photo
-                          src={s.photoUrl}
-                          thumb={s.photoThumb}
-                          className="h-14 w-14 flex-none rounded-lg"
-                        />
+                        <button
+                          type="button"
+                          onClick={() => setLightboxIdx(i)}
+                          className="h-14 w-14 flex-none overflow-hidden rounded-lg"
+                          aria-label={t("common.view_photo")}
+                        >
+                          <Photo
+                            src={s.photoUrl}
+                            thumb={s.photoThumb}
+                            className="h-full w-full"
+                            imgClassName="transition-transform hover:scale-110"
+                          />
+                        </button>
                       ) : (
                         <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
                           🌊
@@ -1185,6 +1195,11 @@ function MemberMapSheet({
           </>
         )}
       </motion.div>
+      <Lightbox
+        sessions={memberSwims}
+        index={lightboxIdx}
+        onClose={() => setLightboxIdx(null)}
+      />
     </>
   );
 }
