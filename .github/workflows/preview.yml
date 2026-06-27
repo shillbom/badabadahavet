@@ -71,15 +71,30 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           FB="npx --yes firebase-tools@15"
-          set +e
-          out=$($FB hosting:channel:deploy "$CHANNEL" \
-            --project "$FIREBASE_PROJECT" --expires 7d --json 2>&1)
-          code=$?
-          set -e
-          echo "$out"
-          # Tolerate redeploying identical content to an existing channel.
-          if [ $code -ne 0 ] && ! echo "$out" | grep -qi "current active version"; then
-            exit $code
+          # channel:deploy can transiently 409 ("already exists") on the
+          # create path; on retry the channel exists, so it takes the update
+          # path and publishes content. "current active version" means the
+          # identical build is already live — a successful no-op.
+          status=fail
+          for attempt in 1 2 3 4; do
+            echo "::group::channel:deploy attempt $attempt"
+            set +e
+            out=$($FB hosting:channel:deploy "$CHANNEL" \
+              --project "$FIREBASE_PROJECT" --expires 7d --json 2>&1)
+            code=$?
+            set -e
+            echo "$out"
+            echo "::endgroup::"
+            if [ $code -eq 0 ]; then status=ok; break; fi
+            if echo "$out" | grep -qi "current active version"; then
+              echo "No content change — channel already current."
+              status=ok; break
+            fi
+            echo "Attempt $attempt failed (exit $code); retrying after backoff…"
+            sleep $((attempt * 5))
+          done
+          if [ "$status" != ok ]; then
+            echo "Preview deploy failed after retries"; exit 1
           fi
           # Read the channel URL back (idempotent GET, safe to retry).
           url=$($FB hosting:channel:list --project "$FIREBASE_PROJECT" --json \
