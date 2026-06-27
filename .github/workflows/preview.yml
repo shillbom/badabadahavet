@@ -6,16 +6,20 @@ on:
 
 # Forks can't read repo secrets — skip preview for them.
 #
-# The "Deploy preview channel" step is currently disabled (commented out
-# below) — we just build + type-check PRs here and try changes locally with
-# `npm run dev` instead. To bring preview deploys back, uncomment that step
-# (and restore the `pull-requests`/`checks` write permissions it needs).
+# Builds + type-checks + tests the PR, then deploys it to a Firebase Hosting
+# preview channel and comments the URL on the PR. Channels auto-expire after
+# 7 days. NOTE: preview channel URLs (badligan--pr-<n>-<hash>.web.app) are a
+# different origin than prod, so signing in on a preview requires the Firebase
+# web API key's HTTP-referrer allow-list to include
+# `https://badligan--*.web.app/*` (the key is restricted to prod by default).
 jobs:
   preview:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
+      checks: write
 
     steps:
       - uses: actions/checkout@v5
@@ -44,14 +48,12 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         run: npm run build
-      # Preview deploy disabled — re-enable by uncommenting and restoring the
-      # `pull-requests: write` / `checks: write` job permissions above.
-      #
-      # - name: Deploy preview channel
-      #   uses: FirebaseExtended/action-hosting-deploy@v0
-      #   with:
-      #     repoToken: ${{ secrets.GITHUB_TOKEN }}
-      #     firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      #     projectId: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-      #     # Preview channels auto-expire after 7 days.
-      #     expires: 7d
+
+      - name: Deploy preview channel
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          # Per-PR channel; auto-expires after 7 days.
+          expires: 7d
