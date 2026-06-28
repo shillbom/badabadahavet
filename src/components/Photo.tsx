@@ -37,8 +37,11 @@ export default function Photo({
   const [loaded, setLoaded] = useState(false);
 
   if (fit === "contain") {
-    // The full image is the in-flow sizer (sized via `imgClassName`); the
-    // blurred thumb sits behind it as a placeholder until the pixels arrive.
+    // Full-screen viewer: the full image is the in-flow sizer (capped to the
+    // viewport so it's always fully visible and centred); the blurred thumb
+    // sits behind as a placeholder until the pixels arrive. The full image is
+    // always rendered (no opacity gated on onLoad — cached images can skip
+    // that event and would otherwise stay invisible behind the blur).
     return (
       <div className={cn("relative inline-block overflow-hidden", className)}>
         {thumb ? (
@@ -46,17 +49,15 @@ export default function Photo({
             src={thumb}
             alt=""
             aria-hidden
-            className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-md"
+            className="pointer-events-none absolute inset-0 h-full w-full scale-110 object-cover blur-lg"
           />
         ) : null}
         <img
           src={src}
           alt={alt}
           decoding="async"
-          onLoad={() => setLoaded(true)}
           className={cn(
-            "relative block object-contain transition-opacity duration-500",
-            loaded || !thumb ? "opacity-100" : "opacity-0",
+            "relative block max-h-[85dvh] max-w-[92vw] object-contain",
             imgClassName,
           )}
         />
