@@ -7,8 +7,10 @@ import type { GroupDoc, SessionDoc } from "./types";
  * reaction baseline, and gets back a ready-to-render summary.
  *
  * Two kinds of news:
- *  - swims:     other people logged dips since you last looked
+ *  - swims:     people *in your groups* logged dips since you last looked.
+ *               Only group-mates — never the whole app's community feed.
  *  - reactions: someone reacted to one of *your* swims since you last looked
+ *               (any reactor — it's your own content).
  *
  * Swims are detected server-side-ish via `createdAt > since` (works across
  * devices). Reactions carry no timestamp on the session doc, so "new" is
@@ -32,8 +34,6 @@ export type AwaySwims = {
   count: number;
   /** Their most recent swim — used for the place label and the deep link. */
   latest: SessionDoc;
-  /** True if this swimmer shares a group with you (ranked higher). */
-  inMyGroup: boolean;
 };
 
 export type AwayReactions = {
@@ -66,9 +66,10 @@ export type DigestInput = {
   since: number | null;
   /** The current user's own swims (used for reaction diffing). */
   mySessions: SessionDoc[];
-  /** This year's community swims (the global feed). */
+  /** This year's community swims (the global feed). Filtered down to your
+   *  group-mates before anything is surfaced. */
   allSessions: SessionDoc[];
-  /** The user's groups — swimmers you share one with rank higher. */
+  /** The user's groups — only swimmers you share a group with appear. */
   groups: GroupDoc[];
   /** Per-session total reactor count last surfaced on this device. */
   reactionBaseline: Record<string, number>;
@@ -123,14 +124,16 @@ export function computeWhileAwayDigest(
     lookBack = since;
   }
 
-  // ── Friends' / community swims since you last looked ──────────────────
+  // ── Swims by your group-mates since you last looked ───────────────────
+  // Strictly limited to people you share a group with — we never surface the
+  // whole app's community feed. No groups → no swim items (reactions only).
   const myGroupMates = new Set<string>();
   for (const g of groups)
     for (const m of g.members) if (m !== myUid) myGroupMates.add(m);
 
   const bySwimmer = new Map<string, AwaySwims>();
   for (const s of allSessions) {
-    if (s.uid === myUid) continue;
+    if (!myGroupMates.has(s.uid)) continue; // group-mates only (excludes me)
     if (s.createdAt <= lookBack) continue;
     const existing = bySwimmer.get(s.uid);
     if (!existing) {
@@ -140,7 +143,6 @@ export function computeWhileAwayDigest(
         name: s.displayName,
         count: 1,
         latest: s,
-        inMyGroup: myGroupMates.has(s.uid),
       });
     } else {
       existing.count += 1;
@@ -152,10 +154,7 @@ export function computeWhileAwayDigest(
   }
 
   const swimItems = [...bySwimmer.values()].sort(
-    (a, b) =>
-      Number(b.inMyGroup) - Number(a.inMyGroup) ||
-      b.count - a.count ||
-      b.latest.createdAt - a.latest.createdAt,
+    (a, b) => b.count - a.count || b.latest.createdAt - a.latest.createdAt,
   );
 
   // ── Reactions on your own swims ───────────────────────────────────────

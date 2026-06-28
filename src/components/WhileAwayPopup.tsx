@@ -258,16 +258,9 @@ function DigestRow({
         onClick={() => onOpen(session)}
         className="flex min-w-0 flex-1 flex-col items-start text-left"
       >
-        <div className="flex w-full items-center gap-1.5">
-          <span className="truncate text-sm font-semibold text-wave-900">
-            {title}
-          </span>
-          {item.kind === "swims" && item.inMyGroup ? (
-            <span className="shrink-0 rounded-full bg-wave-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-wave-700 uppercase">
-              {t("whileaway.group_badge")}
-            </span>
-          ) : null}
-        </div>
+        <span className="w-full truncate text-sm font-semibold text-wave-900">
+          {title}
+        </span>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
           <span className="truncate">{detail}</span>
           {item.kind === "swims" ? (

@@ -87,6 +87,7 @@ describe("computeWhileAwayDigest", () => {
   it("returns null when nothing happened while away", () => {
     const d = computeWhileAwayDigest(
       input({
+        groups: [group(["me", "anna"])],
         // swim happened *before* the baseline
         allSessions: [s({ uid: "anna", createdAt: NOW - 48 * HOUR })],
       }),
@@ -94,15 +95,16 @@ describe("computeWhileAwayDigest", () => {
     expect(d).toBeNull();
   });
 
-  it("counts each swimmer's swims since the baseline, excluding mine", () => {
+  it("counts each group-mate's swims since the baseline, excluding mine", () => {
     const d = computeWhileAwayDigest(
       input({
+        groups: [group(["me", "anna", "bo"])],
         allSessions: [
           s({ uid: "anna", createdAt: NOW - 2 * HOUR }),
           s({ uid: "anna", createdAt: NOW - 1 * HOUR, placeName: "Sea" }),
           s({ uid: "bo", createdAt: NOW - 3 * HOUR }),
           s({ uid: "me", createdAt: NOW - 1 * HOUR }), // mine — ignored
-          s({ uid: "old", createdAt: NOW - 48 * HOUR }), // before baseline
+          s({ uid: "anna", createdAt: NOW - 48 * HOUR }), // before baseline
         ],
       }),
     );
@@ -118,25 +120,37 @@ describe("computeWhileAwayDigest", () => {
     }
   });
 
-  it("ranks group-mates above strangers", () => {
+  it("only surfaces swims from your group-mates, never strangers", () => {
     const d = computeWhileAwayDigest(
       input({
         groups: [group(["me", "bo"])],
         allSessions: [
-          // stranger with more swims
+          // stranger (not in any of my groups) with lots of swims — excluded
           s({ uid: "anna", createdAt: NOW - 2 * HOUR }),
           s({ uid: "anna", createdAt: NOW - 1 * HOUR }),
-          // group-mate with fewer
+          // group-mate — the only one that should show
           s({ uid: "bo", createdAt: NOW - 3 * HOUR }),
         ],
       }),
     );
-    const first = d!.items[0];
-    expect(first.kind).toBe("swims");
-    if (first.kind === "swims") {
-      expect(first.uid).toBe("bo");
-      expect(first.inMyGroup).toBe(true);
-    }
+    expect(d!.swimmerCount).toBe(1);
+    const swimmers = d!.items
+      .filter((i) => i.kind === "swims")
+      .map((i) => (i.kind === "swims" ? i.uid : ""));
+    expect(swimmers).toEqual(["bo"]);
+  });
+
+  it("shows no swims when you're in no groups (reactions still work)", () => {
+    const d = computeWhileAwayDigest(
+      input({
+        groups: [],
+        allSessions: [
+          s({ uid: "anna", createdAt: NOW - 1 * HOUR }),
+          s({ uid: "bo", createdAt: NOW - 2 * HOUR }),
+        ],
+      }),
+    );
+    expect(d).toBeNull(); // no group-mates → no swims, nothing to show
   });
 
   it("surfaces new reactions on my swims and leads with them", () => {
@@ -185,6 +199,7 @@ describe("computeWhileAwayDigest", () => {
       input({
         since: NOW - 60 * 1000, // a quick reload — auto would bail
         manual: true,
+        groups: [group(["me", "anna", "bo"])],
         allSessions: [
           s({ uid: "anna", createdAt: NOW - 10 * 24 * HOUR }), // 10 days ago
           s({ uid: "bo", createdAt: NOW - 40 * 24 * HOUR }), // 40 days — too old
@@ -219,9 +234,14 @@ describe("computeWhileAwayDigest", () => {
 
   it("caps the number of items", () => {
     const many: SessionDoc[] = [];
-    for (let i = 0; i < 20; i++)
+    const members = ["me"];
+    for (let i = 0; i < 20; i++) {
+      members.push(`u${i}`);
       many.push(s({ uid: `u${i}`, createdAt: NOW - (i + 1) * 60 * 1000 }));
-    const d = computeWhileAwayDigest(input({ allSessions: many }));
+    }
+    const d = computeWhileAwayDigest(
+      input({ groups: [group(members)], allSessions: many }),
+    );
     expect(d!.items.length).toBeLessThanOrEqual(8);
   });
 });
