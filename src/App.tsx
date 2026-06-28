@@ -10,6 +10,7 @@ import Layout from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toast";
 import UpdatePrompt from "@/components/UpdatePrompt";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
+import WhileAwayPopup from "@/components/WhileAwayPopup";
 import { FullSplash } from "@/components/Splash";
 import { rememberReturnPath } from "@/lib/utils";
 
@@ -123,6 +124,7 @@ export default function App() {
         onDismiss={() => setUpdateReady(false)}
       />
       <CelebrationOverlay />
+      <WhileAwayPopup />
       {googleOnboarding ? (
         <Suspense fallback={<FullSplash />}>
           <Routes>

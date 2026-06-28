@@ -22,6 +22,11 @@ export type UserDoc = {
   isAdmin?: boolean;
   /** Last known geolocation — used as the map starting point. */
   lastLocation?: { lat: number; lng: number };
+  /** Epoch ms of the user's previous visit. Stamped to "now" on every app
+   *  boot; the value read at boot is the *previous* visit, which powers the
+   *  "while you were away" digest (new swims + reactions since you last
+   *  looked). Owner-writable — it's a personal, low-stakes field. */
+  lastSeenAt?: number;
   /** "Want to swim" list — keyed by placeId. Whether an entry is "done" is
    *  derived from the user's sessions at that place, not stored here. */
   toswim?: Record<string, ToswimEntry>;

@@ -125,6 +125,21 @@ export async function updateUserLastLocation(
   await updateDoc(doc(usersCol, uid), { lastLocation: { lat, lng } });
 }
 
+/**
+ * Stamp the user's "last seen" timestamp to `ts` (call once per app boot).
+ * The value that was stored *before* this write is what drives the
+ * "while you were away" digest, so callers must read the old value first.
+ * Best-effort: a failed write just means no digest next time, so we never
+ * let it surface as an error.
+ */
+export async function touchLastSeen(uid: string, ts: number): Promise<void> {
+  try {
+    await updateDoc(doc(usersCol, uid), { lastSeenAt: ts });
+  } catch {
+    /* offline / transient — ignore, it's a non-critical convenience field */
+  }
+}
+
 export async function recordAchievements(uid: string, ids: string[]) {
   if (ids.length === 0) return;
   const updates: Record<string, number> = {};
