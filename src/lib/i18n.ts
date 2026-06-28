@@ -388,6 +388,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "groups.member.summary": "{spots} platser · {swims} bad · {points} poäng",
     "groups.member.view.map": "Karta",
     "groups.member.view.list": "Lista",
+    "groups.member.show_on_map": "Visa på kartan",
 
     "log.title": "Logga ett bad",
     "log.mode.now": "Här & nu",
@@ -920,6 +921,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "groups.member.summary": "{spots} spots · {swims} swims · {points} pts",
     "groups.member.view.map": "Map",
     "groups.member.view.list": "List",
+    "groups.member.show_on_map": "Show on map",
 
     "log.title": "Log a swim",
     "log.mode.now": "Here & now",

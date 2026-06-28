@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { X, Calendar, List as ListIcon, Map as MapIcon } from "lucide-react";
+import {
+  X,
+  Calendar,
+  List as ListIcon,
+  Map as MapIcon,
+  MapPin,
+} from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
 import { cn, formatDateTime } from "@/lib/utils";
@@ -33,6 +39,16 @@ export default function MemberSwimsSheet({
   const t = useT();
   const { user } = useAuth();
   const [view, setView] = useState<"map" | "list">("map");
+  // A place to reveal on the map (tapped from the list). The token re-fires
+  // the focus even when the same place is tapped twice.
+  const [focus, setFocus] = useState<{ id: string; token: number } | null>(
+    null,
+  );
+
+  function showOnMap(placeId: string) {
+    setFocus({ id: placeId, token: Date.now() });
+    setView("map");
+  }
 
   const memberSessions = useMemo(
     () => sessions.filter((s) => s.uid === member.uid),
@@ -128,7 +144,10 @@ export default function MemberSwimsSheet({
               <div className="inline-flex rounded-full bg-slate-100 p-0.5 text-xs font-semibold">
                 <button
                   type="button"
-                  onClick={() => setView("map")}
+                  onClick={() => {
+                    setFocus(null);
+                    setView("map");
+                  }}
                   aria-pressed={view === "map"}
                   className={cn(
                     "flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors",
@@ -165,6 +184,10 @@ export default function MemberSwimsSheet({
                     sessionsByPlace={sessionsByPlace}
                     fitBoundsToPlaces
                     linkToSpot
+                    viewKey={`member-${member.uid}`}
+                    skipInitialFit={!!focus}
+                    focusPlaceId={focus?.id ?? null}
+                    focusToken={focus?.token}
                   />
                 </div>
               ) : (
@@ -188,22 +211,33 @@ export default function MemberSwimsSheet({
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="truncate font-semibold text-wave-900">
-                            {s.placeName}
+                        {/* Tap the place to reveal it on the map. */}
+                        <button
+                          type="button"
+                          onClick={() => showOnMap(s.placeId)}
+                          title={t("groups.member.show_on_map")}
+                          className="block w-full text-left"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-1 font-semibold text-wave-900">
+                              <span className="truncate">{s.placeName}</span>
+                              <MapPin className="h-3 w-3 flex-none text-wave-500" />
+                            </div>
+                            <div className="flex-none font-display text-base font-black text-wave-700">
+                              +{s.points}
+                            </div>
                           </div>
-                          <div className="flex-none font-display text-base font-black text-wave-700">
-                            +{s.points}
+                          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
+                            <Calendar className="h-3 w-3" />
+                            {formatDateTime(s.date)}
+                            {s.isWinter ? (
+                              <span className="ml-1">❄️</span>
+                            ) : null}
+                            {s.isUniqueForUser ? (
+                              <span className="ml-0.5">✨</span>
+                            ) : null}
                           </div>
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
-                          <Calendar className="h-3 w-3" />
-                          {formatDateTime(s.date)}
-                          {s.isWinter ? <span className="ml-1">❄️</span> : null}
-                          {s.isUniqueForUser ? (
-                            <span className="ml-0.5">✨</span>
-                          ) : null}
-                        </div>
+                        </button>
                         {s.note ? (
                           <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
                             {s.note}

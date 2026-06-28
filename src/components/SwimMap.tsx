@@ -87,6 +87,13 @@ const PIN_TOTAL = PIN_SIZE + PIN_TAIL;
 /** An achievement-rank ring applied to the current user's own pins. */
 export type PinRing = { id: string; ring: string; glow: string };
 
+/** The slice of leaflet.markercluster we use (its types aren't loaded here,
+ *  since we only import the CSS). zoomToShowLayer reveals a marker that may be
+ *  hidden inside a cluster, then runs the callback. */
+type ClusterGroup = {
+  zoomToShowLayer?: (layer: L.Marker, callback: () => void) => void;
+};
+
 // Cache pins keyed by "<temp-or-plain>|<rankId>" so we don't rebuild an
 // icon for every marker on every render.
 const pinIconCache = new Map<string, L.DivIcon>();
@@ -235,6 +242,10 @@ export type SwimMapProps = {
   /** Stable key used to persist pan/zoom across unmounts (e.g. tab navigation).
    *  Maps with the same key share saved view state. Defaults to "default". */
   viewKey?: string;
+  /** Pan/zoom to this place and open its popup when it changes. Pair with
+   *  `focusToken` to re-trigger for the same place id. */
+  focusPlaceId?: string | null;
+  focusToken?: number;
 };
 
 const userLocationIcon = L.divIcon({
@@ -284,6 +295,8 @@ export default function SwimMap({
   mapRef: externalMapRef,
   viewKey = "default",
   topRightActions,
+  focusPlaceId,
+  focusToken,
 }: SwimMapProps) {
   const t = useT();
   const [satellite, setSatellite] = useState(false);
@@ -297,6 +310,17 @@ export default function SwimMap({
   }, [places, userLocation]);
   const fallbackZoom = userLocation && places.length === 0 ? 12 : zoom;
   const mapRef = useRef<L.Map | null>(null);
+  // Leaflet marker + cluster instances, so a focus request can reveal and
+  // open a specific place's popup (even when it's hidden inside a cluster).
+  const markerRefs = useRef(new Map<string, L.Marker>());
+  const clusterRef = useRef<ClusterGroup | null>(null);
+  const focusTarget = useMemo(() => {
+    if (!focusPlaceId) return null;
+    const p = places.find((pl) => pl.id === focusPlaceId);
+    return p
+      ? { lat: p.lat, lng: p.lng, id: p.id, token: focusToken ?? 0 }
+      : null;
+  }, [focusPlaceId, focusToken, places]);
   const saved = savedViews.get(viewKey);
 
   // Position → fresh temperature, so a cluster can average the temps of
@@ -385,6 +409,11 @@ export default function SwimMap({
           fitBoundsToPlaces={fitBoundsToPlaces}
         />
         {keepCenteredOn ? <KeepCentered target={keepCenteredOn} /> : null}
+        <FocusPlace
+          target={focusTarget}
+          markerRefs={markerRefs}
+          clusterRef={clusterRef}
+        />
         {userLocation ? (
           <Marker
             position={[userLocation.lat, userLocation.lng]}
@@ -392,6 +421,9 @@ export default function SwimMap({
           />
         ) : null}
         <MarkerClusterGroup
+          ref={(c: unknown) => {
+            clusterRef.current = (c as ClusterGroup | null) ?? null;
+          }}
           chunkedLoading
           maxClusterRadius={50}
           showCoverageOnHover={false}
@@ -411,11 +443,20 @@ export default function SwimMap({
               return (
                 <Marker
                   key={p.id}
+                  ref={(m) => {
+                    if (m) markerRefs.current.set(p.id, m);
+                    else markerRefs.current.delete(p.id);
+                  }}
                   position={[p.lat, p.lng]}
-                  icon={pinIcon(
-                    hasFreshTemp(p) ? p.waterTemp : null,
-                    pinRingFor(p.lastSwimBorder),
-                  )}
+                  icon={
+                    p.id === focusPlaceId
+                      ? activePlaceIcon
+                      : pinIcon(
+                          hasFreshTemp(p) ? p.waterTemp : null,
+                          pinRingFor(p.lastSwimBorder),
+                        )
+                  }
+                  zIndexOffset={p.id === focusPlaceId ? 1000 : 0}
                   eventHandlers={{
                     mouseover: () => maybeRefreshPlaceTemp(p),
                     click: () => {
@@ -516,6 +557,10 @@ export default function SwimMap({
                 return (
                   <Marker
                     key={`active-${p.id}`}
+                    ref={(m) => {
+                      if (m) markerRefs.current.set(p.id, m);
+                      else markerRefs.current.delete(p.id);
+                    }}
                     position={[p.lat, p.lng]}
                     icon={activePlaceIcon}
                     eventHandlers={{
@@ -659,6 +704,50 @@ function MapActionButton({ action }: { action: MapAction }) {
       {action.label}
     </button>
   );
+}
+
+/**
+ * Reveals one place when `target` changes: reveals it out of any cluster and
+ * opens its popup (via the cluster group's zoomToShowLayer), falling back to a
+ * flyTo + openPopup. A short delay lets chunk-loaded markers register first.
+ */
+function FocusPlace({
+  target,
+  markerRefs,
+  clusterRef,
+}: {
+  target: { lat: number; lng: number; id: string; token: number } | null;
+  markerRefs: RefObject<Map<string, L.Marker>>;
+  clusterRef: RefObject<ClusterGroup | null>;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    if (!target) return;
+    let moveHandler: (() => void) | null = null;
+    const timer = window.setTimeout(() => {
+      const marker = markerRefs.current.get(target.id);
+      const cluster = clusterRef.current;
+      const openIt = () => marker?.openPopup();
+      if (marker && cluster && typeof cluster.zoomToShowLayer === "function") {
+        cluster.zoomToShowLayer(marker, openIt);
+        return;
+      }
+      // Fallback: fly in, then open the popup once the map settles.
+      map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), 14), {
+        animate: true,
+      });
+      moveHandler = () => {
+        if (moveHandler) map.off("moveend", moveHandler);
+        openIt();
+      };
+      map.on("moveend", moveHandler);
+    }, 150);
+    return () => {
+      window.clearTimeout(timer);
+      if (moveHandler) map.off("moveend", moveHandler);
+    };
+  }, [map, target, markerRefs, clusterRef]);
+  return null;
 }
 
 function KeepCentered({ target }: { target: { lat: number; lng: number } }) {
