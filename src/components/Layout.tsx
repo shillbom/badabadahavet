@@ -6,10 +6,18 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Map as MapIcon, Trophy, Plus, ListChecks, LogIn } from "lucide-react";
+import {
+  Map as MapIcon,
+  Trophy,
+  Plus,
+  ListChecks,
+  LogIn,
+  Sparkles,
+} from "lucide-react";
 import { Suspense } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
+import { useWhileAwayLauncher } from "@/components/WhileAwayPopup";
 import { cn, rememberReturnPath } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
@@ -19,6 +27,7 @@ export default function Layout() {
   const location = useLocation();
   const t = useT();
 
+  const openWhileAway = useWhileAwayLauncher((s) => s.open);
   const groupCount = useStore((s) => s.groups.length);
   const groupSubtitle =
     groupCount === 0
@@ -113,7 +122,14 @@ export default function Layout() {
               {t("layout.sign_in")}
             </Link>
           ) : (
-            <div className="w-8" aria-hidden />
+            <button
+              onClick={openWhileAway}
+              aria-label={t("whileaway.open")}
+              title={t("whileaway.open")}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-wave-600 shadow-sm ring-1 ring-wave-200/70 hover:bg-white hover:text-wave-700"
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
           )}
         </div>
       </header>

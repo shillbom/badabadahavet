@@ -20,6 +20,7 @@ import {
   finalizeGoogleProfile,
   recordAchievements,
   setupUserDoc,
+  touchLastSeen,
   watchAllSessions,
   watchPlaces,
   watchUserGroups,
@@ -89,6 +90,15 @@ type State = {
   // ── Auth state ────────────────────────────────────────────────────────
   googleOnboarding: boolean;
 
+  // ── "While you were away" ─────────────────────────────────────────────
+  /** The user's *previous* visit timestamp, captured at login before we
+   *  re-stamp lastSeenAt. null = first ever visit (nothing to look back on).
+   *  Drives the welcome-back digest in components/WhileAwayPopup. */
+  lastSeenBaseline: number | null;
+  /** True once lastSeenBaseline has been resolved for the current login, so
+   *  the digest doesn't compute against the stale initial null. */
+  lastSeenResolved: boolean;
+
   // ── Auth actions ──────────────────────────────────────────────────────
   login: (email: string, password: string) => Promise<void>;
   signup: (
@@ -132,6 +142,8 @@ export const useStore = create<State>((set, get) => ({
   unlockedAchievements: new Set(),
   myPlaceIds: new Set(),
   googleOnboarding: false,
+  lastSeenBaseline: null,
+  lastSeenResolved: false,
 
   // ── Auth actions ──────────────────────────────────────────────────────
   login: async (email, password) => {
@@ -338,12 +350,14 @@ export const useStore = create<State>((set, get) => ({
           googleOnboarding: false,
           mySessions: [],
           groups: [],
+          lastSeenBaseline: null,
+          lastSeenResolved: false,
           ...derive("", [], get().allSessions, get().places),
         });
         return;
       }
 
-      set({ user: u, myUid: u.uid });
+      set({ user: u, myUid: u.uid, lastSeenResolved: false });
 
       try {
         // If signup is still writing the user doc, wait for it to finish
@@ -351,6 +365,18 @@ export const useStore = create<State>((set, get) => ({
         if (signupDone) await signupDone;
 
         const profile = await ensureUserDoc(u.uid, u.displayName ?? "Swimmer");
+
+        // Capture the previous visit *before* re-stamping it, then stamp
+        // "now" so the next login can diff against this visit. The digest in
+        // WhileAwayPopup reads lastSeenBaseline; the live user-doc snapshot
+        // below will carry the freshly-written value, which is fine — the
+        // baseline is held separately in memory.
+        set({
+          lastSeenBaseline:
+            typeof profile.lastSeenAt === "number" ? profile.lastSeenAt : null,
+          lastSeenResolved: true,
+        });
+        void touchLastSeen(u.uid, Date.now());
 
         // A Google user with no homeCountry needs to complete onboarding.
         const isGoogleUser = u.providerData.some(
