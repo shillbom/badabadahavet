@@ -418,15 +418,19 @@ function derive(
 ) {
   const myStats = computeMyStats(mySessions);
 
+  // Everyone's swims this season grouped by place — drives the map pin popups
+  // (count + photos), so a spot shows all of the season's activity, not just
+  // the current user's. Built from allSessions (the year-scoped feed).
   const sessionsByPlace = new Map<string, SessionDoc[]>();
-  for (const s of mySessions) {
+  for (const s of allSessions) {
     const arr = sessionsByPlace.get(s.placeId) ?? [];
     arr.push(s);
     sessionsByPlace.set(s.placeId, arr);
   }
 
-  const myPlaces = places.filter((p) => sessionsByPlace.has(p.id));
-  const myPlaceIds = new Set(sessionsByPlace.keys());
+  // "My places" stays scoped to the current user's own swims.
+  const myPlaceIds = new Set(mySessions.map((s) => s.placeId));
+  const myPlaces = places.filter((p) => myPlaceIds.has(p.id));
   const achievementCtx: AchievementContext = { uid, mySessions, allSessions };
   const unlockedAchievements = evaluateAchievements(achievementCtx);
 
