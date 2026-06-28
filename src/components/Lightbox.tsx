@@ -36,7 +36,7 @@ export default function Lightbox({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/85 p-4"
+          className="fixed inset-0 z-[3500] flex items-center justify-center bg-black/85 p-4"
         >
           <button
             onClick={onClose}
