@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { AnimatePresence, motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
-import { MapPin, X } from "lucide-react";
+import { Waves, X } from "lucide-react";
 import SwimPhoto from "@/components/SwimPhoto";
+import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import { useStore } from "@/store/sessions";
+import { fetchUsers, watchMemberSessions } from "@/lib/data";
 import { useT } from "@/lib/i18n";
 import {
   computeWhileAwayDigest,
@@ -13,7 +14,11 @@ import {
   type AwayItem,
   type WhileAwayDigest,
 } from "@/lib/digest";
-import type { SessionDoc } from "@/lib/types";
+import type { SessionDoc, UserDoc } from "@/lib/types";
+
+// The friend's-swims sheet must stack above the popup (z-2500); its backdrop
+// sits here and the sheet at +100. The Lightbox (z-3500) stays above both.
+const MEMBER_SHEET_Z = 2600;
 
 // Give the session/group snapshots a beat to stream in after login before we
 // look back. The digest only computes once per login regardless.
@@ -35,8 +40,9 @@ export const useWhileAwayLauncher = create<{
 /**
  * "While you were away" — a welcome-back digest of new swims and reactions
  * since the user's previous visit. Shown once per login as a dismissible
- * card. Every row links straight to the swim on the map, and swims with a
- * photo open full-screen on tap, so it's a fast jump-off into the action.
+ * card. Tapping a row opens that swimmer's swims (map / list switcher)
+ * layered over the popup — without navigating away — and photos open
+ * full-screen on top of everything. Closing the sheet returns to the digest.
  */
 type View = { digest: WhileAwayDigest; manual: boolean };
 
@@ -44,16 +50,31 @@ export default function WhileAwayPopup() {
   const myUid = useStore((s) => s.myUid);
   const lastSeenResolved = useStore((s) => s.lastSeenResolved);
   const launchRequests = useWhileAwayLauncher((s) => s.requests);
+  const places = useStore((s) => s.places);
   const [view, setView] = useState<View | null>(null);
+  // The swimmer whose swims are open over the popup (map / list switcher).
+  const [member, setMember] = useState<UserDoc | null>(null);
+  const [memberSessions, setMemberSessions] = useState<SessionDoc[]>([]);
   const processed = useRef<Set<string>>(new Set());
-  const navigate = useNavigate();
   const t = useT();
 
-  // Drop the popup (and let it recompute on next login) whenever the user
+  // Drop everything (and let it recompute on next login) whenever the user
   // signs out or switches account.
   useEffect(() => {
-    if (!myUid) setView(null);
+    if (!myUid) {
+      setView(null);
+      setMember(null);
+    }
   }, [myUid]);
+
+  // Stream the selected swimmer's full (all-time) swims for the sheet.
+  useEffect(() => {
+    if (!member) {
+      setMemberSessions([]);
+      return;
+    }
+    return watchMemberSessions([member.uid], setMemberSessions);
+  }, [member]);
 
   // Auto digest: once per login, a short beat after the data settles.
   useEffect(() => {
@@ -108,57 +129,91 @@ export default function WhileAwayPopup() {
   const digest = view?.digest ?? null;
   const manual = view?.manual ?? false;
 
-  function openSwim(session: SessionDoc) {
-    dismiss();
-    navigate(`/spot/${session.placeId}?session=${session.id}`);
+  // Open a swimmer's swims over the popup (without leaving it). For a swim
+  // item that's the friend; for a reaction on your own swim, that's you.
+  function openItem(item: AwayItem) {
+    const uid = item.kind === "swims" ? item.uid : myUid;
+    const name = item.kind === "swims" ? item.name : "";
+    if (!uid) return;
+    const me = useStore.getState().profile;
+    if (item.kind === "reactions" && me) {
+      setMember(me);
+      return;
+    }
+    // Show immediately with a minimal profile, then enrich with the real
+    // user doc (for the avatar emoji) once it loads.
+    setMember({ uid, displayName: name, createdAt: 0 });
+    void fetchUsers([uid]).then(([u]) => {
+      if (u) setMember((prev) => (prev && prev.uid === uid ? u : prev));
+    });
   }
 
   return (
-    <AnimatePresence>
-      {digest ? (
-        <motion.div
-          key="while-away"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={dismiss}
-          className="fixed inset-0 z-[2500] flex items-end justify-center bg-black/30 backdrop-blur-[2px] sm:items-center"
-        >
+    <>
+      <AnimatePresence>
+        {digest ? (
           <motion.div
-            initial={{ y: 40, opacity: 0, scale: 0.98 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 40, opacity: 0, scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 300, damping: 26 }}
-            onClick={(e) => e.stopPropagation()}
-            className="mx-3 mb-3 flex max-h-[80dvh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5 sm:mb-0"
+            key="while-away"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={dismiss}
+            className="fixed inset-0 z-[2500] flex items-end justify-center bg-black/30 backdrop-blur-[2px] sm:items-center"
           >
-            <Header digest={digest} manual={manual} onClose={dismiss} />
-            {digest.items.length === 0 ? (
-              <div className="flex-1 px-6 py-10 text-center">
-                <div className="text-4xl">🌊</div>
-                <p className="mt-3 text-sm text-slate-500">
-                  {t("whileaway.empty.body")}
-                </p>
+            <motion.div
+              initial={{ y: 40, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 40, opacity: 0, scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 300, damping: 26 }}
+              onClick={(e) => e.stopPropagation()}
+              className="mx-3 mb-3 flex max-h-[80dvh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl ring-1 ring-black/5 sm:mb-0"
+            >
+              <Header digest={digest} manual={manual} onClose={dismiss} />
+              {digest.items.length === 0 ? (
+                <div className="flex-1 px-6 py-10 text-center">
+                  <div className="text-4xl">🌊</div>
+                  <p className="mt-3 text-sm text-slate-500">
+                    {t("whileaway.empty.body")}
+                  </p>
+                </div>
+              ) : (
+                <ul className="flex-1 divide-y divide-slate-100 overflow-y-auto">
+                  {digest.items.map((item) => (
+                    <DigestRow
+                      key={rowKey(item)}
+                      item={item}
+                      onOpen={openItem}
+                    />
+                  ))}
+                </ul>
+              )}
+              <div className="border-t border-slate-100 p-3">
+                <button
+                  onClick={dismiss}
+                  className="w-full rounded-full bg-wave-600 py-2.5 text-sm font-semibold text-white shadow hover:bg-wave-700"
+                >
+                  {t("whileaway.dismiss")}
+                </button>
               </div>
-            ) : (
-              <ul className="flex-1 divide-y divide-slate-100 overflow-y-auto">
-                {digest.items.map((item) => (
-                  <DigestRow key={rowKey(item)} item={item} onOpen={openSwim} />
-                ))}
-              </ul>
-            )}
-            <div className="border-t border-slate-100 p-3">
-              <button
-                onClick={dismiss}
-                className="w-full rounded-full bg-wave-600 py-2.5 text-sm font-semibold text-white shadow hover:bg-wave-700"
-              >
-                {t("whileaway.dismiss")}
-              </button>
-            </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+        ) : null}
+      </AnimatePresence>
+
+      {/* A friend's (or your own) swims, layered above the popup. Closing it
+          returns to the still-open digest. */}
+      <AnimatePresence>
+        {member ? (
+          <MemberSwimsSheet
+            member={member}
+            sessions={memberSessions}
+            places={places}
+            zBase={MEMBER_SHEET_Z}
+            onClose={() => setMember(null)}
+          />
+        ) : null}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -216,7 +271,7 @@ function DigestRow({
   onOpen,
 }: {
   item: AwayItem;
-  onOpen: (session: SessionDoc) => void;
+  onOpen: (item: AwayItem) => void;
 }) {
   const t = useT();
   const session = item.kind === "swims" ? item.latest : item.session;
@@ -253,9 +308,9 @@ function DigestRow({
         )}
       </div>
 
-      {/* Text + the "view on map" jump-off (the whole block is tappable). */}
+      {/* Text + the "view swims" jump-off (the whole block is tappable). */}
       <button
-        onClick={() => onOpen(session)}
+        onClick={() => onOpen(item)}
         className="flex min-w-0 flex-1 flex-col items-start text-left"
       >
         <span className="w-full truncate text-sm font-semibold text-wave-900">
@@ -274,8 +329,8 @@ function DigestRow({
           ) : null}
         </div>
         <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-wave-600">
-          <MapPin className="h-3 w-3" />
-          {t("whileaway.view_map")}
+          <Waves className="h-3 w-3" />
+          {t("whileaway.view_swims")}
         </span>
       </button>
     </li>

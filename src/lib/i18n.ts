@@ -631,7 +631,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "whileaway.reactions_one": "1 ny reaktion på ditt bad",
     "whileaway.reactions_many": "{n} nya reaktioner på ditt bad",
     "whileaway.at": "vid {place}",
-    "whileaway.view_map": "Visa på kartan",
+    "whileaway.view_swims": "Visa bad",
     "whileaway.dismiss": "Okej!",
     "whileaway.empty.body":
       "Inget nytt den senaste månaden — dags att skapa liv i vattnet! 💦",
@@ -1160,7 +1160,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "whileaway.reactions_one": "1 new reaction on your swim",
     "whileaway.reactions_many": "{n} new reactions on your swim",
     "whileaway.at": "at {place}",
-    "whileaway.view_map": "View on map",
+    "whileaway.view_swims": "View swims",
     "whileaway.dismiss": "Got it!",
     "whileaway.empty.body":
       "Nothing new in the last month — time to make some waves! 💦",
