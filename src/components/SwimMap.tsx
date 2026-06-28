@@ -84,6 +84,46 @@ const PIN_SIZE = 28;
 const PIN_TAIL = 12;
 const PIN_TOTAL = PIN_SIZE + PIN_TAIL;
 
+// ── Recency tint ──────────────────────────────────────────────────────────
+// A place's pin fades from full blue (swum within the last week) toward grey
+// (no swim for ~two months, or never), so the map reads activity at a glance.
+// The white temperature label stays legible across the whole range.
+const FRESH_MS = 7 * 24 * 60 * 60 * 1000; // ≤ 1 week → full colour
+const STALE_MS = 60 * 24 * 60 * 60 * 1000; // ≥ ~2 months → fully grey
+
+/** 1 = swum recently (full colour) … 0 = long stale / never swum (grey). */
+function recencyFactor(lastSwimAt?: number): number {
+  if (!lastSwimAt) return 0;
+  const age = Date.now() - lastSwimAt;
+  if (age <= FRESH_MS) return 1;
+  if (age >= STALE_MS) return 0;
+  return 1 - (age - FRESH_MS) / (STALE_MS - FRESH_MS);
+}
+
+type RGB = [number, number, number];
+const GREY_TOP: RGB = [0x6b, 0x72, 0x80]; // grey-500
+const GREY_BOTTOM: RGB = [0x37, 0x41, 0x51]; // grey-700
+const BLUE_TEMP_TOP: RGB = [0x02, 0x84, 0xc7];
+const BLUE_TEMP_BOTTOM: RGB = [0x07, 0x59, 0x85];
+const BLUE_PLAIN_TOP: RGB = [0x01, 0x9e, 0xea];
+const BLUE_PLAIN_BOTTOM: RGB = [0x06, 0x56, 0x84];
+
+/** Channel-wise blend from grey `a` to blue `b` at freshness `t` (0..1). */
+function mix(a: RGB, b: RGB, t: number): string {
+  const c = (i: number) => Math.round(a[i] + (b[i] - a[i]) * t);
+  return `rgb(${c(0)},${c(1)},${c(2)})`;
+}
+
+/** Pin/cluster gradient + tail colour for a given freshness (0..1). */
+function recencyColours(hasTemp: boolean, factor: number) {
+  const top = hasTemp ? BLUE_TEMP_TOP : BLUE_PLAIN_TOP;
+  const bottom = hasTemp ? BLUE_TEMP_BOTTOM : BLUE_PLAIN_BOTTOM;
+  return {
+    bg: `linear-gradient(135deg,${mix(GREY_TOP, top, factor)},${mix(GREY_BOTTOM, bottom, factor)})`,
+    tail: mix(GREY_BOTTOM, bottom, factor),
+  };
+}
+
 /** An achievement-rank ring applied to the current user's own pins. */
 export type PinRing = { id: string; ring: string; glow: string };
 
@@ -98,11 +138,19 @@ type ClusterGroup = {
 // icon for every marker on every render.
 const pinIconCache = new Map<string, L.DivIcon>();
 
-function pinIcon(temp: number | null, ring: PinRing | null): L.DivIcon {
-  const key = `${temp != null ? Math.round(temp) : "plain"}|${ring?.id ?? "none"}`;
+function pinIcon(
+  temp: number | null,
+  ring: PinRing | null,
+  factor = 1,
+): L.DivIcon {
+  // Bucket freshness into 9 steps so the icon cache stays bounded (and pins
+  // don't churn an icon for every millisecond of age).
+  const bucket = Math.round(factor * 8);
+  const key = `${temp != null ? Math.round(temp) : "plain"}|${ring?.id ?? "none"}|${bucket}`;
   const cached = pinIconCache.get(key);
   if (cached) return cached;
   const hasTemp = temp != null;
+  const { bg, tail } = recencyColours(hasTemp, bucket / 8);
   const icon = L.divIcon({
     className: hasTemp ? "swim-pin-temp" : "swim-pin",
     iconSize: [PIN_SIZE, PIN_TOTAL],
@@ -110,10 +158,8 @@ function pinIcon(temp: number | null, ring: PinRing | null): L.DivIcon {
     popupAnchor: [0, -PIN_SIZE],
     html: pinHtml({
       size: PIN_SIZE,
-      bg: hasTemp
-        ? "linear-gradient(135deg,#0284c7,#075985)"
-        : "linear-gradient(135deg,#019eea,#065684)",
-      tail: hasTemp ? "#075985" : "#065684",
+      bg,
+      tail,
       shadow: "rgba(2,100,160,0.45)",
       border: 2,
       ring,
@@ -134,8 +180,15 @@ function clusterPosKey(lat: number, lng: number): string {
 }
 
 // Cluster badge: child count, plus the average of any fresh temps below it.
-function clusterIconHtml(count: number, avgTemp: number | null): string {
+// `factor` is the freshness of the most-recently-swum child, so a cluster
+// greys out only once *all* its places are stale.
+function clusterIconHtml(
+  count: number,
+  avgTemp: number | null,
+  factor: number,
+): string {
   const size = 40;
+  const { bg } = recencyColours(false, factor);
   const tempPill =
     avgTemp != null
       ? `<div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);
@@ -146,7 +199,7 @@ function clusterIconHtml(count: number, avgTemp: number | null): string {
   return `<div style="position:relative;width:${size}px;height:${size}px;">
     <div style="width:${size}px;height:${size}px;border-radius:50%;
       display:flex;align-items:center;justify-content:center;
-      background:linear-gradient(135deg,#019eea,#065684);color:white;
+      background:${bg};color:white;
       font-weight:700;font-size:13px;border:2px solid white;
       box-shadow:0 3px 8px rgba(2,100,160,0.45);">${count}</div>
     ${tempPill}
@@ -336,24 +389,46 @@ export default function SwimMap({
   const tempByPosRef = useRef(tempByPos);
   tempByPosRef.current = tempByPos;
 
+  // Position → last-swim timestamp, so a cluster can tint itself by the
+  // most-recently-swum place beneath it (same ref trick as temps).
+  const lastSwimByPos = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of places) {
+      if (typeof p.lastSwimAt === "number")
+        m.set(clusterPosKey(p.lat, p.lng), p.lastSwimAt);
+    }
+    return m;
+  }, [places]);
+  const lastSwimByPosRef = useRef(lastSwimByPos);
+  lastSwimByPosRef.current = lastSwimByPos;
+
   const createClusterIcon = useCallback(
     (cluster: {
       getAllChildMarkers: () => L.Marker[];
       getChildCount: () => number;
     }) => {
       const lookup = tempByPosRef.current;
+      const swimLookup = lastSwimByPosRef.current;
       let sum = 0;
       let n = 0;
+      let latestSwim = 0;
       for (const m of cluster.getAllChildMarkers()) {
         const ll = m.getLatLng();
-        const temp = lookup.get(clusterPosKey(ll.lat, ll.lng));
+        const posKey = clusterPosKey(ll.lat, ll.lng);
+        const temp = lookup.get(posKey);
         if (typeof temp === "number") {
           sum += temp;
           n++;
         }
+        const swim = swimLookup.get(posKey);
+        if (typeof swim === "number" && swim > latestSwim) latestSwim = swim;
       }
       return L.divIcon({
-        html: clusterIconHtml(cluster.getChildCount(), n ? sum / n : null),
+        html: clusterIconHtml(
+          cluster.getChildCount(),
+          n ? sum / n : null,
+          recencyFactor(latestSwim || undefined),
+        ),
         className: "swim-cluster",
         iconSize: [40, 40],
         iconAnchor: [20, 20],
@@ -454,6 +529,7 @@ export default function SwimMap({
                       : pinIcon(
                           hasFreshTemp(p) ? p.waterTemp : null,
                           pinRingFor(p.lastSwimBorder),
+                          recencyFactor(p.lastSwimAt),
                         )
                   }
                   zIndexOffset={p.id === focusPlaceId ? 1000 : 0}
