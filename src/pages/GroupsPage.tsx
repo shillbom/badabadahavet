@@ -36,7 +36,7 @@ import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { cn, formatDateTime } from "@/lib/utils";
 import SwimMap from "@/components/SwimMap";
-import Photo from "@/components/Photo";
+import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
 
 const DAY_MS = 86_400_000;
@@ -1143,9 +1143,8 @@ function MemberMapSheet({
                       className="glass flex items-start gap-3 p-3"
                     >
                       {s.photoUrl ? (
-                        <Photo
-                          src={s.photoUrl}
-                          thumb={s.photoThumb}
+                        <SwimPhoto
+                          session={s}
                           className="h-14 w-14 flex-none rounded-lg"
                         />
                       ) : (

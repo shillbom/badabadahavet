@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { REACTION_EMOJIS, toggleReaction } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 
 /**
  * Emoji reaction bar for a single swim. Shows the emojis that already have
- * reactors (with counts) and, for signed-in users, a "+" picker to add one.
- * Reactions live on the session doc (`reactions: Record<emoji, uid[]>`) and
- * update via the same Firestore snapshot the list/map is rendered from, so
- * counts reflect immediately. Used on the Spot page and the friends' swim list.
+ * reactors (with counts) and, for signed-in users, a "+" that expands an
+ * inline emoji picker. The picker expands in normal flow (rather than as an
+ * absolute popover) so it's never clipped inside a scrolling container like
+ * the friends'-swims sheet. Reactions live on the session doc
+ * (`reactions: Record<emoji, uid[]>`) and update via the same Firestore
+ * snapshot the list/map renders from, so counts reflect immediately.
  */
 export default function ReactionBar({
   session,
@@ -20,13 +22,13 @@ export default function ReactionBar({
 }) {
   const [showPicker, setShowPicker] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
   const t = useT();
 
   useEffect(() => {
     if (!showPicker) return;
     function onOutside(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node))
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node))
         setShowPicker(false);
     }
     document.addEventListener("mousedown", onOutside);
@@ -50,7 +52,7 @@ export default function ReactionBar({
   }
 
   return (
-    <div className="relative mt-1.5 flex flex-wrap items-center gap-1">
+    <div className="mt-1.5 flex flex-wrap items-center gap-1">
       {activeEmojis.map((emoji) => {
         const reactors = reactions[emoji] ?? [];
         const mine = !!myUid && reactors.includes(myUid);
@@ -75,43 +77,41 @@ export default function ReactionBar({
       })}
 
       {myUid ? (
-        <div className="relative" ref={pickerRef}>
-          <button
-            onClick={() => setShowPicker((v) => !v)}
-            aria-label={t("reactions.add")}
-            className="flex h-6 w-6 items-center justify-center rounded-full bg-white/70 text-sm ring-1 ring-slate-200 hover:bg-slate-50"
-          >
-            +
-          </button>
-          <AnimatePresence>
-            {showPicker ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 4 }}
-                transition={{ duration: 0.12 }}
-                className="absolute right-0 bottom-full z-10 mb-1 flex gap-1 rounded-2xl bg-white p-1.5 shadow-lg ring-1 ring-slate-100"
-              >
-                {REACTION_EMOJIS.map((emoji) => {
-                  const mine =
-                    !!myUid && (reactions[emoji] ?? []).includes(myUid);
-                  return (
-                    <button
-                      key={emoji}
-                      onClick={() => onToggle(emoji)}
-                      aria-label={emoji}
-                      aria-pressed={mine}
-                      className={`flex h-8 w-8 items-center justify-center rounded-xl text-lg transition-colors ${
-                        mine ? "bg-wave-100" : "hover:bg-slate-100"
-                      }`}
-                    >
-                      {emoji}
-                    </button>
-                  );
-                })}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+        <div ref={wrapRef} className="flex items-center">
+          {showPicker ? (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.12 }}
+              className="inline-flex items-center gap-0.5 rounded-full bg-white p-0.5 shadow-sm ring-1 ring-slate-200"
+            >
+              {REACTION_EMOJIS.map((emoji) => {
+                const mine =
+                  !!myUid && (reactions[emoji] ?? []).includes(myUid);
+                return (
+                  <button
+                    key={emoji}
+                    onClick={() => onToggle(emoji)}
+                    aria-label={emoji}
+                    aria-pressed={mine}
+                    className={`flex h-7 w-7 items-center justify-center rounded-full text-lg transition-colors ${
+                      mine ? "bg-wave-100" : "hover:bg-slate-100"
+                    }`}
+                  >
+                    {emoji}
+                  </button>
+                );
+              })}
+            </motion.div>
+          ) : (
+            <button
+              onClick={() => setShowPicker(true)}
+              aria-label={t("reactions.add")}
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-white/70 text-sm ring-1 ring-slate-200 hover:bg-slate-50"
+            >
+              +
+            </button>
+          )}
         </div>
       ) : null}
     </div>
