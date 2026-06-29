@@ -127,13 +127,6 @@ function recencyColours(hasTemp: boolean, factor: number) {
 /** An achievement-rank ring applied to the current user's own pins. */
 export type PinRing = { id: string; ring: string; glow: string };
 
-/** The slice of leaflet.markercluster we use (its types aren't loaded here,
- *  since we only import the CSS). zoomToShowLayer reveals a marker that may be
- *  hidden inside a cluster, then runs the callback. */
-type ClusterGroup = {
-  zoomToShowLayer?: (layer: L.Marker, callback: () => void) => void;
-};
-
 // Cache pins keyed by "<temp-or-plain>|<rankId>" so we don't rebuild an
 // icon for every marker on every render.
 const pinIconCache = new Map<string, L.DivIcon>();
@@ -363,10 +356,10 @@ export default function SwimMap({
   }, [places, userLocation]);
   const fallbackZoom = userLocation && places.length === 0 ? 12 : zoom;
   const mapRef = useRef<L.Map | null>(null);
-  // Leaflet marker + cluster instances, so a focus request can reveal and
-  // open a specific place's popup (even when it's hidden inside a cluster).
+  // Leaflet marker instances, so a focus request can pan to a place and open
+  // its popup. (Focused places render outside the cluster, so no cluster
+  // reveal is needed.)
   const markerRefs = useRef(new Map<string, L.Marker>());
-  const clusterRef = useRef<ClusterGroup | null>(null);
   const focusTarget = useMemo(() => {
     if (!focusPlaceId) return null;
     const p = places.find((pl) => pl.id === focusPlaceId);
@@ -437,6 +430,17 @@ export default function SwimMap({
     [],
   );
 
+  // The active (being-picked) and focused places are pulled out of the
+  // cluster group so they're always their own visible pin — never swallowed
+  // by a cluster bubble. And with only a handful of pins we skip clustering
+  // entirely so every place stays individually tappable.
+  const unclusteredIds = new Set(
+    [activePlaceId, focusPlaceId].filter((id): id is string => !!id),
+  );
+  const clusterablePlaces = places.filter((p) => !unclusteredIds.has(p.id));
+  const unclusteredPlaces = places.filter((p) => unclusteredIds.has(p.id));
+  const shouldCluster = clusterablePlaces.length >= 10;
+
   return (
     <div className={cn("relative h-full w-full", className)}>
       <MapContainer
@@ -484,11 +488,7 @@ export default function SwimMap({
           fitBoundsToPlaces={fitBoundsToPlaces}
         />
         {keepCenteredOn ? <KeepCentered target={keepCenteredOn} /> : null}
-        <FocusPlace
-          target={focusTarget}
-          markerRefs={markerRefs}
-          clusterRef={clusterRef}
-        />
+        <FocusPlace target={focusTarget} markerRefs={markerRefs} />
         {userLocation ? (
           <Marker
             position={[userLocation.lat, userLocation.lng]}
@@ -496,234 +496,223 @@ export default function SwimMap({
           />
         ) : null}
         <MarkerClusterGroup
-          ref={(c: unknown) => {
-            clusterRef.current = (c as ClusterGroup | null) ?? null;
-          }}
+          // Remount when clustering toggles on/off — markercluster reads
+          // maxClusterRadius once at creation. 0 disables clustering, which
+          // we use whenever there are fewer than 10 pins to cluster.
+          key={shouldCluster ? "clustered" : "flat"}
           chunkedLoading
-          maxClusterRadius={50}
+          maxClusterRadius={shouldCluster ? 50 : 0}
           showCoverageOnHover={false}
           spiderfyOnMaxZoom
           iconCreateFunction={createClusterIcon}
         >
-          {places
-            .filter((p) => p.id !== activePlaceId)
-            .map((p) => {
-              const sessions = sessionsByPlace.get(p.id) ?? [];
-              const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
-              // When logging a swim, clicking a pickable pin selects it
-              // immediately — no popup button needed.
-              const isPickable =
-                !!onPickExisting && (!canPickExisting || canPickExisting(p));
+          {clusterablePlaces.map((p) => {
+            const sessions = sessionsByPlace.get(p.id) ?? [];
+            const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
+            // When logging a swim, clicking a pickable pin selects it
+            // immediately — no popup button needed.
+            const isPickable =
+              !!onPickExisting && (!canPickExisting || canPickExisting(p));
 
-              return (
-                <Marker
-                  key={p.id}
-                  ref={(m) => {
-                    if (m) markerRefs.current.set(p.id, m);
-                    else markerRefs.current.delete(p.id);
-                  }}
-                  position={[p.lat, p.lng]}
-                  icon={
-                    p.id === focusPlaceId
-                      ? activePlaceIcon
-                      : pinIcon(
-                          hasFreshTemp(p) ? p.waterTemp : null,
-                          pinRingFor(p.lastSwimBorder),
-                          recencyFactor(p.lastSwimAt),
-                        )
-                  }
-                  zIndexOffset={p.id === focusPlaceId ? 1000 : 0}
-                  eventHandlers={{
-                    mouseover: () => maybeRefreshPlaceTemp(p),
-                    click: () => {
-                      maybeRefreshPlaceTemp(p);
-                      if (isPickable) {
-                        mapRef.current?.closePopup();
-                        onPickExisting(p);
-                      }
-                    },
-                  }}
-                >
-                  {hasFreshTemp(p) ? (
-                    <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
-                      <div className="text-[11px]">
-                        <span className="font-semibold text-wave-900">
-                          💧 {p.waterTemp.toFixed(1)} °C
+            return (
+              <Marker
+                key={p.id}
+                ref={(m) => {
+                  if (m) markerRefs.current.set(p.id, m);
+                  else markerRefs.current.delete(p.id);
+                }}
+                position={[p.lat, p.lng]}
+                icon={pinIcon(
+                  hasFreshTemp(p) ? p.waterTemp : null,
+                  pinRingFor(p.lastSwimBorder),
+                  recencyFactor(p.lastSwimAt),
+                )}
+                eventHandlers={{
+                  mouseover: () => maybeRefreshPlaceTemp(p),
+                  click: () => {
+                    maybeRefreshPlaceTemp(p);
+                    if (isPickable) {
+                      mapRef.current?.closePopup();
+                      onPickExisting(p);
+                    }
+                  },
+                }}
+              >
+                {hasFreshTemp(p) ? (
+                  <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
+                    <div className="text-[11px]">
+                      <span className="font-semibold text-wave-900">
+                        💧 {p.waterTemp.toFixed(1)} °C
+                      </span>
+                      {p.waterTempAt ? (
+                        <span className="ml-1 text-slate-500">
+                          · {formatAge(p.waterTempAt, t)}
                         </span>
-                        {p.waterTempAt ? (
-                          <span className="ml-1 text-slate-500">
-                            · {formatAge(p.waterTempAt, t)}
-                          </span>
-                        ) : null}
-                      </div>
-                    </Tooltip>
-                  ) : null}
-                  {/* Only show popup when not in logging mode — clicking a
+                      ) : null}
+                    </div>
+                  </Tooltip>
+                ) : null}
+                {/* Only show popup when not in logging mode — clicking a
                     pin while logging selects it immediately instead. */}
-                  {!isPickable ? (
-                    <Popup>
-                      <div className="text-sm">
-                        <div className="font-semibold text-wave-900">
-                          {p.name}
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          {sessions.length === 1
-                            ? t("map.popup.swims_one")
-                            : sessions.length > 0
-                              ? t("map.popup.swims_many", {
-                                  n: sessions.length,
-                                })
-                              : t("map.popup.no_swims_yet")}
-                        </div>
-                        {hasFreshTemp(p) ? (
-                          <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
-                            💧 {p.waterTemp.toFixed(1)} °C
-                            {p.waterTempAt ? (
-                              <span className="font-normal text-sky-600">
-                                · {formatAge(p.waterTempAt, t)}
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : null}
-                        {photos.length ? (
-                          <div className="mt-1.5 flex gap-1 overflow-x-auto">
-                            {photos.map((s) => (
-                              <Photo
-                                key={s.id}
-                                src={s.photoUrl!}
-                                thumb={s.photoThumb}
-                                className="h-12 w-12 flex-none rounded-md ring-1 ring-slate-200"
-                              />
-                            ))}
-                          </div>
-                        ) : null}
-                        <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
-                          {sessions.slice(0, 5).map((s) => (
-                            <li key={s.id} className="text-[11px]">
-                              {formatDate(s.date)} — {s.displayName}
-                              {s.isWinter ? " ❄️" : ""}
-                            </li>
-                          ))}
-                        </ul>
-                        {linkToSpot ? (
-                          <Link
-                            to={`/spot/${p.id}`}
-                            className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
-                          >
-                            {t("map.popup.view_spot")}
-                          </Link>
-                        ) : null}
+                {!isPickable ? (
+                  <Popup>
+                    <div className="text-sm">
+                      <div className="font-semibold text-wave-900">
+                        {p.name}
                       </div>
-                    </Popup>
-                  ) : null}
-                </Marker>
-              );
-            })}
-        </MarkerClusterGroup>
-        {/* Active place is rendered outside the cluster group so it is never
-            merged into a cluster bubble regardless of zoom level. */}
-        {activePlaceId
-          ? places
-              .filter((p) => p.id === activePlaceId)
-              .map((p) => {
-                const sessions = sessionsByPlace.get(p.id) ?? [];
-                const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
-                const isPickable =
-                  !!onPickExisting && (!canPickExisting || canPickExisting(p));
-                return (
-                  <Marker
-                    key={`active-${p.id}`}
-                    ref={(m) => {
-                      if (m) markerRefs.current.set(p.id, m);
-                      else markerRefs.current.delete(p.id);
-                    }}
-                    position={[p.lat, p.lng]}
-                    icon={activePlaceIcon}
-                    eventHandlers={{
-                      mouseover: () => maybeRefreshPlaceTemp(p),
-                      click: () => {
-                        maybeRefreshPlaceTemp(p);
-                        if (isPickable) {
-                          mapRef.current?.closePopup();
-                          onPickExisting(p);
-                        }
-                      },
-                    }}
-                  >
-                    {hasFreshTemp(p) ? (
-                      <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
-                        <div className="text-[11px]">
-                          <span className="font-semibold text-wave-900">
-                            💧 {p.waterTemp.toFixed(1)} °C
-                          </span>
+                      <div className="text-[11px] text-slate-500">
+                        {sessions.length === 1
+                          ? t("map.popup.swims_one")
+                          : sessions.length > 0
+                            ? t("map.popup.swims_many", {
+                                n: sessions.length,
+                              })
+                            : t("map.popup.no_swims_yet")}
+                      </div>
+                      {hasFreshTemp(p) ? (
+                        <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                          💧 {p.waterTemp.toFixed(1)} °C
                           {p.waterTempAt ? (
-                            <span className="ml-1 text-slate-500">
+                            <span className="font-normal text-sky-600">
                               · {formatAge(p.waterTempAt, t)}
                             </span>
                           ) : null}
                         </div>
-                      </Tooltip>
-                    ) : null}
-                    {!isPickable ? (
-                      <Popup>
-                        <div className="text-sm">
-                          <div className="font-semibold text-wave-900">
-                            {p.name}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            {sessions.length === 1
-                              ? t("map.popup.swims_one")
-                              : sessions.length > 0
-                                ? t("map.popup.swims_many", {
-                                    n: sessions.length,
-                                  })
-                                : t("map.popup.no_swims_yet")}
-                          </div>
-                          {hasFreshTemp(p) ? (
-                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
-                              💧 {p.waterTemp.toFixed(1)} °C
-                              {p.waterTempAt ? (
-                                <span className="font-normal text-sky-600">
-                                  · {formatAge(p.waterTempAt, t)}
-                                </span>
-                              ) : null}
-                            </div>
-                          ) : null}
-                          {photos.length ? (
-                            <div className="mt-1.5 flex gap-1 overflow-x-auto">
-                              {photos.map((s) => (
-                                <Photo
-                                  key={s.id}
-                                  src={s.photoUrl!}
-                                  thumb={s.photoThumb}
-                                  className="h-12 w-12 flex-none rounded-md ring-1 ring-slate-200"
-                                />
-                              ))}
-                            </div>
-                          ) : null}
-                          <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
-                            {sessions.slice(0, 5).map((s) => (
-                              <li key={s.id} className="text-[11px]">
-                                {formatDate(s.date)} — {s.displayName}
-                                {s.isWinter ? " ❄️" : ""}
-                              </li>
-                            ))}
-                          </ul>
-                          {linkToSpot ? (
-                            <Link
-                              to={`/spot/${p.id}`}
-                              className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
-                            >
-                              {t("map.popup.view_spot")}
-                            </Link>
-                          ) : null}
+                      ) : null}
+                      {photos.length ? (
+                        <div className="mt-1.5 flex gap-1 overflow-x-auto">
+                          {photos.map((s) => (
+                            <Photo
+                              key={s.id}
+                              src={s.photoUrl!}
+                              thumb={s.photoThumb}
+                              className="h-12 w-12 flex-none rounded-md ring-1 ring-slate-200"
+                            />
+                          ))}
                         </div>
-                      </Popup>
+                      ) : null}
+                      <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                        {sessions.slice(0, 5).map((s) => (
+                          <li key={s.id} className="text-[11px]">
+                            {formatDate(s.date)} — {s.displayName}
+                            {s.isWinter ? " ❄️" : ""}
+                          </li>
+                        ))}
+                      </ul>
+                      {linkToSpot ? (
+                        <Link
+                          to={`/spot/${p.id}`}
+                          className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
+                        >
+                          {t("map.popup.view_spot")}
+                        </Link>
+                      ) : null}
+                    </div>
+                  </Popup>
+                ) : null}
+              </Marker>
+            );
+          })}
+        </MarkerClusterGroup>
+        {/* The active (picked) and focused places render outside the cluster
+            group with the orange highlight icon, so they're never merged into
+            a cluster bubble regardless of zoom level. */}
+        {unclusteredPlaces.map((p) => {
+          const sessions = sessionsByPlace.get(p.id) ?? [];
+          const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
+          const isPickable =
+            !!onPickExisting && (!canPickExisting || canPickExisting(p));
+          return (
+            <Marker
+              key={`active-${p.id}`}
+              ref={(m) => {
+                if (m) markerRefs.current.set(p.id, m);
+                else markerRefs.current.delete(p.id);
+              }}
+              position={[p.lat, p.lng]}
+              icon={activePlaceIcon}
+              eventHandlers={{
+                mouseover: () => maybeRefreshPlaceTemp(p),
+                click: () => {
+                  maybeRefreshPlaceTemp(p);
+                  if (isPickable) {
+                    mapRef.current?.closePopup();
+                    onPickExisting(p);
+                  }
+                },
+              }}
+            >
+              {hasFreshTemp(p) ? (
+                <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
+                  <div className="text-[11px]">
+                    <span className="font-semibold text-wave-900">
+                      💧 {p.waterTemp.toFixed(1)} °C
+                    </span>
+                    {p.waterTempAt ? (
+                      <span className="ml-1 text-slate-500">
+                        · {formatAge(p.waterTempAt, t)}
+                      </span>
                     ) : null}
-                  </Marker>
-                );
-              })
-          : null}
+                  </div>
+                </Tooltip>
+              ) : null}
+              {!isPickable ? (
+                <Popup>
+                  <div className="text-sm">
+                    <div className="font-semibold text-wave-900">{p.name}</div>
+                    <div className="text-[11px] text-slate-500">
+                      {sessions.length === 1
+                        ? t("map.popup.swims_one")
+                        : sessions.length > 0
+                          ? t("map.popup.swims_many", {
+                              n: sessions.length,
+                            })
+                          : t("map.popup.no_swims_yet")}
+                    </div>
+                    {hasFreshTemp(p) ? (
+                      <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
+                        💧 {p.waterTemp.toFixed(1)} °C
+                        {p.waterTempAt ? (
+                          <span className="font-normal text-sky-600">
+                            · {formatAge(p.waterTempAt, t)}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {photos.length ? (
+                      <div className="mt-1.5 flex gap-1 overflow-x-auto">
+                        {photos.map((s) => (
+                          <Photo
+                            key={s.id}
+                            src={s.photoUrl!}
+                            thumb={s.photoThumb}
+                            className="h-12 w-12 flex-none rounded-md ring-1 ring-slate-200"
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                    <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                      {sessions.slice(0, 5).map((s) => (
+                        <li key={s.id} className="text-[11px]">
+                          {formatDate(s.date)} — {s.displayName}
+                          {s.isWinter ? " ❄️" : ""}
+                        </li>
+                      ))}
+                    </ul>
+                    {linkToSpot ? (
+                      <Link
+                        to={`/spot/${p.id}`}
+                        className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
+                      >
+                        {t("map.popup.view_spot")}
+                      </Link>
+                    ) : null}
+                  </div>
+                </Popup>
+              ) : null}
+            </Marker>
+          );
+        })}
         {pickedAt && !activePlaceId ? (
           <Marker position={[pickedAt.lat, pickedAt.lng]} icon={newSwimIcon} />
         ) : null}
@@ -783,38 +772,28 @@ function MapActionButton({ action }: { action: MapAction }) {
 }
 
 /**
- * Reveals one place when `target` changes: reveals it out of any cluster and
- * opens its popup (via the cluster group's zoomToShowLayer), falling back to a
- * flyTo + openPopup. A short delay lets chunk-loaded markers register first.
+ * Pans to a place when `target` changes and opens its popup. The focused
+ * place always renders outside the cluster group, so it's a plain
+ * flyTo + openPopup; a short delay lets a freshly-mounted marker register.
  */
 function FocusPlace({
   target,
   markerRefs,
-  clusterRef,
 }: {
   target: { lat: number; lng: number; id: string; token: number } | null;
   markerRefs: RefObject<Map<string, L.Marker>>;
-  clusterRef: RefObject<ClusterGroup | null>;
 }) {
   const map = useMap();
   useEffect(() => {
     if (!target) return;
     let moveHandler: (() => void) | null = null;
     const timer = window.setTimeout(() => {
-      const marker = markerRefs.current.get(target.id);
-      const cluster = clusterRef.current;
-      const openIt = () => marker?.openPopup();
-      if (marker && cluster && typeof cluster.zoomToShowLayer === "function") {
-        cluster.zoomToShowLayer(marker, openIt);
-        return;
-      }
-      // Fallback: fly in, then open the popup once the map settles.
-      map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), 14), {
+      map.flyTo([target.lat, target.lng], Math.max(map.getZoom(), 13), {
         animate: true,
       });
       moveHandler = () => {
         if (moveHandler) map.off("moveend", moveHandler);
-        openIt();
+        markerRefs.current.get(target.id)?.openPopup();
       };
       map.on("moveend", moveHandler);
     }, 150);
@@ -822,7 +801,7 @@ function FocusPlace({
       window.clearTimeout(timer);
       if (moveHandler) map.off("moveend", moveHandler);
     };
-  }, [map, target, markerRefs, clusterRef]);
+  }, [map, target, markerRefs]);
   return null;
 }
 
