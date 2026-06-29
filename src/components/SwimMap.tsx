@@ -84,6 +84,13 @@ const PIN_SIZE = 28;
 const PIN_TAIL = 12;
 const PIN_TOTAL = PIN_SIZE + PIN_TAIL;
 
+// Cluster only once at least CLUSTER_ON pins are within the current viewport;
+// stop clustering below CLUSTER_OFF. The gap is hysteresis — panning across a
+// single threshold would otherwise thrash the cluster group, which has to
+// remount to change its radius.
+const CLUSTER_ON = 10;
+const CLUSTER_OFF = 8;
+
 // ── Recency tint ──────────────────────────────────────────────────────────
 // A place's pin fades from full blue (swum within the last week) toward grey
 // (no swim for ~two months, or never), so the map reads activity at a glance.
@@ -346,6 +353,10 @@ export default function SwimMap({
 }: SwimMapProps) {
   const t = useT();
   const [satellite, setSatellite] = useState(false);
+  // How many clusterable pins are currently in the viewport (null until the
+  // first measurement). Drives whether we cluster at all.
+  const [inViewCount, setInViewCount] = useState<number | null>(null);
+  const clusteringRef = useRef(false);
   const baseTheme = MAP_THEMES[0];
   const satelliteTheme = MAP_THEMES.find((t) => t.id === "satellite")!;
   const theme = satellite ? satelliteTheme : baseTheme;
@@ -434,12 +445,35 @@ export default function SwimMap({
   // cluster group so they're always their own visible pin — never swallowed
   // by a cluster bubble. And with only a handful of pins we skip clustering
   // entirely so every place stays individually tappable.
-  const unclusteredIds = new Set(
-    [activePlaceId, focusPlaceId].filter((id): id is string => !!id),
+  const unclusteredIds = useMemo(
+    () =>
+      new Set([activePlaceId, focusPlaceId].filter((id): id is string => !!id)),
+    [activePlaceId, focusPlaceId],
   );
-  const clusterablePlaces = places.filter((p) => !unclusteredIds.has(p.id));
-  const unclusteredPlaces = places.filter((p) => unclusteredIds.has(p.id));
-  const shouldCluster = clusterablePlaces.length >= 10;
+  const clusterablePlaces = useMemo(
+    () => places.filter((p) => !unclusteredIds.has(p.id)),
+    [places, unclusteredIds],
+  );
+  const unclusteredPlaces = useMemo(
+    () => places.filter((p) => unclusteredIds.has(p.id)),
+    [places, unclusteredIds],
+  );
+
+  // Cluster based on how many pins are actually in view. Before the first
+  // measurement, fall back to the total so a busy map starts clustered (no
+  // flash of hundreds of individual markers). Hysteresis between the two
+  // thresholds keeps the group from remounting as you pan over the edge.
+  let shouldCluster: boolean;
+  if (inViewCount == null) {
+    shouldCluster = clusterablePlaces.length >= CLUSTER_ON;
+  } else if (inViewCount >= CLUSTER_ON) {
+    shouldCluster = true;
+  } else if (inViewCount < CLUSTER_OFF) {
+    shouldCluster = false;
+  } else {
+    shouldCluster = clusteringRef.current;
+  }
+  clusteringRef.current = shouldCluster;
 
   return (
     <div className={cn("relative h-full w-full", className)}>
@@ -489,6 +523,7 @@ export default function SwimMap({
         />
         {keepCenteredOn ? <KeepCentered target={keepCenteredOn} /> : null}
         <FocusPlace target={focusTarget} markerRefs={markerRefs} />
+        <ViewportPinCount places={clusterablePlaces} onCount={setInViewCount} />
         {userLocation ? (
           <Marker
             position={[userLocation.lat, userLocation.lng]}
@@ -802,6 +837,35 @@ function FocusPlace({
       if (moveHandler) map.off("moveend", moveHandler);
     };
   }, [map, target, markerRefs]);
+  return null;
+}
+
+/**
+ * Reports how many of `places` fall within the current viewport, on mount and
+ * after every pan/zoom. Lets the map decide whether clustering is worthwhile
+ * for what's actually on screen. `onCount` must be referentially stable.
+ */
+function ViewportPinCount({
+  places,
+  onCount,
+}: {
+  places: PlaceDoc[];
+  onCount: (n: number) => void;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    const measure = () => {
+      const bounds = map.getBounds();
+      let n = 0;
+      for (const p of places) if (bounds.contains([p.lat, p.lng])) n++;
+      onCount(n);
+    };
+    measure();
+    map.on("moveend zoomend", measure);
+    return () => {
+      map.off("moveend zoomend", measure);
+    };
+  }, [map, places, onCount]);
   return null;
 }
 
