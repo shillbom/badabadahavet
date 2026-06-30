@@ -1,13 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
+import { Link } from "react-router-dom";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { X, Calendar } from "lucide-react";
 import { useStore } from "@/store/sessions";
-import { reactorUids, reactionAddedAt, touchLastSeen } from "@/lib/data";
+import {
+  reactorUids,
+  reactionAddedAt,
+  touchLastSeen,
+  fetchUsers,
+} from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/utils";
 import Photo from "@/components/Photo";
+import Lightbox from "@/components/Lightbox";
 import ReactionBar from "@/components/ReactionBar";
 
 // How long to wait for Firestore snapshots to settle before computing the
@@ -34,33 +41,47 @@ export function openRecap() {
   useRecapTrigger.getState().open();
 }
 
-type ReactionItem = { session: SessionDoc; delta: number };
+// A single entry in the merged recap feed: either a friend's new swim or a
+// batch of new reactions on one of my swims. `ts` is when the thing happened
+// (swim creation / latest new reaction) so the feed can sort by recency.
+type FeedItem =
+  | { kind: "swim"; ts: number; session: SessionDoc }
+  | { kind: "reaction"; ts: number; session: SessionDoc; delta: number };
 
 type Activity = {
   // "visit" auto-pops what's new since the last visit; "month" is the
   // manually-opened recap of roughly the last 30 days.
   mode: "visit" | "month";
-  friendSwims: SessionDoc[];
-  reactionItems: ReactionItem[];
+  items: FeedItem[];
   newSwimCount: number;
   newReactionCount: number;
 };
 
 /** Reactions on `s` left by people other than the swimmer themselves, added
- *  after `since` (epoch ms). Reactions carry the timestamp they were added
- *  (see lib/data.toggleReaction), so "new since your last visit" is exact —
- *  legacy reactions with no timestamp (addedAt 0) are treated as already-seen. */
-function newReactionCount(s: SessionDoc, myUid: string, since: number): number {
+ *  after `since` (epoch ms): the count and the latest such timestamp. Reactions
+ *  carry the timestamp they were added (see lib/data.toggleReaction), so "new
+ *  since your last visit" is exact — legacy reactions with no timestamp
+ *  (addedAt 0) are treated as already-seen. */
+function newReactions(
+  s: SessionDoc,
+  myUid: string,
+  since: number,
+): { count: number; latest: number } {
   const reactions = s.reactions ?? {};
-  let n = 0;
+  let count = 0;
+  let latest = 0;
   for (const emoji in reactions) {
     const entry = reactions[emoji];
     for (const uid of reactorUids(entry)) {
       if (uid === myUid) continue;
-      if (reactionAddedAt(entry, uid) > since) n++;
+      const at = reactionAddedAt(entry, uid);
+      if (at > since) {
+        count++;
+        if (at > latest) latest = at;
+      }
     }
   }
-  return n;
+  return { count, latest };
 }
 
 function computeActivity(
@@ -82,19 +103,41 @@ function computeActivity(
   // New reactions on any of my swims — an old swim can pick up a fresh
   // reaction, so we look at all my swims and count reactions added after
   // `since` (rather than limiting by swim date).
-  const reactionItems: ReactionItem[] = [];
+  const reactionItems: { session: SessionDoc; delta: number; ts: number }[] =
+    [];
   for (const s of mySessions) {
-    const delta = newReactionCount(s, myUid, since);
-    if (delta > 0) reactionItems.push({ session: s, delta });
+    const { count, latest } = newReactions(s, myUid, since);
+    if (count > 0) reactionItems.push({ session: s, delta: count, ts: latest });
   }
-  reactionItems.sort((a, b) => b.session.date - a.session.date);
+
+  // Merge swims and reaction batches into one feed, newest first. Each side is
+  // capped first so a long absence can't blow up either category.
+  const items: FeedItem[] = [
+    ...friendSwims.slice(0, MAX_FRIEND_SWIMS).map(
+      (s): FeedItem => ({
+        kind: "swim",
+        ts: s.createdAt ?? s.date,
+        session: s,
+      }),
+    ),
+    ...reactionItems
+      .sort((a, b) => b.ts - a.ts)
+      .slice(0, MAX_REACTION_ITEMS)
+      .map(
+        (r): FeedItem => ({
+          kind: "reaction",
+          ts: r.ts,
+          session: r.session,
+          delta: r.delta,
+        }),
+      ),
+  ].sort((a, b) => b.ts - a.ts);
 
   return {
     mode,
+    items,
     newSwimCount: friendSwims.length,
     newReactionCount: reactionItems.reduce((n, r) => n + r.delta, 0),
-    friendSwims: friendSwims.slice(0, MAX_FRIEND_SWIMS),
-    reactionItems: reactionItems.slice(0, MAX_REACTION_ITEMS),
   };
 }
 
@@ -149,11 +192,7 @@ export default function SinceLastVisit() {
       // Persist "seen up to now" regardless of whether we show anything — so a
       // first visit just establishes the baseline instead of dumping history.
       touchLastSeen(myUid, Date.now());
-      if (
-        !openRef.current &&
-        since !== null &&
-        (result.friendSwims.length > 0 || result.reactionItems.length > 0)
-      )
+      if (!openRef.current && since !== null && result.items.length > 0)
         setActivity(result);
     }, SETTLE_MS);
     return () => {
@@ -193,6 +232,74 @@ function Sheet({
 }) {
   const t = useT();
   const dragControls = useDragControls();
+
+  // The recap list is frozen when the sheet opens, but reaction state should
+  // stay live: reacting writes to Firestore, which updates the store, and we
+  // re-read each session by id so counts reflect immediately. Without this the
+  // sheet would keep rendering the stale snapshot captured at open time.
+  const allSessions = useStore((s) => s.allSessions);
+  const mySessions = useStore((s) => s.mySessions);
+  const liveById = useMemo(() => {
+    const m = new Map<string, SessionDoc>();
+    for (const s of allSessions) m.set(s.id, s);
+    for (const s of mySessions) m.set(s.id, s);
+    return m;
+  }, [allSessions, mySessions]);
+
+  // Resolve reactor UIDs to display names. Sessions carry their author's name,
+  // so the union of sessions is a free directory — but a reactor may not have
+  // logged a swim this year, so we also fetch the user docs of any reactor we
+  // can't name from sessions alone.
+  const sessionNames = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of allSessions) m.set(s.uid, s.displayName);
+    for (const s of mySessions) m.set(s.uid, s.displayName);
+    return m;
+  }, [allSessions, mySessions]);
+
+  // Every distinct reactor UID (other than me) referenced by the reaction
+  // feed items — the people whose names we need to show.
+  const reactorUidList = useMemo(() => {
+    const set = new Set<string>();
+    for (const item of activity.items) {
+      if (item.kind !== "reaction") continue;
+      const reactions = item.session.reactions ?? {};
+      for (const emoji in reactions)
+        for (const uid of reactorUids(reactions[emoji]))
+          if (uid !== myUid) set.add(uid);
+    }
+    return [...set];
+  }, [activity.items, myUid]);
+
+  // Names fetched from user docs for reactors not covered by `sessionNames`.
+  const [fetchedNames, setFetchedNames] = useState<Map<string, string>>(
+    () => new Map(),
+  );
+  useEffect(() => {
+    const missing = reactorUidList.filter((uid) => !sessionNames.has(uid));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    fetchUsers(missing).then((users) => {
+      if (cancelled) return;
+      setFetchedNames((prev) => {
+        const next = new Map(prev);
+        for (const u of users) next.set(u.uid, u.displayName);
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reactorUidList, sessionNames]);
+
+  const nameByUid = useMemo(() => {
+    const m = new Map(fetchedNames);
+    for (const [uid, name] of sessionNames) m.set(uid, name);
+    return m;
+  }, [sessionNames, fetchedNames]);
+
+  // Photo opened full-screen in the lightbox (tapping a card's image).
+  const [lightboxFor, setLightboxFor] = useState<SessionDoc | null>(null);
 
   const subtitleParts: string[] = [];
   if (activity.newSwimCount > 0)
@@ -273,133 +380,171 @@ function Sheet({
 
         {/* Scrollable body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
-          {activity.friendSwims.length === 0 &&
-          activity.reactionItems.length === 0 ? (
+          {activity.items.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
               <div className="text-4xl">🌊</div>
               <p className="text-sm text-slate-500">{t("sincevisit.empty")}</p>
             </div>
-          ) : null}
-          {activity.friendSwims.length > 0 ? (
-            <section className="mb-4">
-              <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                {t("sincevisit.friends_title")}
-              </h4>
-              <ul className="space-y-2">
-                {activity.friendSwims.map((s, i) => (
+          ) : (
+            <ul className="space-y-2">
+              {activity.items.map((item, i) => {
+                const s = liveById.get(item.session.id) ?? item.session;
+                if (item.kind === "swim") {
+                  return (
+                    <motion.li
+                      key={`swim-${s.id}`}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: Math.min(i, 8) * 0.03 }}
+                      className="glass flex items-start gap-3 p-3"
+                    >
+                      {s.photoUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => setLightboxFor(s)}
+                          className="flex-none"
+                          aria-label={t("common.open")}
+                        >
+                          <Photo
+                            src={s.photoUrl}
+                            thumb={s.photoThumb}
+                            className="h-14 w-14 flex-none rounded-lg"
+                          />
+                        </button>
+                      ) : (
+                        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
+                          🌊
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-wave-900">
+                              {s.displayName}
+                            </div>
+                            <Link
+                              to={`/spot/${s.placeId}`}
+                              onClick={onClose}
+                              className="block truncate text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
+                            >
+                              {s.placeName}
+                            </Link>
+                          </div>
+                          <div className="flex-none font-display text-base font-black text-wave-700">
+                            +{s.points}
+                          </div>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
+                          <Calendar className="h-3 w-3" />
+                          {formatDateTime(s.date)}
+                          {s.isWinter ? <span className="ml-1">❄️</span> : null}
+                          {s.isUniqueForUser ? (
+                            <span className="ml-0.5">✨</span>
+                          ) : null}
+                        </div>
+                        {s.note ? (
+                          <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
+                            {s.note}
+                          </p>
+                        ) : null}
+                        <ReactionBar session={s} myUid={myUid} />
+                      </div>
+                    </motion.li>
+                  );
+                }
+
+                const reactions = s.reactions ?? {};
+                const emojis = Object.keys(reactions).filter(
+                  (e) =>
+                    reactorUids(reactions[e]).filter((uid) => uid !== myUid)
+                      .length > 0,
+                );
+                // Distinct people (other than me) who reacted on this swim,
+                // resolved to display names where we know them.
+                const reactorNames = [
+                  ...new Set(
+                    emojis.flatMap((e) =>
+                      reactorUids(reactions[e]).filter((uid) => uid !== myUid),
+                    ),
+                  ),
+                ].map((uid) => nameByUid.get(uid) ?? t("common.someone"));
+                return (
                   <motion.li
-                    key={s.id}
+                    key={`reaction-${s.id}`}
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: Math.min(i, 8) * 0.03 }}
                     className="glass flex items-start gap-3 p-3"
                   >
                     {s.photoUrl ? (
-                      <Photo
-                        src={s.photoUrl}
-                        thumb={s.photoThumb}
-                        className="h-14 w-14 flex-none rounded-lg"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setLightboxFor(s)}
+                        className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-amber-50 text-2xl ring-1 ring-amber-200"
+                        aria-label={t("common.open")}
+                      >
+                        {emojis[0] ?? "💗"}
+                      </button>
                     ) : (
-                      <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
-                        🌊
+                      <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-amber-50 text-2xl ring-1 ring-amber-200">
+                        {emojis[0] ?? "💗"}
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-semibold text-wave-900">
-                            {s.displayName}
+                            {t("sincevisit.reacted", {
+                              name: reactorNames.join(", "),
+                            })}
                           </div>
-                          <div className="truncate text-[11px] text-slate-500">
+                          <Link
+                            to={`/spot/${s.placeId}`}
+                            onClick={onClose}
+                            className="block truncate text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
+                          >
                             {s.placeName}
-                          </div>
+                          </Link>
                         </div>
-                        <div className="flex-none font-display text-base font-black text-wave-700">
-                          +{s.points}
+                        <div className="flex-none rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">
+                          +{item.delta}
                         </div>
                       </div>
                       <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
                         <Calendar className="h-3 w-3" />
                         {formatDateTime(s.date)}
-                        {s.isWinter ? <span className="ml-1">❄️</span> : null}
-                        {s.isUniqueForUser ? (
-                          <span className="ml-0.5">✨</span>
-                        ) : null}
                       </div>
-                      {s.note ? (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
-                          {s.note}
-                        </p>
-                      ) : null}
-                      <ReactionBar session={s} myUid={myUid} />
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {emojis.map((e) => (
+                          <span
+                            key={e}
+                            className="inline-flex items-center gap-0.5 rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] text-slate-500 ring-1 ring-slate-200"
+                          >
+                            {e}
+                            <span className="tabular-nums">
+                              {
+                                reactorUids(reactions[e]).filter(
+                                  (u) => u !== myUid,
+                                ).length
+                              }
+                            </span>
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </motion.li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {activity.reactionItems.length > 0 ? (
-            <section>
-              <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                {t("sincevisit.reactions_title")}
-              </h4>
-              <ul className="space-y-2">
-                {activity.reactionItems.map(({ session: s, delta }, i) => {
-                  const reactions = s.reactions ?? {};
-                  const emojis = Object.keys(reactions).filter(
-                    (e) =>
-                      reactorUids(reactions[e]).filter((uid) => uid !== myUid)
-                        .length > 0,
-                  );
-                  return (
-                    <motion.li
-                      key={s.id}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: Math.min(i, 8) * 0.03 }}
-                      className="glass flex items-center gap-3 p-3"
-                    >
-                      <div className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-amber-50 text-lg ring-1 ring-amber-200">
-                        {emojis[0] ?? "💗"}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-semibold text-wave-900">
-                          {s.placeName}
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
-                          {emojis.map((e) => (
-                            <span
-                              key={e}
-                              className="inline-flex items-center gap-0.5 rounded-full bg-white/70 px-1.5 py-0.5 ring-1 ring-slate-200"
-                            >
-                              {e}
-                              <span className="tabular-nums">
-                                {
-                                  reactorUids(reactions[e]).filter(
-                                    (u) => u !== myUid,
-                                  ).length
-                                }
-                              </span>
-                            </span>
-                          ))}
-                          <span className="text-slate-400">
-                            · {formatDateTime(s.date)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex-none rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">
-                        +{delta}
-                      </div>
-                    </motion.li>
-                  );
-                })}
-              </ul>
-            </section>
-          ) : null}
+                );
+              })}
+            </ul>
+          )}
         </div>
       </motion.div>
+
+      <Lightbox
+        sessions={lightboxFor ? [lightboxFor] : []}
+        index={lightboxFor ? 0 : null}
+        onClose={() => setLightboxFor(null)}
+      />
     </>
   );
 }
