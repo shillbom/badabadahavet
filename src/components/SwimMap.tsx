@@ -1,11 +1,4 @@
-import {
-  MapContainer,
-  Marker,
-  Popup,
-  TileLayer,
-  Tooltip,
-  useMap,
-} from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L, { type LatLngExpression } from "leaflet";
 // Leaflet's styles ship with the map, not the app shell — keeping this import
 // here (rather than in main.tsx) keeps the 190 KB leaflet chunk and its CSS
@@ -87,6 +80,13 @@ function pinHtml(opts: {
 const PIN_SIZE = 28;
 const PIN_TAIL = 12;
 const PIN_TOTAL = PIN_SIZE + PIN_TAIL;
+
+// Leaflet's default popup autoPan padding is a razor-thin 5px, so an opened
+// popup ends up flush against the map's edge — easy to clip against the
+// container (Leaflet itself clips overflow) or against a sheet/header
+// overlapping the map. Pad it out so a pin never lands right at the edge.
+const POPUP_AUTO_PAN_TOP_LEFT: [number, number] = [24, 56];
+const POPUP_AUTO_PAN_BOTTOM_RIGHT: [number, number] = [24, 56];
 
 // Cluster only once at least CLUSTER_ON pins are within the current viewport;
 // stop clustering below CLUSTER_OFF. The gap is hysteresis — panning across a
@@ -548,6 +548,9 @@ export default function SwimMap({
           {clusterablePlaces.map((p) => {
             const sessions = sessionsByPlace.get(p.id) ?? [];
             const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
+            const lastSession = sessions.length
+              ? sessions.reduce((a, b) => (b.date > a.date ? b : a))
+              : null;
             // When logging a swim, clicking a pickable pin selects it
             // immediately — no popup button needed.
             const isPickable =
@@ -577,24 +580,13 @@ export default function SwimMap({
                   },
                 }}
               >
-                {hasFreshTemp(p) ? (
-                  <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
-                    <div className="text-[11px]">
-                      <span className="font-semibold text-wave-900">
-                        💧 {p.waterTemp.toFixed(1)} °C
-                      </span>
-                      {p.waterTempAt ? (
-                        <span className="ml-1 text-slate-500">
-                          · {formatAge(p.waterTempAt, t)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </Tooltip>
-                ) : null}
                 {/* Only show popup when not in logging mode — clicking a
                     pin while logging selects it immediately instead. */}
                 {!isPickable ? (
-                  <Popup>
+                  <Popup
+                    autoPanPaddingTopLeft={POPUP_AUTO_PAN_TOP_LEFT}
+                    autoPanPaddingBottomRight={POPUP_AUTO_PAN_BOTTOM_RIGHT}
+                  >
                     <div className="text-sm">
                       <div className="font-semibold text-wave-900">
                         {p.name}
@@ -630,14 +622,13 @@ export default function SwimMap({
                           ))}
                         </div>
                       ) : null}
-                      <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
-                        {sessions.slice(0, 5).map((s) => (
-                          <li key={s.id} className="text-[11px]">
-                            {formatDate(s.date)} — {s.displayName}
-                            {s.isWinter ? " ❄️" : ""}
-                          </li>
-                        ))}
-                      </ul>
+                      {lastSession ? (
+                        <div className="mt-1 text-[11px]">
+                          {formatDate(lastSession.date)} —{" "}
+                          {lastSession.displayName}
+                          {lastSession.isWinter ? " ❄️" : ""}
+                        </div>
+                      ) : null}
                       {linkToSpot ? (
                         <Link
                           to={`/spot/${p.id}`}
@@ -659,6 +650,9 @@ export default function SwimMap({
         {unclusteredPlaces.map((p) => {
           const sessions = sessionsByPlace.get(p.id) ?? [];
           const photos = sessions.filter((s) => s.photoUrl).slice(0, 6);
+          const lastSession = sessions.length
+            ? sessions.reduce((a, b) => (b.date > a.date ? b : a))
+            : null;
           const isPickable =
             !!onPickExisting && (!canPickExisting || canPickExisting(p));
           return (
@@ -681,22 +675,11 @@ export default function SwimMap({
                 },
               }}
             >
-              {hasFreshTemp(p) ? (
-                <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
-                  <div className="text-[11px]">
-                    <span className="font-semibold text-wave-900">
-                      💧 {p.waterTemp.toFixed(1)} °C
-                    </span>
-                    {p.waterTempAt ? (
-                      <span className="ml-1 text-slate-500">
-                        · {formatAge(p.waterTempAt, t)}
-                      </span>
-                    ) : null}
-                  </div>
-                </Tooltip>
-              ) : null}
               {!isPickable ? (
-                <Popup>
+                <Popup
+                  autoPanPaddingTopLeft={POPUP_AUTO_PAN_TOP_LEFT}
+                  autoPanPaddingBottomRight={POPUP_AUTO_PAN_BOTTOM_RIGHT}
+                >
                   <div className="text-sm">
                     <div className="font-semibold text-wave-900">{p.name}</div>
                     <div className="text-[11px] text-slate-500">
@@ -730,14 +713,13 @@ export default function SwimMap({
                         ))}
                       </div>
                     ) : null}
-                    <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
-                      {sessions.slice(0, 5).map((s) => (
-                        <li key={s.id} className="text-[11px]">
-                          {formatDate(s.date)} — {s.displayName}
-                          {s.isWinter ? " ❄️" : ""}
-                        </li>
-                      ))}
-                    </ul>
+                    {lastSession ? (
+                      <div className="mt-1 text-[11px]">
+                        {formatDate(lastSession.date)} —{" "}
+                        {lastSession.displayName}
+                        {lastSession.isWinter ? " ❄️" : ""}
+                      </div>
+                    ) : null}
                     {linkToSpot ? (
                       <Link
                         to={`/spot/${p.id}`}
