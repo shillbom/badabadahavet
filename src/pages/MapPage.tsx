@@ -156,12 +156,6 @@ export default function MapPage() {
           )}
         </div>
       </div>
-
-      {!isGuest && myStats.totalSwims === 0 ? (
-        <p className="text-center text-xs text-slate-500">
-          {t("map.empty.helper")}
-        </p>
-      ) : null}
     </div>
   );
 }
