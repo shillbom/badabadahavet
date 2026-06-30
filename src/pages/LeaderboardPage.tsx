@@ -127,7 +127,7 @@ export default function LeaderboardPage() {
                 <div className="relative flex-none">
                   <div
                     className={cn(
-                      "flex h-9 w-9 items-center justify-center rounded-full font-display text-lg font-black",
+                      "flex h-9 w-9 items-center justify-center rounded-full text-lg font-black",
                       podium.medalClass,
                       r.border.id !== "none" && `ring-2 ${r.border.ringClass}`,
                     )}
