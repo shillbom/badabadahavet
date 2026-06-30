@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
-import { Link } from "react-router-dom";
-import { motion, AnimatePresence, useDragControls } from "framer-motion";
-import { X, Calendar } from "lucide-react";
+import { motion } from "framer-motion";
+import { Calendar } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import {
   reactorUids,
@@ -15,6 +14,8 @@ import { useT } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/utils";
 import Photo from "@/components/Photo";
 import Lightbox from "@/components/Lightbox";
+import BottomSheet from "@/components/BottomSheet";
+import SpotSheet from "@/components/SpotSheet";
 import ReactionBar from "@/components/ReactionBar";
 
 // How long to wait for Firestore snapshots to settle before computing the
@@ -209,15 +210,11 @@ export default function SinceLastVisit() {
   }, [recapToken]);
 
   return (
-    <AnimatePresence>
-      {activity ? (
-        <Sheet
-          activity={activity}
-          myUid={myUid ?? ""}
-          onClose={() => setActivity(null)}
-        />
-      ) : null}
-    </AnimatePresence>
+    <Sheet
+      activity={activity}
+      myUid={myUid ?? ""}
+      onClose={() => setActivity(null)}
+    />
   );
 }
 
@@ -226,12 +223,17 @@ function Sheet({
   myUid,
   onClose,
 }: {
-  activity: Activity;
+  activity: Activity | null;
   myUid: string;
   onClose: () => void;
 }) {
   const t = useT();
-  const dragControls = useDragControls();
+
+  // Keep the last activity around so the sheet still has content to render
+  // while it animates closed (`open` flips to false before the sheet unmounts).
+  const lastRef = useRef<Activity | null>(activity);
+  if (activity) lastRef.current = activity;
+  const shown = activity ?? lastRef.current;
 
   // The recap list is frozen when the sheet opens, but reaction state should
   // stay live: reacting writes to Firestore, which updates the store, and we
@@ -261,7 +263,7 @@ function Sheet({
   // feed items — the people whose names we need to show.
   const reactorUidList = useMemo(() => {
     const set = new Set<string>();
-    for (const item of activity.items) {
+    for (const item of shown?.items ?? []) {
       if (item.kind !== "reaction") continue;
       const reactions = item.session.reactions ?? {};
       for (const emoji in reactions)
@@ -269,7 +271,7 @@ function Sheet({
           if (uid !== myUid) set.add(uid);
     }
     return [...set];
-  }, [activity.items, myUid]);
+  }, [shown?.items, myUid]);
 
   // Names fetched from user docs for reactors not covered by `sessionNames`.
   const [fetchedNames, setFetchedNames] = useState<Map<string, string>>(
@@ -301,93 +303,60 @@ function Sheet({
   // Photo opened full-screen in the lightbox (tapping a card's image).
   const [lightboxFor, setLightboxFor] = useState<SessionDoc | null>(null);
 
+  // Place opened in a bottom sheet (tapping a card's place name).
+  const [spotFor, setSpotFor] = useState<string | null>(null);
+
   const subtitleParts: string[] = [];
-  if (activity.newSwimCount > 0)
+  if (shown && shown.newSwimCount > 0)
     subtitleParts.push(
-      activity.newSwimCount === 1
+      shown.newSwimCount === 1
         ? t("sincevisit.sub.swims_one")
-        : t("sincevisit.sub.swims_many", { n: activity.newSwimCount }),
+        : t("sincevisit.sub.swims_many", { n: shown.newSwimCount }),
     );
-  if (activity.newReactionCount > 0)
+  if (shown && shown.newReactionCount > 0)
     subtitleParts.push(
-      activity.newReactionCount === 1
+      shown.newReactionCount === 1
         ? t("sincevisit.sub.reactions_one")
-        : t("sincevisit.sub.reactions_many", { n: activity.newReactionCount }),
+        : t("sincevisit.sub.reactions_many", { n: shown.newReactionCount }),
     );
+
+  const header = shown ? (
+    <div className="flex min-w-0 items-center gap-3">
+      <div className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-wave-100 text-2xl ring-1 ring-wave-200">
+        {shown.mode === "month" ? "🗓️" : "👋"}
+      </div>
+      <div className="min-w-0">
+        <h3 className="truncate font-display text-xl font-black text-wave-900">
+          {shown.mode === "month"
+            ? t("sincevisit.month.title")
+            : t("sincevisit.title")}
+        </h3>
+        {subtitleParts.length > 0 ? (
+          <p className="truncate text-[11px] text-slate-500">
+            {subtitleParts.join(" · ")}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
-      <motion.div
-        key="lv-backdrop"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="fixed inset-0 z-[1100] bg-black/40 backdrop-blur-sm"
-      />
-      <motion.div
-        key="lv-sheet"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        drag="y"
-        dragControls={dragControls}
-        dragListener={false}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0, bottom: 0.4 }}
-        onDragEnd={(_e, info) => {
-          if (info.offset.y > 120 || info.velocity.y > 500) onClose();
-        }}
-        className="fixed inset-x-0 bottom-0 z-[1200] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-3xl bg-white/95 shadow-2xl backdrop-blur-sm"
-        style={{ maxHeight: "92dvh" }}
+      <BottomSheet
+        open={!!activity}
+        onClose={onClose}
+        size="large"
+        title={header}
       >
-        {/* Drag handle — grab here to dismiss; the list stays scrollable. */}
-        <div
-          onPointerDown={(e) => dragControls.start(e)}
-          className="flex flex-none cursor-grab touch-none justify-center pt-4 pb-3 active:cursor-grabbing"
-        >
-          <div className="h-1 w-10 rounded-full bg-slate-300" />
-        </div>
-
-        {/* Header */}
-        <div className="flex flex-none items-center justify-between gap-3 px-5 pt-1 pb-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-wave-100 text-2xl ring-1 ring-wave-200">
-              {activity.mode === "month" ? "🗓️" : "👋"}
-            </div>
-            <div className="min-w-0">
-              <h3 className="truncate font-display text-xl font-black text-wave-900">
-                {activity.mode === "month"
-                  ? t("sincevisit.month.title")
-                  : t("sincevisit.title")}
-              </h3>
-              {subtitleParts.length > 0 ? (
-                <p className="truncate text-[11px] text-slate-500">
-                  {subtitleParts.join(" · ")}
-                </p>
-              ) : null}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            aria-label={t("common.close")}
-            className="flex-none rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Scrollable body */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
-          {activity.items.length === 0 ? (
+        <div className="px-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
+          {!shown || shown.items.length === 0 ? (
             <div className="flex flex-col items-center gap-2 px-6 py-12 text-center">
               <div className="text-4xl">🌊</div>
               <p className="text-sm text-slate-500">{t("sincevisit.empty")}</p>
             </div>
           ) : (
             <ul className="space-y-2">
-              {activity.items.map((item, i) => {
+              {shown.items.map((item, i) => {
                 const s = liveById.get(item.session.id) ?? item.session;
                 if (item.kind === "swim") {
                   return (
@@ -422,13 +391,13 @@ function Sheet({
                             <div className="truncate text-sm font-semibold text-wave-900">
                               {s.displayName}
                             </div>
-                            <Link
-                              to={`/spot/${s.placeId}`}
-                              onClick={onClose}
-                              className="block truncate text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
+                            <button
+                              type="button"
+                              onClick={() => setSpotFor(s.placeId)}
+                              className="block max-w-full truncate text-left text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
                             >
                               {s.placeName}
-                            </Link>
+                            </button>
                           </div>
                           <div className="flex-none font-display text-base font-black text-wave-700">
                             +{s.points}
@@ -498,13 +467,13 @@ function Sheet({
                               name: reactorNames.join(", "),
                             })}
                           </div>
-                          <Link
-                            to={`/spot/${s.placeId}`}
-                            onClick={onClose}
-                            className="block truncate text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
+                          <button
+                            type="button"
+                            onClick={() => setSpotFor(s.placeId)}
+                            className="block max-w-full truncate text-left text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
                           >
                             {s.placeName}
-                          </Link>
+                          </button>
                         </div>
                         <div className="flex-none rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">
                           +{item.delta}
@@ -538,13 +507,11 @@ function Sheet({
             </ul>
           )}
         </div>
-      </motion.div>
+      </BottomSheet>
 
-      <Lightbox
-        sessions={lightboxFor ? [lightboxFor] : []}
-        index={lightboxFor ? 0 : null}
-        onClose={() => setLightboxFor(null)}
-      />
+      <Lightbox session={lightboxFor} onClose={() => setLightboxFor(null)} />
+
+      <SpotSheet placeId={spotFor} onClose={() => setSpotFor(null)} />
     </>
   );
 }

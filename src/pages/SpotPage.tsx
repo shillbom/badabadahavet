@@ -21,6 +21,7 @@ import {
   Trash2,
   ImageOff,
   Delete,
+  X,
 } from "lucide-react";
 import {
   addToSwim,
@@ -47,8 +48,23 @@ import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
 import { toast } from "@/components/ui/Toast";
 
-export default function SpotPage() {
-  const { placeId } = useParams<{ placeId: string }>();
+/**
+ * The spot detail UI (map, stats, photos, recent dips). Extracted from the
+ * routed page so it can also be rendered inside a {@link BottomSheet} (e.g.
+ * tapping a place in the recap) without a full navigation.
+ *
+ * `variant` swaps the top-left affordance: "page" shows a back button that
+ * pops the history stack; "sheet" shows a close button that calls `onClose`.
+ */
+export function SpotView({
+  placeId,
+  variant = "page",
+  onClose,
+}: {
+  placeId: string;
+  variant?: "page" | "sheet";
+  onClose?: () => void;
+}) {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const isAdmin = profile?.isAdmin === true;
@@ -193,7 +209,8 @@ export default function SpotPage() {
     try {
       await adminDeletePlace(place.id);
       toast.success(t("admin.delete_spot.success"));
-      navigate("/", { replace: true });
+      if (variant === "sheet") onClose?.();
+      else navigate("/", { replace: true });
     } catch {
       toast.error(t("admin.delete_spot.error"));
     }
@@ -238,11 +255,17 @@ export default function SpotPage() {
     <div className="px-4 pt-2 pb-12">
       <div className="mb-3 flex items-center gap-2">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => (variant === "sheet" ? onClose?.() : navigate(-1))}
           className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
+          aria-label={
+            variant === "sheet" ? t("common.close") : t("common.back")
+          }
         >
-          <ArrowLeft className="h-4 w-4" />
+          {variant === "sheet" ? (
+            <X className="h-4 w-4" />
+          ) : (
+            <ArrowLeft className="h-4 w-4" />
+          )}
         </button>
         <div className="min-w-0 flex-1">
           <h2 className="truncate font-display text-2xl font-black text-wave-900">
@@ -498,6 +521,19 @@ export default function SpotPage() {
       </div>
     </div>
   );
+}
+
+export default function SpotPage() {
+  const { placeId } = useParams<{ placeId: string }>();
+  const t = useT();
+  if (!placeId) {
+    return (
+      <div className="px-4 pt-6 text-center text-sm text-slate-500">
+        {t("spot.not_found")}
+      </div>
+    );
+  }
+  return <SpotView placeId={placeId} variant="page" />;
 }
 
 function Stat({

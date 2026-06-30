@@ -17,16 +17,14 @@ import Photo from "@/components/Photo";
  * from actually covering the screen.
  */
 export default function Lightbox({
-  sessions,
-  index,
+  session,
   onClose,
 }: {
-  sessions: SessionDoc[];
-  index: number | null;
+  session: SessionDoc | null;
   onClose: () => void;
 }) {
   const t = useT();
-  const s = index != null ? sessions[index] : null;
+  const s = session;
   return createPortal(
     <AnimatePresence>
       {s ? (
