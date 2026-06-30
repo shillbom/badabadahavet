@@ -154,7 +154,7 @@ export function localeBcp(l?: Locale): string {
 const MESSAGES: Record<Locale, Record<string, string>> = {
   sv: {
     "app.name": "Badligan",
-    "app.tagline": "En liten, vänlig badtävling",
+    "app.tagline": "Tävla med dina vänner om vem som badar mest.",
     "common.loading": "Laddar…",
     "common.you": "du",
     "common.back": "Tillbaka",
@@ -253,8 +253,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.last.today": "Du har badat idag — snyggt!",
     "map.last.yesterday": "Du badade igår.",
     "map.last.days": "{n} dagar sedan ditt senaste dopp.",
-    "map.empty.helper":
-      "Inga bad ännu — logga ditt första så dyker en pin upp här. ✨",
     "map.guest.title": "Välkommen till Badligan",
     "map.guest.subtitle":
       "Bläddra runt fritt. Logga in för att tävla, reagera och logga bad.",
@@ -689,7 +687,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
   en: {
     "app.name": "Badligan",
-    "app.tagline": "A friendly little swim-spot competition",
+    "app.tagline": "A friendly swim-spot competition",
     "common.loading": "Loading…",
     "common.you": "you",
     "common.back": "Back",
@@ -786,8 +784,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.last.today": "You swam today — nice.",
     "map.last.yesterday": "You swam yesterday.",
     "map.last.days": "It's been {n} days since your last dip.",
-    "map.empty.helper":
-      "No swims yet — when you log one, a pin shows up here. ✨",
     "map.guest.title": "Welcome to Badligan",
     "map.guest.subtitle":
       "Have a browse. Sign in to compete, react and log swims.",
