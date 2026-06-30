@@ -44,8 +44,7 @@ export default function SwimPhoto({
         />
       </button>
       <Lightbox
-        sessions={[session]}
-        index={open ? 0 : null}
+        session={open ? session : null}
         onClose={() => setOpen(false)}
       />
     </>
