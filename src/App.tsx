@@ -1,6 +1,8 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useStore } from "@/store/sessions";
+import { useT } from "@/lib/i18n";
+import { toast } from "@/components/ui/Toast";
 import { ACHIEVEMENTS_BY_ID } from "@/lib/achievements";
 import { Pages, preloadAllPages } from "@/lib/pages";
 import { useRegisterSW } from "virtual:pwa-register/react";
@@ -35,9 +37,22 @@ export default function App() {
   const profile = useStore((s) => s.profile);
   const loading = useStore((s) => s.loading);
   const googleOnboarding = useStore((s) => s.googleOnboarding);
+  const authError = useStore((s) => s.authError);
+  const navigate = useNavigate();
+  const t = useT();
 
   // Boot auth listener + data subscriptions once for the lifetime of the app.
   useEffect(() => useStore.getState()._startListening(), []);
+
+  // A failed sign-in (e.g. the profile doc wouldn't load) signs the user back
+  // out and sets authError. Surface it as a toast and send them to /login
+  // rather than leaving them stuck on the splash.
+  useEffect(() => {
+    if (!authError) return;
+    toast.error(t("auth.error.session"));
+    useStore.setState({ authError: null });
+    navigate("/login", { replace: true });
+  }, [authError, navigate, t]);
 
   // Service worker update handling. On first load we apply a waiting update
   // automatically so the user always lands on the latest version; if a new

@@ -143,6 +143,29 @@ function computeActivity(
 }
 
 /**
+ * Decide what the recap sheet should show for a given mode, reading the
+ * current user + profile straight from the store so callers never capture a
+ * stale value. Returns null when nothing should appear.
+ *
+ *  - "visit"  the auto-pop. Shows only when there's a real previous baseline
+ *             (not a first-ever visit) AND something happened since then.
+ *  - "month"  the manually-opened recap. Always returns an Activity (possibly
+ *             empty), since the user explicitly asked to see it.
+ */
+function recapToShow(mode: "visit" | "month"): Activity | null {
+  const { myUid, profile } = useStore.getState();
+  if (!myUid) return null;
+  if (mode === "month") {
+    return computeActivity(myUid, "month", Date.now() - MONTH_MS);
+  }
+  // First-ever visit: no baseline yet, so just establish one (show nothing).
+  const since = profile?.lastSeenAt ?? null;
+  if (since === null) return null;
+  const result = computeActivity(myUid, "visit", since);
+  return result.items.length > 0 ? result : null;
+}
+
+/**
  * Bottom sheet that recaps what happened while the user was away: new swims
  * from their group friends (with inline reactions) and any new reactions left
  * on their own swims. Shown once per app open when there's something new, and
@@ -176,37 +199,32 @@ export default function SinceLastVisit() {
     setActivity(null);
   }, [myUid]);
 
-  // Once auth + data have settled, compute the since-last-visit recap exactly
+  // Once auth + data have settled, decide the since-last-visit recap exactly
   // once. The timer resets on each data change so we don't fire on a
-  // half-loaded snapshot.
+  // half-loaded snapshot. `recapToShow` owns the "what to show" decision; here
+  // we just trigger it after the data goes quiet.
   useEffect(() => {
     if (!myUid || loading || !profile || doneRef.current) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       if (doneRef.current) return;
       doneRef.current = true;
-      // Read the baseline straight from the user doc — this is still the
-      // previous session's value because we haven't written the new one yet.
-      const { profile: p } = useStore.getState();
-      const since = p?.lastSeenAt ?? null;
-      const result = computeActivity(myUid, "visit", since ?? 0);
-      // Persist "seen up to now" regardless of whether we show anything — so a
-      // first visit just establishes the baseline instead of dumping history.
+      const result = recapToShow("visit");
+      // Advance the baseline regardless of whether we show anything, so a
+      // first visit just establishes it instead of later dumping all history.
       touchLastSeen(myUid, Date.now());
-      if (!openRef.current && since !== null && result.items.length > 0)
-        setActivity(result);
+      if (!openRef.current && result) setActivity(result);
     }, SETTLE_MS);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [myUid, loading, profile, allSessions, mySessions, groups]);
 
-  // Manual open (map button): always show a "past month" recap, even if empty.
+  // Manual open (map button): run the same helper again for a "past month"
+  // recap, which always shows (even when empty) since the user asked for it.
   useEffect(() => {
-    if (recapToken === 0 || !myUid) return;
-    const since = Date.now() - MONTH_MS;
-    setActivity(computeActivity(myUid, "month", since));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (recapToken === 0) return;
+    setActivity(recapToShow("month"));
   }, [recapToken]);
 
   return (
@@ -281,14 +299,18 @@ function Sheet({
     const missing = reactorUidList.filter((uid) => !sessionNames.has(uid));
     if (missing.length === 0) return;
     let cancelled = false;
-    fetchUsers(missing).then((users) => {
-      if (cancelled) return;
-      setFetchedNames((prev) => {
-        const next = new Map(prev);
-        for (const u of users) next.set(u.uid, u.displayName);
-        return next;
-      });
-    });
+    fetchUsers(missing)
+      .then((users) => {
+        if (cancelled) return;
+        setFetchedNames((prev) => {
+          const next = new Map(prev);
+          for (const u of users) next.set(u.uid, u.displayName);
+          return next;
+        });
+      })
+      // Names are best-effort — unresolved reactors just fall back to
+      // "someone", so a failed lookup shouldn't surface as an error.
+      .catch(() => {});
     return () => {
       cancelled = true;
     };

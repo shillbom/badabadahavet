@@ -61,6 +61,10 @@ type State = {
   user: User | null;
   profile: UserDoc | null;
   loading: boolean;
+  /** Set when a signed-in session can't be established (e.g. the profile doc
+   *  fails to load). The app reacts by signing out and bouncing the user back
+   *  to /login with an error toast, rather than hanging on the splash. */
+  authError: string | null;
 
   // ── Location ──────────────────────────────────────────────────────────
   currentLocation: { lat: number; lng: number } | null;
@@ -128,6 +132,7 @@ export const useStore = create<State>((set, get) => ({
   user: null,
   profile: null,
   loading: true,
+  authError: null,
   currentLocation: null,
   locationPermission: "checking",
   myUid: null,
@@ -286,6 +291,14 @@ export const useStore = create<State>((set, get) => ({
 
     const fetchLocation = () => get()._refreshLocation();
 
+    // Named so the same reference can be removed on cleanup (an inline arrow
+    // can never be unregistered, so the listener would leak).
+    const onPermissionChange = () => {
+      if (!permissionStatus) return;
+      set({ locationPermission: permissionStatus.state as PermissionState });
+      if (permissionStatus.state !== "denied") fetchLocation();
+    };
+
     const stopUser = () => {
       userUnsubs.forEach((u) => u());
       userUnsubs = [];
@@ -321,10 +334,7 @@ export const useStore = create<State>((set, get) => ({
           permissionStatus = s;
           set({ locationPermission: s.state });
           if (s.state !== "denied") fetchLocation();
-          s.addEventListener("change", () => {
-            set({ locationPermission: s.state as PermissionState });
-            if (s.state !== "denied") fetchLocation();
-          });
+          s.addEventListener("change", onPermissionChange);
         })
         .catch(() => {
           set({ locationPermission: "unsupported" });
@@ -357,7 +367,15 @@ export const useStore = create<State>((set, get) => ({
         return;
       }
 
-      set({ user: u, myUid: u.uid, lastSeenResolved: false });
+      set({ user: u, myUid: u.uid, lastSeenResolved: false, authError: null });
+
+      // A signed-in session we can't fully establish (profile won't load)
+      // shouldn't strand the user on the splash. Sign back out and flag the
+      // error so the app bounces them to /login with a toast.
+      const failAuth = (reason: string) => {
+        set({ authError: reason, loading: false });
+        void signOut(auth).catch(() => {});
+      };
 
       try {
         // If signup is still writing the user doc, wait for it to finish
@@ -389,22 +407,30 @@ export const useStore = create<State>((set, get) => ({
         set({ profile, loading: false });
         if (profile.locale) useLocale.getState().setLocale(profile.locale);
       } catch {
-        // Network error or Firestore failure — user is authed but profile
-        // couldn't be loaded. Unblock the UI so the spinner doesn't hang.
-        set({ loading: false });
+        // Couldn't load the profile doc (network / Firestore failure). Treat
+        // it as a failed login rather than leaving the user authed-but-
+        // profileless, which would hang the splash forever.
+        failAuth("profile_load_failed");
+        return;
       }
 
       userUnsubs = [
-        // User profile — so locale/display-name changes propagate live.
-        onSnapshot(doc(db, "users", u.uid), (snap) => {
-          if (snap.exists()) {
-            const data = snap.data() as UserDoc;
-            set({ profile: data, loading: false });
-            if (data.locale) useLocale.getState().setLocale(data.locale);
-          } else {
-            set({ profile: null });
-          }
-        }),
+        // User profile — so locale/display-name changes propagate live. A
+        // terminal listen failure (e.g. permission revoked) bounces to login
+        // instead of silently freezing on the last-known state.
+        onSnapshot(
+          doc(db, "users", u.uid),
+          (snap) => {
+            if (snap.exists()) {
+              const data = snap.data() as UserDoc;
+              set({ profile: data, loading: false });
+              if (data.locale) useLocale.getState().setLocale(data.locale);
+            } else {
+              set({ profile: null });
+            }
+          },
+          () => failAuth("profile_listen_failed"),
+        ),
 
         watchUserSessions(u.uid, (mySessions) => {
           const { allSessions, places } = get();
@@ -424,7 +450,7 @@ export const useStore = create<State>((set, get) => ({
       stopUser();
       publicUnsubs.forEach((u) => u());
       publicUnsubs = [];
-      permissionStatus?.removeEventListener("change", () => {});
+      permissionStatus?.removeEventListener("change", onPermissionChange);
     };
   },
 }));
