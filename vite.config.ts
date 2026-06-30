@@ -62,34 +62,44 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Split heavy libs into long-lived chunks so route-switches
-        // don't redownload them and so initial JS stays small.
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return;
-          if (
-            id.includes("leaflet.markercluster") ||
-            id.includes("react-leaflet-cluster") ||
-            id.includes("react-leaflet") ||
-            id.includes("/leaflet/")
-          ) {
-            return "leaflet";
-          }
-          if (id.includes("/firebase/") || id.includes("@firebase/")) {
-            return "firebase";
-          }
-          if (id.includes("framer-motion")) {
-            return "motion";
-          }
-          if (id.includes("lucide")) {
-            return "lucide";
-          }
-          if (
-            id.includes("/react/") ||
-            id.includes("/react-dom/") ||
-            id.includes("react-router")
-          ) {
-            return "react";
-          }
+        // Split heavy libs into long-lived chunks so route-switches don't
+        // redownload them and initial JS stays small.
+        //
+        // `priority` matters: React (incl. react-dom, react-router, the JSX
+        // runtime and the scheduler) must be claimed FIRST and removed from
+        // every other group. Without this, rolldown leaks react/jsx-runtime
+        // into whichever vendor chunk happens to reference it first (we saw it
+        // land in `motion`/`leaflet`), which forces the entry — and therefore
+        // the very first paint — to download those 100s of KB just to render.
+        // Highest priority wins, so order by how badly we want each isolated.
+        advancedChunks: {
+          groups: [
+            {
+              name: "react",
+              test: /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/,
+              priority: 50,
+            },
+            {
+              name: "firebase",
+              test: /[\\/]node_modules[\\/]@?firebase[\\/]/,
+              priority: 40,
+            },
+            {
+              name: "leaflet",
+              test: /[\\/]node_modules[\\/](leaflet|leaflet\.markercluster|react-leaflet|react-leaflet-cluster)[\\/]/,
+              priority: 30,
+            },
+            {
+              name: "motion",
+              test: /[\\/]node_modules[\\/]framer-motion[\\/]/,
+              priority: 20,
+            },
+            {
+              name: "lucide",
+              test: /[\\/]node_modules[\\/]lucide/,
+              priority: 10,
+            },
+          ],
         },
       },
     },

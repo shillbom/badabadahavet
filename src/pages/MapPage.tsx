@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Flame, MapPin, Trophy } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { sumScores } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
-import SwimMap from "@/components/SwimMap";
 import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
+const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
   const { user, profile } = useAuth();

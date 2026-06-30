@@ -1,5 +1,6 @@
-@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap");
-
+/* Fonts are loaded via <link> in index.html so they're discovered during HTML
+   parse rather than serialized behind this stylesheet. Don't re-add an @import
+   here — it would put a third-party request back on the critical path. */
 @import "tailwindcss";
 
 /* Tell Tailwind v4 where to look for class usage. */
