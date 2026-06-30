@@ -97,7 +97,9 @@ type State = {
   // ── "While you were away" ─────────────────────────────────────────────
   /** The user's *previous* visit timestamp, captured at login before we
    *  re-stamp lastSeenAt. null = first ever visit (nothing to look back on).
-   *  Drives the welcome-back digest in components/WhileAwayPopup. */
+   *  Drives the welcome-back digest in components/SinceLastVisit — read this
+   *  instead of profile.lastSeenAt, which gets overwritten with "now" by the
+   *  in-flight touchLastSeen() write below, often before the digest runs. */
   lastSeenBaseline: number | null;
   /** True once lastSeenBaseline has been resolved for the current login, so
    *  the digest doesn't compute against the stale initial null. */
@@ -386,7 +388,7 @@ export const useStore = create<State>((set, get) => ({
 
         // Capture the previous visit *before* re-stamping it, then stamp
         // "now" so the next login can diff against this visit. The digest in
-        // WhileAwayPopup reads lastSeenBaseline; the live user-doc snapshot
+        // SinceLastVisit reads lastSeenBaseline; the live user-doc snapshot
         // below will carry the freshly-written value, which is fine — the
         // baseline is held separately in memory.
         set({
