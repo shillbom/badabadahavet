@@ -1,0 +1,111 @@
+import type { ReactNode } from "react";
+import { motion, AnimatePresence, useDragControls } from "framer-motion";
+import { X } from "lucide-react";
+import { useT } from "@/lib/i18n";
+
+/**
+ * Reusable swipe-to-dismiss bottom sheet: a dimmed backdrop plus a rounded
+ * panel that springs up from the bottom and can be flicked back down. Owns its
+ * own enter/exit animation via `AnimatePresence`, so callers just toggle
+ * `open`.
+ *
+ * Because the exit animation needs the content to stay rendered while the sheet
+ * slides away, callers that derive `title`/`children` from state that becomes
+ * null on close should keep the last value around (e.g. via a ref) so the
+ * closing frame still has something to show.
+ *
+ * Two sizes:
+ *  - "large": a tall, flex-column panel (caps at 92dvh) whose body scrolls.
+ *    Drag is started from the grab handle so the inner list stays scrollable.
+ *  - "small": a compact, content-height panel. The whole panel is draggable
+ *    since there's no scroll region to conflict with.
+ */
+export default function BottomSheet({
+  open,
+  onClose,
+  size = "large",
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  size?: "large" | "small";
+  title?: ReactNode;
+  children?: ReactNode;
+}) {
+  const t = useT();
+  const dragControls = useDragControls();
+  const isLarge = size === "large";
+
+  return (
+    <AnimatePresence>
+      {open ? (
+        <>
+          <motion.div
+            key="bs-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-[1100] bg-black/40 backdrop-blur-sm"
+          />
+          <motion.div
+            key="bs-sheet"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            drag="y"
+            dragControls={isLarge ? dragControls : undefined}
+            dragListener={!isLarge}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.4 }}
+            onDragEnd={(_e, info) => {
+              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+            }}
+            style={isLarge ? { maxHeight: "92dvh" } : undefined}
+            className={
+              isLarge
+                ? "fixed inset-x-0 bottom-0 z-[1200] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-3xl bg-white/95 shadow-2xl backdrop-blur-sm"
+                : "fixed inset-x-0 bottom-0 z-[1200] mx-auto max-w-md touch-none rounded-t-3xl bg-white/95 px-6 pt-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)] shadow-2xl backdrop-blur-sm"
+            }
+          >
+            {isLarge ? (
+              <>
+                {/* Drag handle — grab here to dismiss; the body stays scrollable. */}
+                <div
+                  onPointerDown={(e) => dragControls.start(e)}
+                  className="flex flex-none cursor-grab touch-none justify-center pt-4 pb-3 active:cursor-grabbing"
+                >
+                  <div className="h-1 w-10 rounded-full bg-slate-300" />
+                </div>
+
+                {title != null ? (
+                  <div className="flex flex-none items-center justify-between gap-3 px-5 pt-1 pb-3">
+                    <div className="min-w-0 flex-1">{title}</div>
+                    <button
+                      onClick={onClose}
+                      aria-label={t("common.close")}
+                      className="flex-none rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+              </>
+            ) : (
+              <>
+                {/* Decorative handle — the whole panel is draggable. */}
+                <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-300" />
+                {title != null ? <div className="mb-3">{title}</div> : null}
+                {children}
+              </>
+            )}
+          </motion.div>
+        </>
+      ) : null}
+    </AnimatePresence>
+  );
+}

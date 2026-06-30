@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence, useDragControls } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Copy,
   LogOut,
@@ -33,6 +33,7 @@ import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
+import BottomSheet from "@/components/BottomSheet";
 
 const DAY_MS = 86_400_000;
 
@@ -102,6 +103,12 @@ export default function GroupsPage() {
     memberCount: number;
     code: string;
   } | null>(null);
+
+  // Keep the last preview so the confirm sheet still has content to render
+  // while it animates closed (`open` flips to false before unmount).
+  const lastJoinRef = useRef(pendingJoin);
+  if (pendingJoin) lastJoinRef.current = pendingJoin;
+  const join = pendingJoin ?? lastJoinRef.current;
 
   // Trigger a group lookup, then show the confirmation dialog.
   async function lookupAndConfirm(code: string) {
@@ -358,90 +365,59 @@ export default function GroupsPage() {
         </ul>
       )}
 
-      <AnimatePresence>
-        {openGroup ? (
-          <GroupDetailSheet
-            group={openGroup}
-            myUid={user?.uid ?? ""}
-            places={places}
-            onClose={() => setOpenGroup(null)}
-            onLeave={() => onLeave(openGroup.id, openGroup.name)}
-          />
-        ) : null}
-      </AnimatePresence>
+      <GroupDetailSheet
+        group={openGroup}
+        myUid={user?.uid ?? ""}
+        places={places}
+        onClose={() => setOpenGroup(null)}
+        onLeave={() => {
+          if (openGroup) onLeave(openGroup.id, openGroup.name);
+        }}
+      />
 
       {/* Join confirmation dialog */}
-      <AnimatePresence>
-        {pendingJoin ? (
-          <>
-            <motion.div
-              key="join-backdrop"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => !busy && setPendingJoin(null)}
-              className="fixed inset-0 z-[1100] bg-black/40 backdrop-blur-sm"
-            />
-            <motion.div
-              key="join-dialog"
-              initial={{ opacity: 0, scale: 0.93, y: 12 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.93, y: 12 }}
-              transition={{ type: "spring", stiffness: 340, damping: 28 }}
-              drag="y"
-              dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={{ top: 0, bottom: 0.4 }}
-              onDragEnd={(_e, info) => {
-                if (!busy && (info.offset.y > 120 || info.velocity.y > 500))
-                  setPendingJoin(null);
-              }}
-              className="fixed inset-x-0 bottom-0 z-[1200] mx-auto max-w-md touch-none rounded-t-3xl bg-white/95 px-6 pt-6 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)] shadow-2xl backdrop-blur-sm"
-            >
-              {/* Handle */}
-              <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200" />
+      <BottomSheet
+        size="small"
+        open={!!pendingJoin}
+        onClose={() => !busy && setPendingJoin(null)}
+      >
+        {join ? (
+          <div className="flex flex-col items-center gap-3 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-wave-100 text-4xl ring-1 ring-wave-200">
+              {join.emoji ?? "👥"}
+            </div>
+            <div>
+              <p className="text-sm text-slate-500">
+                {t("groups.join.confirm.body")}
+              </p>
+              <h3 className="mt-0.5 font-display text-2xl font-black text-wave-900">
+                {join.name}
+              </h3>
+              <p className="mt-1 text-sm text-slate-400">
+                {join.memberCount === 1
+                  ? t("groups.join.confirm.member_one")
+                  : t("groups.join.confirm.members", {
+                      n: join.memberCount,
+                    })}
+              </p>
+            </div>
 
-              <div className="flex flex-col items-center gap-3 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-wave-100 text-4xl ring-1 ring-wave-200">
-                  {pendingJoin.emoji ?? "👥"}
-                </div>
-                <div>
-                  <p className="text-sm text-slate-500">
-                    {t("groups.join.confirm.body")}
-                  </p>
-                  <h3 className="mt-0.5 font-display text-2xl font-black text-wave-900">
-                    {pendingJoin.name}
-                  </h3>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {pendingJoin.memberCount === 1
-                      ? t("groups.join.confirm.member_one")
-                      : t("groups.join.confirm.members", {
-                          n: pendingJoin.memberCount,
-                        })}
-                  </p>
-                </div>
-
-                <div className="mt-2 flex w-full gap-3">
-                  <Button
-                    variant="secondary"
-                    className="flex-1"
-                    onClick={() => setPendingJoin(null)}
-                    disabled={busy}
-                  >
-                    {t("common.cancel")}
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    loading={busy}
-                    onClick={confirmJoin}
-                  >
-                    {t("groups.join.confirm.button")}
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          </>
+            <div className="mt-2 flex w-full gap-3">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setPendingJoin(null)}
+                disabled={busy}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button className="flex-1" loading={busy} onClick={confirmJoin}>
+                {t("groups.join.confirm.button")}
+              </Button>
+            </div>
+          </div>
         ) : null}
-      </AnimatePresence>
+      </BottomSheet>
     </div>
   );
 }
@@ -453,30 +429,38 @@ function GroupDetailSheet({
   onClose,
   onLeave,
 }: {
-  group: GroupDoc;
+  group: GroupDoc | null;
   myUid: string;
   places: PlaceDoc[];
   onClose: () => void;
   onLeave: () => void;
 }) {
   const t = useT();
+
+  // Keep the last group around so the sheet still renders content while it
+  // animates closed (`group` flips to null before the sheet unmounts).
+  const lastRef = useRef<GroupDoc | null>(group);
+  if (group) lastRef.current = group;
+  const shown = group ?? lastRef.current;
+
   const [allSessions, setAllSessions] = useState<SessionDoc[]>([]);
   const [sortBy, setSortBy] = useState<"points" | "recent" | "streak">(
     "points",
   );
-  const dragControls = useDragControls();
 
   useEffect(() => {
+    if (!group) return;
     return watchMemberSessions(group.members, setAllSessions);
-  }, [group.members]);
+  }, [group?.members]);
 
   function shareInviteLink() {
-    const url = `${window.location.origin}/groups?join=${group.code}`;
+    if (!shown) return;
+    const url = `${window.location.origin}/groups?join=${shown.code}`;
     if (navigator.share) {
       navigator
         .share({
-          title: t("groups.share_title", { name: group.name }),
-          text: t("groups.share_text", { code: group.code }),
+          title: t("groups.share_title", { name: shown.name }),
+          text: t("groups.share_text", { code: shown.code }),
           url,
         })
         .catch(() => {});
@@ -487,14 +471,14 @@ function GroupDetailSheet({
       );
     }
   }
-  const isLeader = group.createdBy === myUid;
+  const isLeader = shown?.createdBy === myUid;
   const [profiles, setProfiles] = useState<UserDoc[]>([]);
   const [loadingProfiles, setLoadingProfiles] = useState(true);
   const [selectedMember, setSelectedMember] = useState<UserDoc | null>(null);
 
   // Rename state
   const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState(group.name);
+  const [nameInput, setNameInput] = useState(shown?.name ?? "");
   const [savingMeta, setSavingMeta] = useState(false);
 
   // Emoji picker state
@@ -529,19 +513,21 @@ function GroupDetailSheet({
   ];
 
   useEffect(() => {
-    setNameInput(group.name);
-  }, [group.name]);
+    if (shown) setNameInput(shown.name);
+  }, [shown?.name]);
 
   useEffect(() => {
+    if (!group) return;
     setLoadingProfiles(true);
     fetchUsers(group.members).then((users) => {
       setProfiles(users);
       setLoadingProfiles(false);
     });
-  }, [group.members]);
+  }, [group?.members]);
 
   const memberStats = useMemo(() => {
-    const memberSet = new Set(group.members);
+    const members = shown?.members ?? [];
+    const memberSet = new Set(members);
     const acc = new Map<
       string,
       {
@@ -552,7 +538,7 @@ function GroupDetailSheet({
         dates: number[];
       }
     >();
-    for (const uid of group.members)
+    for (const uid of members)
       acc.set(uid, {
         points: 0,
         swims: 0,
@@ -588,7 +574,7 @@ function GroupDetailSheet({
         streak: currentDayStreak(e.dates),
       });
     return map;
-  }, [allSessions, group.members]);
+  }, [allSessions, shown?.members]);
 
   const sortedMembers = useMemo(() => {
     return [...profiles].sort((a, b) => {
@@ -605,6 +591,7 @@ function GroupDetailSheet({
   }, [profiles, memberStats, sortBy]);
 
   async function onKick(member: UserDoc) {
+    if (!shown) return;
     if (
       !window.confirm(
         t("groups.detail.kick_confirm", { name: member.displayName }),
@@ -612,7 +599,7 @@ function GroupDetailSheet({
     )
       return;
     try {
-      await kickGroupMember({ groupId: group.id, memberUid: member.uid });
+      await kickGroupMember({ groupId: shown.id, memberUid: member.uid });
       toast.success(t("groups.detail.kicked", { name: member.displayName }));
     } catch {
       toast.error(t("groups.detail.kick_error"));
@@ -620,14 +607,15 @@ function GroupDetailSheet({
   }
 
   async function saveName() {
+    if (!shown) return;
     const trimmed = nameInput.trim();
-    if (!trimmed || trimmed === group.name) {
+    if (!trimmed || trimmed === shown.name) {
       setEditingName(false);
       return;
     }
     setSavingMeta(true);
     try {
-      await updateGroupMeta(group.id, { name: trimmed, emoji: group.emoji });
+      await updateGroupMeta(shown.id, { name: trimmed, emoji: shown.emoji });
       toast.success(t("groups.detail.rename.success"));
       setEditingName(false);
     } catch {
@@ -638,332 +626,296 @@ function GroupDetailSheet({
   }
 
   async function saveEmoji(emoji: string) {
+    if (!shown) return;
     setEmojiPickerOpen(false);
     try {
-      await updateGroupMeta(group.id, { name: group.name, emoji });
+      await updateGroupMeta(shown.id, { name: shown.name, emoji });
       toast.success(t("groups.detail.rename.success"));
     } catch {
       toast.error(t("groups.detail.rename.error"));
     }
   }
 
-  const groupIcon = group.emoji ?? "👥";
+  const groupIcon = shown?.emoji ?? "👥";
+
+  const header =
+    shown != null ? (
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {/* Group emoji / picker trigger */}
+        <div className="relative flex-none">
+          <button
+            ref={emojiTriggerRef}
+            disabled={!isLeader}
+            onClick={() => {
+              if (!isLeader) return;
+              if (!emojiPickerOpen && emojiTriggerRef.current) {
+                const r = emojiTriggerRef.current.getBoundingClientRect();
+                setPickerPos({
+                  top: r.bottom + 8,
+                  left: r.left + r.width / 2,
+                });
+              }
+              setEmojiPickerOpen((v) => !v);
+            }}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-wave-100 text-2xl ring-1 ring-wave-200 transition hover:bg-wave-200 disabled:cursor-default"
+            title={isLeader ? t("groups.detail.emoji.pick") : undefined}
+          >
+            {groupIcon}
+          </button>
+          {createPortal(
+            <AnimatePresence>
+              {emojiPickerOpen && pickerPos && (
+                <>
+                  {/* Click-away backdrop */}
+                  <button
+                    type="button"
+                    aria-label="close"
+                    onClick={() => setEmojiPickerOpen(false)}
+                    className="fixed inset-0 z-[1300] cursor-default bg-transparent"
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.9, y: -4 }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 380,
+                      damping: 28,
+                    }}
+                    style={{
+                      position: "fixed",
+                      top: pickerPos.top,
+                      left: pickerPos.left,
+                      transform: "translateX(-50%)",
+                    }}
+                    className="z-[1310] w-[14.5rem] rounded-2xl bg-white p-2 shadow-xl ring-1 ring-slate-200"
+                  >
+                    {/* Triangle pointer */}
+                    <div className="relative grid grid-cols-5 gap-1">
+                      {GROUP_EMOJIS.map((e) => {
+                        const active = e === groupIcon;
+                        return (
+                          <button
+                            key={e}
+                            onClick={() => saveEmoji(e)}
+                            className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl transition active:scale-95 ${
+                              active
+                                ? "bg-wave-100 ring-2 ring-wave-500"
+                                : "hover:bg-wave-50"
+                            }`}
+                          >
+                            {e}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>,
+            document.body,
+          )}
+        </div>
+        {/* Name / rename */}
+        <div className="min-w-0 flex-1">
+          {editingName && isLeader ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                autoFocus
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveName();
+                  if (e.key === "Escape") setEditingName(false);
+                }}
+                maxLength={60}
+                className="min-w-0 flex-1 rounded-lg border border-wave-300 bg-white px-2 py-1 font-display text-lg font-black text-wave-900 outline-none focus:ring-2 focus:ring-wave-400"
+              />
+              <button
+                onClick={saveName}
+                disabled={savingMeta}
+                className="rounded-full bg-wave-600 p-1.5 text-white hover:bg-wave-700 disabled:opacity-50"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setEditingName(false)}
+                className="rounded-full bg-slate-100 p-1.5 text-slate-500 hover:bg-slate-200"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <h3 className="truncate font-display text-xl font-black text-wave-900">
+                {shown.name}
+              </h3>
+              {isLeader && (
+                <button
+                  onClick={() => {
+                    setNameInput(shown.name);
+                    setEditingName(true);
+                  }}
+                  className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+          <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
+            {shown.members.length === 1
+              ? t("groups.member_one")
+              : t("groups.member_many", { n: shown.members.length })}
+            {" · "}
+            <span className="font-mono tracking-wider">{shown.code}</span>
+            <button
+              onClick={shareInviteLink}
+              className="inline-flex items-center gap-0.5 rounded-full bg-wave-50 px-2 py-0.5 text-[10px] font-medium text-wave-600 ring-1 ring-wave-200 hover:bg-wave-100"
+              title={t("groups.share_link")}
+            >
+              <Share2 className="h-2.5 w-2.5" />
+              {t("groups.share_link")}
+            </button>
+          </p>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <>
-      {/* Backdrop */}
-      <motion.div
-        key="backdrop"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-        className="fixed inset-0 z-[1100] bg-black/40 backdrop-blur-sm"
-      />
-      {/* Sheet */}
-      <motion.div
-        key="sheet"
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 320, damping: 32 }}
-        drag="y"
-        dragControls={dragControls}
-        dragListener={false}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0, bottom: 0.4 }}
-        onDragEnd={(_e, info) => {
-          if (info.offset.y > 120 || info.velocity.y > 500) onClose();
-        }}
-        className="fixed inset-x-0 bottom-0 z-[1200] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-3xl bg-white/95 shadow-2xl backdrop-blur-sm"
-        style={{ maxHeight: "85dvh" }}
-      >
-        {/* Handle (drag from here to dismiss; keeps list scrollable) */}
-        <div
-          onPointerDown={(e) => dragControls.start(e)}
-          className="flex flex-none cursor-grab touch-none justify-center pt-4 pb-3 active:cursor-grabbing"
-        >
-          <div className="h-1 w-10 rounded-full bg-slate-300" />
-        </div>
-        {/* Header */}
-        <div className="flex flex-none items-start justify-between gap-3 px-5 pt-1 pb-3">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            {/* Group emoji / picker trigger */}
-            <div className="relative flex-none">
-              <button
-                ref={emojiTriggerRef}
-                disabled={!isLeader}
-                onClick={() => {
-                  if (!isLeader) return;
-                  if (!emojiPickerOpen && emojiTriggerRef.current) {
-                    const r = emojiTriggerRef.current.getBoundingClientRect();
-                    setPickerPos({
-                      top: r.bottom + 8,
-                      left: r.left + r.width / 2,
-                    });
-                  }
-                  setEmojiPickerOpen((v) => !v);
-                }}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-wave-100 text-2xl ring-1 ring-wave-200 transition hover:bg-wave-200 disabled:cursor-default"
-                title={isLeader ? t("groups.detail.emoji.pick") : undefined}
-              >
-                {groupIcon}
-              </button>
-              {createPortal(
-                <AnimatePresence>
-                  {emojiPickerOpen && pickerPos && (
-                    <>
-                      {/* Click-away backdrop */}
-                      <button
-                        type="button"
-                        aria-label="close"
-                        onClick={() => setEmojiPickerOpen(false)}
-                        className="fixed inset-0 z-[1300] cursor-default bg-transparent"
-                      />
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0.9, y: -4 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: -4 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 380,
-                          damping: 28,
-                        }}
-                        style={{
-                          position: "fixed",
-                          top: pickerPos.top,
-                          left: pickerPos.left,
-                          transform: "translateX(-50%)",
-                        }}
-                        className="z-[1310] w-[14.5rem] rounded-2xl bg-white p-2 shadow-xl ring-1 ring-slate-200"
-                      >
-                        {/* Triangle pointer */}
-                        <div className="relative grid grid-cols-5 gap-1">
-                          {GROUP_EMOJIS.map((e) => {
-                            const active = e === groupIcon;
-                            return (
-                              <button
-                                key={e}
-                                onClick={() => saveEmoji(e)}
-                                className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl transition active:scale-95 ${
-                                  active
-                                    ? "bg-wave-100 ring-2 ring-wave-500"
-                                    : "hover:bg-wave-50"
-                                }`}
-                              >
-                                {e}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </motion.div>
-                    </>
-                  )}
-                </AnimatePresence>,
-                document.body,
-              )}
-            </div>
-            {/* Name / rename */}
-            <div className="min-w-0 flex-1">
-              {editingName && isLeader ? (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    autoFocus
-                    value={nameInput}
-                    onChange={(e) => setNameInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") saveName();
-                      if (e.key === "Escape") setEditingName(false);
-                    }}
-                    maxLength={60}
-                    className="min-w-0 flex-1 rounded-lg border border-wave-300 bg-white px-2 py-1 font-display text-lg font-black text-wave-900 outline-none focus:ring-2 focus:ring-wave-400"
-                  />
-                  <button
-                    onClick={saveName}
-                    disabled={savingMeta}
-                    className="rounded-full bg-wave-600 p-1.5 text-white hover:bg-wave-700 disabled:opacity-50"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setEditingName(false)}
-                    className="rounded-full bg-slate-100 p-1.5 text-slate-500 hover:bg-slate-200"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <h3 className="truncate font-display text-xl font-black text-wave-900">
-                    {group.name}
-                  </h3>
-                  {isLeader && (
-                    <button
-                      onClick={() => {
-                        setNameInput(group.name);
-                        setEditingName(true);
-                      }}
-                      className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              )}
-              <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                {group.members.length === 1
-                  ? t("groups.member_one")
-                  : t("groups.member_many", { n: group.members.length })}
-                {" · "}
-                <span className="font-mono tracking-wider">{group.code}</span>
+      <BottomSheet open={!!group} onClose={onClose} size="large" title={header}>
+        {shown ? (
+          <div className="px-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
+            <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              {t("groups.detail.members")}
+            </h4>
+            <div className="mb-3 flex rounded-full bg-slate-100 p-0.5 text-[11px] font-semibold">
+              {(
+                [
+                  ["points", t("groups.sort.points")],
+                  ["recent", t("groups.sort.recent")],
+                  ["streak", t("groups.sort.streak")],
+                ] as const
+              ).map(([key, label]) => (
                 <button
-                  onClick={shareInviteLink}
-                  className="inline-flex items-center gap-0.5 rounded-full bg-wave-50 px-2 py-0.5 text-[10px] font-medium text-wave-600 ring-1 ring-wave-200 hover:bg-wave-100"
-                  title={t("groups.share_link")}
+                  key={key}
+                  type="button"
+                  onClick={() => setSortBy(key)}
+                  className={cn(
+                    "flex-1 rounded-full px-2 py-1 transition",
+                    sortBy === key
+                      ? "bg-white text-wave-800 shadow-sm"
+                      : "text-slate-500",
+                  )}
                 >
-                  <Share2 className="h-2.5 w-2.5" />
-                  {t("groups.share_link")}
+                  {label}
                 </button>
-              </p>
+              ))}
             </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="flex-none rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Member list */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
-          <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-            {t("groups.detail.members")}
-          </h4>
-          <div className="mb-3 flex rounded-full bg-slate-100 p-0.5 text-[11px] font-semibold">
-            {(
-              [
-                ["points", t("groups.sort.points")],
-                ["recent", t("groups.sort.recent")],
-                ["streak", t("groups.sort.streak")],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSortBy(key)}
-                className={cn(
-                  "flex-1 rounded-full px-2 py-1 transition",
-                  sortBy === key
-                    ? "bg-white text-wave-800 shadow-sm"
-                    : "text-slate-500",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {loadingProfiles ? (
-            <div className="flex h-20 items-center justify-center">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-wave-600 border-r-transparent" />
-            </div>
-          ) : (
-            <ul className="space-y-2 pb-4">
-              {sortedMembers.map((member, i) => {
-                const stats = memberStats.get(member.uid) ?? {
-                  points: 0,
-                  swims: 0,
-                  spots: new Set<string>(),
-                  lastSwim: 0,
-                  streak: 0,
-                };
-                const isMe = member.uid === myUid;
-                const last = recency(stats.lastSwim, t);
-                return (
-                  <li
-                    key={member.uid}
-                    onClick={() => setSelectedMember(member)}
-                    className="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/70 px-3 py-2.5 ring-1 ring-white/60 transition hover:bg-white/90 active:scale-[0.99]"
-                  >
-                    <div className="relative flex h-8 w-8 flex-none items-center justify-center rounded-full bg-wave-100 text-lg">
-                      {member.emoji ?? "🌊"}
-                      {i === 0 && sortBy === "points" && (
-                        <span className="absolute -top-1 -right-1 text-[10px]">
-                          🥇
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-wave-900">
-                        {member.displayName}
-                        {isMe && (
-                          <span className="text-[10px] text-wave-500">
-                            {t("common.you")}
-                          </span>
-                        )}
-                        {member.uid === group.createdBy && (
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-700 uppercase">
-                            {t("groups.founder")}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                        <span className="font-semibold text-wave-700">
-                          {stats.points} {t("groups.detail.points")}
-                        </span>
-                        <span>·</span>
-                        <span className="flex items-center gap-0.5">
-                          <Waves className="h-2.5 w-2.5" /> {stats.swims}{" "}
-                          {t("groups.detail.swims")}
-                        </span>
-                        <span>·</span>
-                        <span
-                          className={cn(
-                            "flex items-center gap-0.5",
-                            stats.streak > 0 && "font-semibold text-orange-600",
-                          )}
-                        >
-                          🔥 {stats.streak}
-                        </span>
-                      </div>
-                    </div>
-                    <span
-                      className={cn(
-                        "flex-none rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap",
-                        last.cls,
-                      )}
-                      title={t("groups.last.tooltip")}
+            {loadingProfiles ? (
+              <div className="flex h-20 items-center justify-center">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-wave-600 border-r-transparent" />
+              </div>
+            ) : (
+              <ul className="space-y-2 pb-4">
+                {sortedMembers.map((member, i) => {
+                  const stats = memberStats.get(member.uid) ?? {
+                    points: 0,
+                    swims: 0,
+                    spots: new Set<string>(),
+                    lastSwim: 0,
+                    streak: 0,
+                  };
+                  const isMe = member.uid === myUid;
+                  const last = recency(stats.lastSwim, t);
+                  return (
+                    <li
+                      key={member.uid}
+                      onClick={() => setSelectedMember(member)}
+                      className="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/70 px-3 py-2.5 ring-1 ring-white/60 transition hover:bg-white/90 active:scale-[0.99]"
                     >
-                      {last.label}
-                    </span>
-                    {isLeader && !isMe ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onKick(member);
-                        }}
-                        className="rounded-full bg-white p-1.5 text-rose-400 ring-1 ring-rose-200 hover:bg-rose-50 hover:text-rose-600"
-                        title={t("groups.detail.kick")}
-                        aria-label={t("groups.detail.kick")}
+                      <div className="relative flex h-8 w-8 flex-none items-center justify-center rounded-full bg-wave-100 text-lg">
+                        {member.emoji ?? "🌊"}
+                        {i === 0 && sortBy === "points" && (
+                          <span className="absolute -top-1 -right-1 text-[10px]">
+                            🥇
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-wave-900">
+                          {member.displayName}
+                          {isMe && (
+                            <span className="text-[10px] text-wave-500">
+                              {t("common.you")}
+                            </span>
+                          )}
+                          {member.uid === shown.createdBy && (
+                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-700 uppercase">
+                              {t("groups.founder")}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                          <span className="font-semibold text-wave-700">
+                            {stats.points} {t("groups.detail.points")}
+                          </span>
+                          <span>·</span>
+                          <span className="flex items-center gap-0.5">
+                            <Waves className="h-2.5 w-2.5" /> {stats.swims}{" "}
+                            {t("groups.detail.swims")}
+                          </span>
+                          <span>·</span>
+                          <span
+                            className={cn(
+                              "flex items-center gap-0.5",
+                              stats.streak > 0 &&
+                                "font-semibold text-orange-600",
+                            )}
+                          >
+                            🔥 {stats.streak}
+                          </span>
+                        </div>
+                      </div>
+                      <span
+                        className={cn(
+                          "flex-none rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap",
+                          last.cls,
+                        )}
+                        title={t("groups.last.tooltip")}
                       >
-                        <UserMinus className="h-3.5 w-3.5" />
-                      </button>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {/* Leave button at bottom */}
-          <button
-            onClick={onLeave}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 hover:bg-rose-100"
-          >
-            <LogOut className="h-4 w-4" />
-            {t("groups.leave_title")}
-          </button>
-        </div>
-      </motion.div>
+                        {last.label}
+                      </span>
+                      {isLeader && !isMe ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onKick(member);
+                          }}
+                          className="rounded-full bg-white p-1.5 text-rose-400 ring-1 ring-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                          title={t("groups.detail.kick")}
+                          aria-label={t("groups.detail.kick")}
+                        >
+                          <UserMinus className="h-3.5 w-3.5" />
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {/* Leave button at bottom */}
+            <button
+              onClick={onLeave}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 hover:bg-rose-100"
+            >
+              <LogOut className="h-4 w-4" />
+              {t("groups.leave_title")}
+            </button>
+          </div>
+        ) : null}
+      </BottomSheet>
 
       {/* Member-detail map overlay (stacks above the group sheet) */}
       <AnimatePresence>

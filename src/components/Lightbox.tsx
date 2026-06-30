@@ -9,7 +9,7 @@ import Photo from "@/components/Photo";
 /**
  * Full-screen photo viewer for a swim. Tapping a swim photo (on the Spot page
  * or in a friend's swim list) opens this over everything; tap anywhere or the
- * close button to dismiss. `index` selects which of `sessions` to show.
+ * close button to dismiss. Pass the `session` to show, or `null` when closed.
  *
  * Rendered through a portal to <body> so it's never confined by a transformed
  * or overflow-hidden ancestor (e.g. the bottom-sheet or a scroll strip) — a
@@ -17,16 +17,14 @@ import Photo from "@/components/Photo";
  * from actually covering the screen.
  */
 export default function Lightbox({
-  sessions,
-  index,
+  session,
   onClose,
 }: {
-  sessions: SessionDoc[];
-  index: number | null;
+  session: SessionDoc | null;
   onClose: () => void;
 }) {
   const t = useT();
-  const s = index != null ? sessions[index] : null;
+  const s = session;
   return createPortal(
     <AnimatePresence>
       {s ? (
