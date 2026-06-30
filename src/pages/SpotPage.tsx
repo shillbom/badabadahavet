@@ -5,7 +5,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Snowflake,
@@ -17,7 +17,6 @@ import {
   MapPin,
   Share2,
   Thermometer,
-  X,
   Pencil,
   Trash2,
   ImageOff,
@@ -42,7 +41,7 @@ import {
 } from "@/lib/utils";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import SwimMap from "@/components/SwimMap";
-import Photo from "@/components/Photo";
+import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
@@ -57,7 +56,6 @@ export default function SpotPage() {
   const [place, setPlace] = useState<PlaceDoc | null>(null);
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [searchParams] = useSearchParams();
   const focusedSessionId = searchParams.get("session");
   // Track which sessions have been highlighted once so we don't replay
@@ -336,26 +334,15 @@ export default function SpotPage() {
 
       {photoSessions.length > 0 ? (
         <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
-          {photoSessions.map((s, idx) => (
+          {photoSessions.map((s) => (
             <div
               key={s.id}
               className="relative h-24 w-24 flex-none overflow-hidden rounded-xl ring-1 ring-white/60"
             >
-              <button
-                onClick={() => setLightboxIdx(idx)}
-                className="block h-full w-full"
-                aria-label={`${s.displayName}`}
-              >
-                <Photo
-                  src={s.photoUrl!}
-                  thumb={s.photoThumb}
-                  className="h-full w-full"
-                  imgClassName="transition-transform hover:scale-110"
-                />
-                <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                  {s.displayName}
-                </span>
-              </button>
+              <SwimPhoto session={s} className="h-full w-full" />
+              <span className="pointer-events-none absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                {s.displayName}
+              </span>
               {isAdmin ? (
                 <button
                   onClick={(e) => {
@@ -421,9 +408,8 @@ export default function SpotPage() {
             }`}
           >
             {s.photoUrl ? (
-              <Photo
-                src={s.photoUrl}
-                thumb={s.photoThumb}
+              <SwimPhoto
+                session={s}
                 className="h-14 w-14 flex-none rounded-lg"
               />
             ) : (
@@ -510,65 +496,7 @@ export default function SpotPage() {
           </Link>
         )}
       </div>
-
-      <Lightbox
-        sessions={photoSessions}
-        index={lightboxIdx}
-        onClose={() => setLightboxIdx(null)}
-      />
     </div>
-  );
-}
-
-function Lightbox({
-  sessions,
-  index,
-  onClose,
-}: {
-  sessions: SessionDoc[];
-  index: number | null;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const s = index != null ? sessions[index] : null;
-  return (
-    <AnimatePresence>
-      {s ? (
-        <motion.div
-          key={s.id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/85 p-4"
-        >
-          <button
-            onClick={onClose}
-            className="absolute top-[max(env(safe-area-inset-top),1rem)] right-4 rounded-full bg-white/10 p-2 text-white"
-            aria-label={t("common.close")}
-          >
-            <X className="h-4 w-4" />
-          </button>
-          <motion.div
-            initial={{ scale: 0.92, y: 8 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.92, y: 8 }}
-            onClick={(e) => e.stopPropagation()}
-            className="max-h-[85dvh] max-w-full"
-          >
-            <img
-              src={s.photoUrl!}
-              alt=""
-              className="max-h-[80dvh] max-w-full rounded-xl"
-            />
-            <div className="mt-2 text-center text-xs text-white/80">
-              {s.displayName} · {formatDate(s.date)}
-              {s.note ? ` · ${s.note}` : ""}
-            </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
   );
 }
 

@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap");
 
 @import "tailwindcss";
 
@@ -8,8 +8,12 @@
 
 /* Theme — Tailwind v4 reads custom tokens from CSS instead of a JS config. */
 @theme {
-  --font-display: "Fraunces", ui-serif, Georgia, serif;
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Caveat Brush ships a single weight (400). Heading classes throughout use
+     font-bold/font-black; we let the browser synthesize the heavier weight
+     rather than fall back to a different family. */
+  --font-display: "Caveat Brush", "Bricolage Grotesque", system-ui, sans-serif;
+  --font-sans:
+    "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", sans-serif;
 
   --color-wave-50: #eff9ff;
   --color-wave-100: #def1ff;
@@ -65,6 +69,13 @@
   body,
   #root {
     height: 100%;
+  }
+  /* Caveat Brush has a small x-height, so it reads smaller than the body font
+     at the same font-size. Scale every .font-display element up to a slightly
+     larger target x-height ratio so display text appears a touch bigger without
+     touching each text-* utility. Bump the value for a larger effect. */
+  .font-display {
+    font-size-adjust: 0.5;
   }
   /* iOS PWA: 100dvh includes areas that aren't truly available (home indicator
      gap, etc.). -webkit-fill-available gives the exact usable height instead.

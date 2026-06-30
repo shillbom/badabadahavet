@@ -80,7 +80,7 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
       "Perfekt badväder, {name}! ☀️",
       "Hej {name} — dags att hoppa i! 🌊",
       "Middagsbad, {name}? 🏖️",
-      "Solen är uppe, {name}! Häng inte! 💦",
+      "Solen är uppe, {name}! Ut och bada! 💦",
     ],
     afternoon: [
       "Kvällsdopp, {name}? 🌅",
@@ -154,11 +154,12 @@ export function localeBcp(l?: Locale): string {
 const MESSAGES: Record<Locale, Record<string, string>> = {
   sv: {
     "app.name": "Badligan",
-    "app.tagline": "En liten, vänlig badtävling",
+    "app.tagline": "Tävla med dina vänner om vem som badar mest.",
     "common.loading": "Laddar…",
     "common.you": "du",
     "common.back": "Tillbaka",
     "common.close": "Stäng",
+    "common.view_photo": "Visa bild",
     "update.prompt": "En ny version finns.",
     "update.reload": "Ladda om",
     "common.previous": "Föregående",
@@ -252,8 +253,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.last.today": "Du har badat idag — snyggt!",
     "map.last.yesterday": "Du badade igår.",
     "map.last.days": "{n} dagar sedan ditt senaste dopp.",
-    "map.empty.helper":
-      "Inga bad ännu — logga ditt första så dyker en pin upp här. ✨",
     "map.guest.title": "Välkommen till Badligan",
     "map.guest.subtitle":
       "Bläddra runt fritt. Logga in för att tävla, reagera och logga bad.",
@@ -387,6 +386,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "groups.member.summary": "{spots} platser · {swims} bad · {points} poäng",
     "groups.member.view.map": "Karta",
     "groups.member.view.list": "Lista",
+    "groups.member.show_on_map": "Visa på kartan",
 
     "log.title": "Logga ett bad",
     "log.mode.now": "Här & nu",
@@ -580,6 +580,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Badplatser i Danmark och Finland kommer från Europeiska miljöbyrån (EEA),",
     "about.data.meteo":
       "För platser utan en officiell mätning uppskattas vattentemperaturen från satellitdata via Open-Meteo,",
+    "about.data.maps":
+      "Kartbilder kommer från OpenStreetMap och CARTO, satellitvyn från Esri, och vilket land ett bad ligger i slås upp med BigDataCloud.",
     "about.privacy.title": "Integritet",
     "about.privacy.body":
       "Din e-post används bara om du behöver återställa lösenordet. Vi delar inte din data, skickar ingen reklam och du kan radera kontot när som helst från profilen.",
@@ -629,6 +631,25 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "celebration.swim.new_spot": "ny plats",
     "celebration.swim.winter": "vinter",
     "celebration.swim.points": "+{n} p",
+
+    "whileaway.title": "Medan du var borta 🌊",
+    "whileaway.subtitle": "Det här har hänt sen sist",
+    "whileaway.month.title": "Senaste månaden 🌊",
+    "whileaway.month.subtitle": "Det senaste från din badvärld",
+    "whileaway.summary.swims_one": "1 nytt bad",
+    "whileaway.summary.swims_many": "{n} nya bad",
+    "whileaway.summary.reactions_one": "1 ny reaktion",
+    "whileaway.summary.reactions_many": "{n} nya reaktioner",
+    "whileaway.swims_one": "{name} loggade ett bad",
+    "whileaway.swims_many": "{name} loggade {n} bad",
+    "whileaway.reactions_one": "1 ny reaktion på ditt bad",
+    "whileaway.reactions_many": "{n} nya reaktioner på ditt bad",
+    "whileaway.at": "vid {place}",
+    "whileaway.view_swims": "Visa bad",
+    "whileaway.dismiss": "Okej!",
+    "whileaway.empty.body":
+      "Inget nytt den senaste månaden — dags att skapa liv i vattnet! 💦",
+    "whileaway.open": "Vad har hänt sen sist",
 
     "map.popup.swims_one": "1 bad",
     "map.popup.swims_many": "{n} bad",
@@ -681,11 +702,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
   en: {
     "app.name": "Badligan",
-    "app.tagline": "A friendly little swim-spot competition",
+    "app.tagline": "A friendly swim-spot competition",
     "common.loading": "Loading…",
     "common.you": "you",
     "common.back": "Back",
     "common.close": "Close",
+    "common.view_photo": "View photo",
     "update.prompt": "A new version is available.",
     "update.reload": "Reload",
     "common.previous": "Previous",
@@ -777,8 +799,6 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.last.today": "You swam today — nice.",
     "map.last.yesterday": "You swam yesterday.",
     "map.last.days": "It's been {n} days since your last dip.",
-    "map.empty.helper":
-      "No swims yet — when you log one, a pin shows up here. ✨",
     "map.guest.title": "Welcome to Badligan",
     "map.guest.subtitle":
       "Have a browse. Sign in to compete, react and log swims.",
@@ -912,6 +932,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "groups.member.summary": "{spots} spots · {swims} swims · {points} pts",
     "groups.member.view.map": "Map",
     "groups.member.view.list": "List",
+    "groups.member.show_on_map": "Show on map",
 
     "log.title": "Log a swim",
     "log.mode.now": "Here & now",
@@ -1103,6 +1124,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Swim spots in Denmark and Finland come from the European Environment Agency (EEA),",
     "about.data.meteo":
       "For spots without an official reading, water temperature is estimated from satellite data via Open-Meteo,",
+    "about.data.maps":
+      "Map tiles come from OpenStreetMap and CARTO, satellite imagery from Esri, and each swim's country is looked up via BigDataCloud.",
     "about.privacy.title": "Privacy",
     "about.privacy.body":
       "Your email is only used so you can reset your password. We never share your data, send marketing, and you can delete your account any time from your profile.",
@@ -1151,6 +1174,25 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "celebration.swim.new_spot": "new spot",
     "celebration.swim.winter": "winter",
     "celebration.swim.points": "+{n} pts",
+
+    "whileaway.title": "While you were away 🌊",
+    "whileaway.subtitle": "Here's what you missed",
+    "whileaway.month.title": "Your last month 🌊",
+    "whileaway.month.subtitle": "The latest from your swim world",
+    "whileaway.summary.swims_one": "1 new swim",
+    "whileaway.summary.swims_many": "{n} new swims",
+    "whileaway.summary.reactions_one": "1 new reaction",
+    "whileaway.summary.reactions_many": "{n} new reactions",
+    "whileaway.swims_one": "{name} logged a swim",
+    "whileaway.swims_many": "{name} logged {n} swims",
+    "whileaway.reactions_one": "1 new reaction on your swim",
+    "whileaway.reactions_many": "{n} new reactions on your swim",
+    "whileaway.at": "at {place}",
+    "whileaway.view_swims": "View swims",
+    "whileaway.dismiss": "Got it!",
+    "whileaway.empty.body":
+      "Nothing new in the last month — time to make some waves! 💦",
+    "whileaway.open": "What's happened since last time",
 
     "map.popup.swims_one": "1 swim",
     "map.popup.swims_many": "{n} swims",

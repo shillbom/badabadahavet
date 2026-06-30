@@ -40,14 +40,11 @@ service cloud.firestore {
     }
     function validReactionDelta(emoji, oldR, newR) {
       let myUid = request.auth.uid;
-      let oldSet = oldR.get(emoji, []).toSet();
-      let newSet = newR.get(emoji, []).toSet();
-      let added = newSet.difference(oldSet);
-      let removed = oldSet.difference(newSet);
-      // Either unchanged, or exactly the caller's uid was toggled.
-      return (added.size() == 0 && removed.size() == 0)
-          || (added == [myUid].toSet() && removed.size() == 0)
-          || (removed == [myUid].toSet() && added.size() == 0);
+      // Each emoji maps to { uid: addedAt }. The only key that may be added,
+      // removed, or changed under an emoji is the caller's own uid.
+      let oldE = oldR.get(emoji, {});
+      let newE = newR.get(emoji, {});
+      return newE.diff(oldE).affectedKeys().hasOnly([myUid]);
     }
     function validLatLng(lat, lng) {
       return lat is number && lng is number

@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { X, Calendar } from "lucide-react";
 import { useStore } from "@/store/sessions";
-import { recordLastVisit } from "@/lib/data";
+import { reactorUids, reactionAddedAt, touchLastSeen } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/utils";
@@ -46,34 +46,27 @@ type Activity = {
   newReactionCount: number;
 };
 
-/** Reactions from people other than the swimmer themselves. */
-function othersReactionCount(s: SessionDoc, myUid: string): number {
+/** Reactions on `s` left by people other than the swimmer themselves, added
+ *  after `since` (epoch ms). Reactions carry the timestamp they were added
+ *  (see lib/data.toggleReaction), so "new since your last visit" is exact —
+ *  legacy reactions with no timestamp (addedAt 0) are treated as already-seen. */
+function newReactionCount(s: SessionDoc, myUid: string, since: number): number {
   const reactions = s.reactions ?? {};
   let n = 0;
-  for (const emoji in reactions)
-    n += reactions[emoji].filter((uid) => uid !== myUid).length;
-  return n;
-}
-
-/** Current reaction counts on the user's own swims (only swims that have any),
- *  for persisting as the next "seen" baseline. */
-function reactionSnapshot(
-  mySessions: SessionDoc[],
-  myUid: string,
-): Record<string, number> {
-  const snapshot: Record<string, number> = {};
-  for (const s of mySessions) {
-    const n = othersReactionCount(s, myUid);
-    if (n > 0) snapshot[s.id] = n;
+  for (const emoji in reactions) {
+    const entry = reactions[emoji];
+    for (const uid of reactorUids(entry)) {
+      if (uid === myUid) continue;
+      if (reactionAddedAt(entry, uid) > since) n++;
+    }
   }
-  return snapshot;
+  return n;
 }
 
 function computeActivity(
   myUid: string,
   mode: "visit" | "month",
   since: number,
-  seen: Record<string, number>,
 ): Activity {
   const { allSessions, mySessions, groups } = useStore.getState();
 
@@ -86,14 +79,12 @@ function computeActivity(
     .filter((s) => friendUids.has(s.uid) && (s.createdAt ?? s.date) > since)
     .sort((a, b) => (b.createdAt ?? b.date) - (a.createdAt ?? a.date));
 
-  // "visit" surfaces reactions on any of my swims (an old swim can get a fresh
-  // reaction); "month" limits to swims from the window so it reads as a recap.
+  // New reactions on any of my swims — an old swim can pick up a fresh
+  // reaction, so we look at all my swims and count reactions added after
+  // `since` (rather than limiting by swim date).
   const reactionItems: ReactionItem[] = [];
   for (const s of mySessions) {
-    if (mode === "month" && s.date < since) continue;
-    const now = othersReactionCount(s, myUid);
-    const before = seen[s.id] ?? 0;
-    const delta = now - before;
+    const delta = newReactionCount(s, myUid, since);
     if (delta > 0) reactionItems.push({ session: s, delta });
   }
   reactionItems.sort((a, b) => b.session.date - a.session.date);
@@ -152,17 +143,12 @@ export default function SinceLastVisit() {
       doneRef.current = true;
       // Read the baseline straight from the user doc — this is still the
       // previous session's value because we haven't written the new one yet.
-      const { profile: p, mySessions: mine } = useStore.getState();
-      const since = p?.lastVisit ?? null;
-      const seen = p?.lastVisitReactions ?? {};
-      const result = computeActivity(myUid, "visit", since ?? 0, seen);
+      const { profile: p } = useStore.getState();
+      const since = p?.lastSeenAt ?? null;
+      const result = computeActivity(myUid, "visit", since ?? 0);
       // Persist "seen up to now" regardless of whether we show anything — so a
       // first visit just establishes the baseline instead of dumping history.
-      void recordLastVisit(
-        myUid,
-        Date.now(),
-        reactionSnapshot(mine, myUid),
-      ).catch(() => {});
+      touchLastSeen(myUid, Date.now());
       if (
         !openRef.current &&
         since !== null &&
@@ -179,7 +165,7 @@ export default function SinceLastVisit() {
   useEffect(() => {
     if (recapToken === 0 || !myUid) return;
     const since = Date.now() - MONTH_MS;
-    setActivity(computeActivity(myUid, "month", since, {}));
+    setActivity(computeActivity(myUid, "month", since));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recapToken]);
 
@@ -364,7 +350,8 @@ function Sheet({
                   const reactions = s.reactions ?? {};
                   const emojis = Object.keys(reactions).filter(
                     (e) =>
-                      reactions[e].filter((uid) => uid !== myUid).length > 0,
+                      reactorUids(reactions[e]).filter((uid) => uid !== myUid)
+                        .length > 0,
                   );
                   return (
                     <motion.li
@@ -389,7 +376,11 @@ function Sheet({
                             >
                               {e}
                               <span className="tabular-nums">
-                                {reactions[e].filter((u) => u !== myUid).length}
+                                {
+                                  reactorUids(reactions[e]).filter(
+                                    (u) => u !== myUid,
+                                  ).length
+                                }
                               </span>
                             </span>
                           ))}

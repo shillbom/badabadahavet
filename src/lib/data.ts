@@ -12,7 +12,6 @@ import {
   orderBy,
   onSnapshot,
   arrayRemove,
-  arrayUnion,
   writeBatch,
   Unsubscribe,
 } from "firebase/firestore";
@@ -126,20 +125,18 @@ export async function updateUserLastLocation(
 }
 
 /**
- * Persist "everything up to now is seen" for the since-last-visit recap:
- * the current timestamp plus a snapshot of how many reactions each of the
- * user's own swims currently has. Stored on the user doc so the recap works
- * across devices. `reactions` should already be pruned to swims with > 0.
+ * Stamp the user's "last seen" timestamp to `ts` (call once per app boot).
+ * The value that was stored *before* this write is what drives the
+ * "while you were away" digest, so callers must read the old value first.
+ * Best-effort: a failed write just means no digest next time, so we never
+ * let it surface as an error.
  */
-export async function recordLastVisit(
-  uid: string,
-  lastVisit: number,
-  reactions: Record<string, number>,
-) {
-  await updateDoc(doc(usersCol, uid), {
-    lastVisit,
-    lastVisitReactions: reactions,
-  });
+export async function touchLastSeen(uid: string, ts: number): Promise<void> {
+  try {
+    await updateDoc(doc(usersCol, uid), { lastSeenAt: ts });
+  } catch {
+    /* offline / transient — ignore, it's a non-critical convenience field */
+  }
 }
 
 export async function recordAchievements(uid: string, ids: string[]) {
@@ -384,21 +381,45 @@ export function watchAllSessions(
 export const REACTION_EMOJIS = ["🔥", "💪", "❄️", "🤩", "👏"] as const;
 
 /**
+ * Reactor UIDs for a single emoji entry, tolerant of both the current
+ * `{ uid: addedAt }` map shape and the legacy `uid[]` array shape.
+ */
+export function reactorUids(
+  entry: Record<string, number> | string[] | undefined,
+): string[] {
+  if (!entry) return [];
+  return Array.isArray(entry) ? entry : Object.keys(entry);
+}
+
+/**
+ * Epoch ms when `uid` added their reaction for this emoji entry, or 0 when
+ * unknown (legacy array-shaped reactions carried no timestamp).
+ */
+export function reactionAddedAt(
+  entry: Record<string, number> | string[] | undefined,
+  uid: string,
+): number {
+  if (!entry || Array.isArray(entry)) return 0;
+  return entry[uid] ?? 0;
+}
+
+/**
  * Toggle an emoji reaction on a session. If the user has already reacted
- * with this emoji, remove them; otherwise add them.
+ * with this emoji, remove them; otherwise add them with the current time as
+ * the reaction timestamp (used by the "while you were away" recap).
  */
 export async function toggleReaction(
   sessionId: string,
   emoji: string,
   uid: string,
-  currentReactors: string[],
+  hasReacted: boolean,
 ): Promise<void> {
   const ref = doc(sessionsCol, sessionId);
-  const field = `reactions.${emoji}`;
-  if (currentReactors.includes(uid)) {
-    await updateDoc(ref, { [field]: arrayRemove(uid) });
+  const field = `reactions.${emoji}.${uid}`;
+  if (hasReacted) {
+    await updateDoc(ref, { [field]: deleteField() });
   } else {
-    await updateDoc(ref, { [field]: arrayUnion(uid) });
+    await updateDoc(ref, { [field]: Date.now() });
   }
 }
 

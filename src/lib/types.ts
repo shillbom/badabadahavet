@@ -22,15 +22,11 @@ export type UserDoc = {
   isAdmin?: boolean;
   /** Last known geolocation — used as the map starting point. */
   lastLocation?: { lat: number; lng: number };
-  /** Epoch ms of the user's previous app visit. Drives the "since your last
-   *  visit" recap. Stored server-side (not per-device) so the recap is
-   *  consistent across the user's devices and reinstalls. */
-  lastVisit?: number;
-  /** Reaction counts (from other people) on each of the user's own swims as
-   *  of `lastVisit`, keyed by session id. Only swims that had reactions are
-   *  stored. Reactions carry no timestamp, so the recap diffs current counts
-   *  against this snapshot to find new ones. */
-  lastVisitReactions?: Record<string, number>;
+  /** Epoch ms of the user's previous visit. Stamped to "now" on every app
+   *  boot; the value read at boot is the *previous* visit, which powers the
+   *  "while you were away" digest (new swims + reactions since you last
+   *  looked). Owner-writable — it's a personal, low-stakes field. */
+  lastSeenAt?: number;
   /** "Want to swim" list — keyed by placeId. Whether an entry is "done" is
    *  derived from the user's sessions at that place, not stored here. */
   toswim?: Record<string, ToswimEntry>;
@@ -99,8 +95,13 @@ export type SessionDoc = {
   border?: string;
   points: number;
   createdAt: number;
-  /** Emoji reactions: key = emoji, value = list of UIDs who reacted. */
-  reactions?: Record<string, string[]>;
+  /** Emoji reactions: key = emoji, value = a map of reactor UID -> epoch ms
+   *  when they reacted. The timestamp powers the "while you were away" recap
+   *  (so we can tell which reactions are new since your last visit).
+   *  Legacy docs may still hold a plain UID array with no timestamps — read
+   *  via the `reactorUids` / `reactionAddedAt` helpers in lib/data, which
+   *  tolerate both shapes. */
+  reactions?: Record<string, Record<string, number> | string[]>;
 };
 
 export type GroupDoc = {
