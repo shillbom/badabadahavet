@@ -1,11 +1,4 @@
-import {
-  MapContainer,
-  Marker,
-  Popup,
-  TileLayer,
-  Tooltip,
-  useMap,
-} from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import L, { type LatLngExpression } from "leaflet";
 // Leaflet's styles ship with the map, not the app shell — keeping this import
 // here (rather than in main.tsx) keeps the 190 KB leaflet chunk and its CSS
@@ -577,20 +570,6 @@ export default function SwimMap({
                   },
                 }}
               >
-                {hasFreshTemp(p) ? (
-                  <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
-                    <div className="text-[11px]">
-                      <span className="font-semibold text-wave-900">
-                        💧 {p.waterTemp.toFixed(1)} °C
-                      </span>
-                      {p.waterTempAt ? (
-                        <span className="ml-1 text-slate-500">
-                          · {formatAge(p.waterTempAt, t)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </Tooltip>
-                ) : null}
                 {/* Only show popup when not in logging mode — clicking a
                     pin while logging selects it immediately instead. */}
                 {!isPickable ? (
@@ -681,20 +660,6 @@ export default function SwimMap({
                 },
               }}
             >
-              {hasFreshTemp(p) ? (
-                <Tooltip direction="top" offset={[0, -PIN_TOTAL + 4]}>
-                  <div className="text-[11px]">
-                    <span className="font-semibold text-wave-900">
-                      💧 {p.waterTemp.toFixed(1)} °C
-                    </span>
-                    {p.waterTempAt ? (
-                      <span className="ml-1 text-slate-500">
-                        · {formatAge(p.waterTempAt, t)}
-                      </span>
-                    ) : null}
-                  </div>
-                </Tooltip>
-              ) : null}
               {!isPickable ? (
                 <Popup>
                   <div className="text-sm">
