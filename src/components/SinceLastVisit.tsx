@@ -3,12 +3,7 @@ import { create } from "zustand";
 import { motion } from "framer-motion";
 import { Calendar } from "lucide-react";
 import { useStore } from "@/store/sessions";
-import {
-  reactorUids,
-  reactionAddedAt,
-  touchLastSeen,
-  fetchUsers,
-} from "@/lib/data";
+import { reactorUids, reactionAddedAt, fetchUsers } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { formatDateTime } from "@/lib/utils";
@@ -153,15 +148,18 @@ function computeActivity(
  *             empty), since the user explicitly asked to see it.
  */
 function recapToShow(mode: "visit" | "month"): Activity | null {
-  const { myUid, profile } = useStore.getState();
+  const { myUid, lastSeenBaseline } = useStore.getState();
   if (!myUid) return null;
   if (mode === "month") {
     return computeActivity(myUid, "month", Date.now() - MONTH_MS);
   }
   // First-ever visit: no baseline yet, so just establish one (show nothing).
-  const since = profile?.lastSeenAt ?? null;
-  if (since === null) return null;
-  const result = computeActivity(myUid, "visit", since);
+  // Read the baseline captured at login (before it gets re-stamped to "now"),
+  // not profile.lastSeenAt directly — that field is overwritten with "now" by
+  // the in-flight touchLastSeen() write, often before this even runs, which
+  // would silently erase the "since last visit" window.
+  if (lastSeenBaseline === null) return null;
+  const result = computeActivity(myUid, "visit", lastSeenBaseline);
   return result.items.length > 0 ? result : null;
 }
 
@@ -178,7 +176,7 @@ function recapToShow(mode: "visit" | "month"): Activity | null {
 export default function SinceLastVisit() {
   const myUid = useStore((s) => s.myUid);
   const loading = useStore((s) => s.loading);
-  const profile = useStore((s) => s.profile);
+  const lastSeenResolved = useStore((s) => s.lastSeenResolved);
   const allSessions = useStore((s) => s.allSessions);
   const mySessions = useStore((s) => s.mySessions);
   const groups = useStore((s) => s.groups);
@@ -204,21 +202,18 @@ export default function SinceLastVisit() {
   // half-loaded snapshot. `recapToShow` owns the "what to show" decision; here
   // we just trigger it after the data goes quiet.
   useEffect(() => {
-    if (!myUid || loading || !profile || doneRef.current) return;
+    if (!myUid || loading || !lastSeenResolved || doneRef.current) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       if (doneRef.current) return;
       doneRef.current = true;
       const result = recapToShow("visit");
-      // Advance the baseline regardless of whether we show anything, so a
-      // first visit just establishes it instead of later dumping all history.
-      touchLastSeen(myUid, Date.now());
       if (!openRef.current && result) setActivity(result);
     }, SETTLE_MS);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [myUid, loading, profile, allSessions, mySessions, groups]);
+  }, [myUid, loading, lastSeenResolved, allSessions, mySessions, groups]);
 
   // Manual open (map button): run the same helper again for a "past month"
   // recap, which always shows (even when empty) since the user asked for it.
