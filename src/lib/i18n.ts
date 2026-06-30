@@ -154,7 +154,7 @@ export function localeBcp(l?: Locale): string {
 const MESSAGES: Record<Locale, Record<string, string>> = {
   sv: {
     "app.name": "Badligan",
-    "app.tagline": "En liten, vänlig badtävling",
+    "app.tagline": "Tävla med dina vänner om vem som badar mest.",
     "common.loading": "Laddar…",
     "common.you": "du",
     "common.back": "Tillbaka",
@@ -687,7 +687,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
   en: {
     "app.name": "Badligan",
-    "app.tagline": "A friendly little swim-spot competition",
+    "app.tagline": "A friendly swim-spot competition",
     "common.loading": "Loading…",
     "common.you": "you",
     "common.back": "Back",

@@ -70,6 +70,13 @@
   #root {
     height: 100%;
   }
+  /* Caveat Brush has a small x-height, so it reads smaller than the body font
+     at the same font-size. Scale every .font-display element up to a slightly
+     larger target x-height ratio so display text appears a touch bigger without
+     touching each text-* utility. Bump the value for a larger effect. */
+  .font-display {
+    font-size-adjust: 0.5;
+  }
   /* iOS PWA: 100dvh includes areas that aren't truly available (home indicator
      gap, etc.). -webkit-fill-available gives the exact usable height instead.
      Scoped to iOS via -webkit-touch-callout so it doesn't affect other browsers. */

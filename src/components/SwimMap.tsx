@@ -58,7 +58,7 @@ function pinHtml(opts: {
   const ringShadow = opts.ring
     ? `0 0 0 3px ${opts.ring.ring},0 0 9px 1px ${opts.ring.glow},`
     : "";
-  return `<div style="position:relative;width:${opts.size}px;height:${total}px;">
+  return `<div style="position:relative;width:${opts.size}px;height:${total}px;font-family:var(--font-display);">
     <div style="
       position:absolute;left:0;top:0;
       width:${opts.size}px;height:${opts.size}px;
@@ -67,7 +67,7 @@ function pinHtml(opts: {
       border:${opts.border}px solid white;
       box-shadow:${ringShadow}0 4px 12px ${opts.shadow};
       display:flex;align-items:center;justify-content:center;
-      color:white;font-weight:900;font-size:${Math.round(opts.size * 0.55)}px;line-height:1;
+      color:white;font-weight:900;font-size:${Math.round(opts.size * 0.62)}px;line-height:1;
     ">${opts.content ?? ""}</div>
     <div style="
       position:absolute;left:50%;bottom:0;transform:translateX(-50%);
@@ -164,7 +164,7 @@ function pinIcon(
       border: 2,
       ring,
       content: hasTemp
-        ? `<span style="font-size:11px;line-height:1;">${Math.round(temp)}°</span>`
+        ? `<span style="font-size:14px;line-height:1;">${Math.round(temp)}°</span>`
         : undefined,
     }),
   });
@@ -196,11 +196,11 @@ function clusterIconHtml(
            padding:2px 5px;border-radius:8px;border:1.5px solid white;white-space:nowrap;
            box-shadow:0 1px 3px rgba(2,100,160,0.5);">💧 ${Math.round(avgTemp)}°</div>`
       : "";
-  return `<div style="position:relative;width:${size}px;height:${size}px;">
+  return `<div style="position:relative;width:${size}px;height:${size}px;font-family:var(--font-display);">
     <div style="width:${size}px;height:${size}px;border-radius:50%;
       display:flex;align-items:center;justify-content:center;
       background:${bg};color:white;
-      font-weight:700;font-size:13px;border:2px solid white;
+      font-weight:700;font-size:18px;border:2px solid white;
       box-shadow:0 3px 8px rgba(2,100,160,0.45);">${count}</div>
     ${tempPill}
   </div>`;
