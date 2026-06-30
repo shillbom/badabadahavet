@@ -80,7 +80,7 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
       "Perfekt badväder, {name}! ☀️",
       "Hej {name} — dags att hoppa i! 🌊",
       "Middagsbad, {name}? 🏖️",
-      "Solen är uppe, {name}! Häng inte! 💦",
+      "Solen är uppe, {name}! Ut och bada! 💦",
     ],
     afternoon: [
       "Kvällsdopp, {name}? 🌅",
@@ -589,7 +589,22 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.tech.body":
       "Byggt med React, Vite, Firebase, Leaflet och Tailwind. Kartan använder CartoDB-tiles ovanpå OpenStreetMap.",
     "about.tech.source": "Källkoden finns på",
+    "about.support.title": "Bjud på en öl 🍻",
+    "about.support.body":
+      "Gillar du Badligan? Swisha gärna en slant för driftkostnaden — eller bara en öl efter badet. Helt frivilligt, noll krav. 🌊",
+    "about.support.cta": "Swisha en slant",
     "about.created_by": "Skapad av",
+
+    "sincevisit.title": "Sedan du var här sist",
+    "sincevisit.month.title": "Senaste månaden",
+    "sincevisit.open": "Återblick",
+    "sincevisit.empty": "Inget nytt den senaste månaden — dags att hoppa i! 🌊",
+    "sincevisit.sub.swims_one": "1 nytt bad",
+    "sincevisit.sub.swims_many": "{n} nya bad",
+    "sincevisit.sub.reactions_one": "1 ny reaktion",
+    "sincevisit.sub.reactions_many": "{n} nya reaktioner",
+    "sincevisit.friends_title": "Vännernas bad",
+    "sincevisit.reactions_title": "Nya reaktioner på dina bad",
 
     "profile.title": "Profil",
     "profile.history_cta": "Bläddra i alla dina bad",
@@ -1118,7 +1133,22 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.tech.body":
       "Built with React, Vite, Firebase, Leaflet and Tailwind. The map uses CartoDB tiles over OpenStreetMap.",
     "about.tech.source": "Source code lives on",
+    "about.support.title": "Buy me a beer 🍻",
+    "about.support.body":
+      "Enjoying Badligan? Feel free to Swish a little something towards the running costs — or just a beer after the swim. Totally optional, zero pressure. 🌊",
+    "about.support.cta": "Swish a little something",
     "about.created_by": "Created by",
+
+    "sincevisit.title": "Since you were last here",
+    "sincevisit.month.title": "This past month",
+    "sincevisit.open": "Recap",
+    "sincevisit.empty": "Nothing new this past month — time to jump in! 🌊",
+    "sincevisit.sub.swims_one": "1 new swim",
+    "sincevisit.sub.swims_many": "{n} new swims",
+    "sincevisit.sub.reactions_one": "1 new reaction",
+    "sincevisit.sub.reactions_many": "{n} new reactions",
+    "sincevisit.friends_title": "Your friends' swims",
+    "sincevisit.reactions_title": "New reactions on your swims",
 
     "profile.title": "Profile",
     "profile.history_cta": "Browse all your swims",

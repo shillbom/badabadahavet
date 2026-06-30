@@ -95,8 +95,13 @@ export type SessionDoc = {
   border?: string;
   points: number;
   createdAt: number;
-  /** Emoji reactions: key = emoji, value = list of UIDs who reacted. */
-  reactions?: Record<string, string[]>;
+  /** Emoji reactions: key = emoji, value = a map of reactor UID -> epoch ms
+   *  when they reacted. The timestamp powers the "while you were away" recap
+   *  (so we can tell which reactions are new since your last visit).
+   *  Legacy docs may still hold a plain UID array with no timestamps — read
+   *  via the `reactorUids` / `reactionAddedAt` helpers in lib/data, which
+   *  tolerate both shapes. */
+  reactions?: Record<string, Record<string, number> | string[]>;
 };
 
 export type GroupDoc = {

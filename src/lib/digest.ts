@@ -1,4 +1,5 @@
 import type { GroupDoc, SessionDoc } from "./types";
+import { reactorUids } from "./data";
 
 /**
  * "While you were away" digest — what changed since the user's previous
@@ -87,7 +88,7 @@ export type DigestInput = {
 export function reactionTotal(s: SessionDoc): number {
   const r = s.reactions ?? {};
   let n = 0;
-  for (const emoji in r) n += r[emoji]?.length ?? 0;
+  for (const emoji in r) n += reactorUids(r[emoji]).length;
   return n;
 }
 
@@ -95,8 +96,8 @@ export function reactionTotal(s: SessionDoc): number {
 function topEmojis(s: SessionDoc): string[] {
   const r = s.reactions ?? {};
   return Object.keys(r)
-    .filter((e) => (r[e]?.length ?? 0) > 0)
-    .sort((a, b) => (r[b]?.length ?? 0) - (r[a]?.length ?? 0));
+    .filter((e) => reactorUids(r[e]).length > 0)
+    .sort((a, b) => reactorUids(r[b]).length - reactorUids(r[a]).length);
 }
 
 /**

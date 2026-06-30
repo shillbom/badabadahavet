@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { REACTION_EMOJIS, toggleReaction } from "@/lib/data";
+import { REACTION_EMOJIS, reactorUids, toggleReaction } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 
@@ -37,14 +37,15 @@ export default function ReactionBar({
 
   const reactions = session.reactions ?? {};
   const activeEmojis = REACTION_EMOJIS.filter(
-    (e) => (reactions[e]?.length ?? 0) > 0,
+    (e) => reactorUids(reactions[e]).length > 0,
   );
 
   async function onToggle(emoji: string) {
     if (!myUid || pending) return;
     setPending(emoji);
     try {
-      await toggleReaction(session.id, emoji, myUid, reactions[emoji] ?? []);
+      const hasReacted = reactorUids(reactions[emoji]).includes(myUid);
+      await toggleReaction(session.id, emoji, myUid, hasReacted);
     } finally {
       setPending(null);
       setShowPicker(false);
@@ -54,7 +55,7 @@ export default function ReactionBar({
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1">
       {activeEmojis.map((emoji) => {
-        const reactors = reactions[emoji] ?? [];
+        const reactors = reactorUids(reactions[emoji]);
         const mine = !!myUid && reactors.includes(myUid);
         return (
           <motion.button
@@ -87,7 +88,7 @@ export default function ReactionBar({
             >
               {REACTION_EMOJIS.map((emoji) => {
                 const mine =
-                  !!myUid && (reactions[emoji] ?? []).includes(myUid);
+                  !!myUid && reactorUids(reactions[emoji]).includes(myUid);
                 return (
                   <button
                     key={emoji}

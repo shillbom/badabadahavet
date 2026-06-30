@@ -12,12 +12,13 @@ import {
   Plus,
   ListChecks,
   LogIn,
-  Sparkles,
+  History,
+  Info,
 } from "lucide-react";
 import { Suspense } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
-import { useWhileAwayLauncher } from "@/components/WhileAwayPopup";
+import { openRecap } from "@/components/SinceLastVisit";
 import { cn, rememberReturnPath } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
@@ -27,7 +28,6 @@ export default function Layout() {
   const location = useLocation();
   const t = useT();
 
-  const openWhileAway = useWhileAwayLauncher((s) => s.open);
   const groupCount = useStore((s) => s.groups.length);
   const groupSubtitle =
     groupCount === 0
@@ -122,14 +122,25 @@ export default function Layout() {
               {t("layout.sign_in")}
             </Link>
           ) : (
-            <button
-              onClick={openWhileAway}
-              aria-label={t("whileaway.open")}
-              title={t("whileaway.open")}
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-wave-600 shadow-sm ring-1 ring-wave-200/70 hover:bg-white hover:text-wave-700"
-            >
-              <Sparkles className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openRecap}
+                aria-label={t("sincevisit.open")}
+                title={t("sincevisit.open")}
+                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+              >
+                <History className="h-4 w-4" />
+              </button>
+              <Link
+                to="/about"
+                aria-label={t("about.title")}
+                title={t("about.title")}
+                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+              >
+                <Info className="h-4 w-4" />
+              </Link>
+            </div>
           )}
         </div>
       </header>

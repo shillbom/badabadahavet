@@ -12,7 +12,6 @@ import {
   orderBy,
   onSnapshot,
   arrayRemove,
-  arrayUnion,
   writeBatch,
   Unsubscribe,
 } from "firebase/firestore";
@@ -382,21 +381,45 @@ export function watchAllSessions(
 export const REACTION_EMOJIS = ["🔥", "💪", "❄️", "🤩", "👏"] as const;
 
 /**
+ * Reactor UIDs for a single emoji entry, tolerant of both the current
+ * `{ uid: addedAt }` map shape and the legacy `uid[]` array shape.
+ */
+export function reactorUids(
+  entry: Record<string, number> | string[] | undefined,
+): string[] {
+  if (!entry) return [];
+  return Array.isArray(entry) ? entry : Object.keys(entry);
+}
+
+/**
+ * Epoch ms when `uid` added their reaction for this emoji entry, or 0 when
+ * unknown (legacy array-shaped reactions carried no timestamp).
+ */
+export function reactionAddedAt(
+  entry: Record<string, number> | string[] | undefined,
+  uid: string,
+): number {
+  if (!entry || Array.isArray(entry)) return 0;
+  return entry[uid] ?? 0;
+}
+
+/**
  * Toggle an emoji reaction on a session. If the user has already reacted
- * with this emoji, remove them; otherwise add them.
+ * with this emoji, remove them; otherwise add them with the current time as
+ * the reaction timestamp (used by the "while you were away" recap).
  */
 export async function toggleReaction(
   sessionId: string,
   emoji: string,
   uid: string,
-  currentReactors: string[],
+  hasReacted: boolean,
 ): Promise<void> {
   const ref = doc(sessionsCol, sessionId);
-  const field = `reactions.${emoji}`;
-  if (currentReactors.includes(uid)) {
-    await updateDoc(ref, { [field]: arrayRemove(uid) });
+  const field = `reactions.${emoji}.${uid}`;
+  if (hasReacted) {
+    await updateDoc(ref, { [field]: deleteField() });
   } else {
-    await updateDoc(ref, { [field]: arrayUnion(uid) });
+    await updateDoc(ref, { [field]: Date.now() });
   }
 }
 
