@@ -14,6 +14,7 @@ import {
   LogIn,
   History,
   Info,
+  UsersRound,
 } from "lucide-react";
 import { Suspense } from "react";
 import { useAuth } from "@/auth/AuthContext";
@@ -236,7 +237,7 @@ export default function Layout() {
               <NavTab
                 to="/groups"
                 label={t("nav.groups")}
-                icon={<span className="text-base">👥</span>}
+                icon={<UsersRound className="h-5 w-5" />}
               />
             ) : null}
           </motion.nav>
@@ -261,7 +262,7 @@ function NavTab({
       end={to === "/"}
       className={({ isActive }) =>
         cn(
-          "relative flex w-12 flex-col items-center gap-0.5 rounded-2xl px-1 py-1 text-[10px] font-medium transition-colors",
+          "relative flex w-12 flex-col items-center gap-0.5 rounded-2xl px-4 py-2 text-[10px] font-medium transition-colors",
           isActive ? "text-wave-700" : "text-slate-400 hover:text-slate-600",
         )
       }
