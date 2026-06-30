@@ -29,10 +29,135 @@
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
+    <!-- Warm up the connections the app needs the instant it boots: the auth +
+         data backends, and Google Fonts. preconnect opens DNS/TLS early so the
+         first auth/Firestore request and the font fetch don't pay handshake
+         latency on the critical path. -->
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
+    <link rel="preconnect" href="https://securetoken.googleapis.com" />
+    <link rel="preconnect" href="https://firestore.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Map tiles load only after sign-in, so a lighter DNS hint is enough. -->
+    <link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
+
+    <!-- Fonts loaded here (not via @import inside the bundled CSS) so the
+         browser discovers them during HTML parse and fetches them in parallel.
+         Loaded async (preload → swap to stylesheet onload) so this third-party
+         request never blocks first paint — the splash and body fall back to
+         system-ui and swap in the webfont when it arrives (display=swap). -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap"
+      />
+    </noscript>
+
+    <!-- Boot splash. Lives in the HTML so it paints during parse — before any
+         JS downloads or React boots. The styles are inline (not Tailwind) so
+         the splash never depends on the app's JS chunks. The <img> being in the
+         initial markup also lets the preload scanner fetch it immediately.
+         React renders an identical <FullSplash> (same class names) on mount, so
+         the handoff is seamless. Keep this in sync with components/Splash.tsx. -->
+    <style>
+      .app-splash {
+        display: flex;
+        min-height: 100dvh;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+      }
+      .app-splash__logo {
+        position: relative;
+        height: 5rem;
+        width: 5rem;
+      }
+      .app-splash__ripple {
+        position: absolute;
+        inset: 0;
+        border-radius: 9999px;
+        border: 2px solid #2bb8ff; /* wave-400 */
+        animation: app-splash-ripple 1.6s ease-out infinite;
+      }
+      .app-splash__ripple:nth-child(2) {
+        animation-delay: 0.4s;
+      }
+      .app-splash__ripple:nth-child(3) {
+        animation-delay: 0.8s;
+      }
+      .app-splash__img {
+        position: absolute;
+        inset: 0;
+        height: 100%;
+        width: 100%;
+        border-radius: 9999px;
+        object-fit: cover;
+        animation: app-splash-bob 2s ease-in-out infinite;
+      }
+      .app-splash__word {
+        font-family: "Caveat Brush", "Bricolage Grotesque", system-ui,
+          sans-serif;
+        font-size: 0.875rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #0264a0; /* wave-700 */
+        animation: app-splash-fade 0.6s ease-out 0.2s both;
+      }
+      @keyframes app-splash-ripple {
+        0% {
+          transform: scale(0.5);
+          opacity: 0.5;
+        }
+        100% {
+          transform: scale(1.6);
+          opacity: 0;
+        }
+      }
+      @keyframes app-splash-bob {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-6px);
+        }
+      }
+      @keyframes app-splash-fade {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+    </style>
+
     <title>Badligan</title>
   </head>
   <body class="bg-sky-50">
-    <div id="root"></div>
+    <div id="root">
+      <div class="app-splash">
+        <div class="app-splash__logo">
+          <span class="app-splash__ripple"></span>
+          <span class="app-splash__ripple"></span>
+          <span class="app-splash__ripple"></span>
+          <img
+            class="app-splash__img"
+            src="/web-app-manifest-192x192.png"
+            alt="Badligan"
+          />
+        </div>
+        <div class="app-splash__word">Badligan</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

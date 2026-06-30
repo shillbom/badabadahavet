@@ -7,6 +7,10 @@ import {
   useMap,
 } from "react-leaflet";
 import L, { type LatLngExpression } from "leaflet";
+// Leaflet's styles ship with the map, not the app shell — keeping this import
+// here (rather than in main.tsx) keeps the 190 KB leaflet chunk and its CSS
+// off the first-paint critical path; they load lazily with this component.
+import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import MarkerClusterGroup from "react-leaflet-cluster";

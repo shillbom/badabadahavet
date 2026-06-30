@@ -1,17 +1,21 @@
-import React from "react";
+import { StrictMode, lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import "leaflet/dist/leaflet.css";
 import "./index.css";
-import App from "./App";
-import { AuthProvider } from "./auth/AuthContext";
+import { FullSplash } from "./components/Splash";
+
+// App is lazy so the Firebase/Leaflet/page chunks load *after* first paint.
+// Auth state lives in the Zustand store (no provider needed), so importing the
+// store — and with it the ~618 KB Firebase chunk — happens inside this lazy
+// boundary rather than eagerly here on the critical path.
+const App = lazy(() => import("./App"));
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+  <StrictMode>
     <BrowserRouter>
-      <AuthProvider>
+      <Suspense fallback={<FullSplash />}>
         <App />
-      </AuthProvider>
+      </Suspense>
     </BrowserRouter>
-  </React.StrictMode>,
+  </StrictMode>,
 );
