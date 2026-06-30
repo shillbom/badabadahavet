@@ -125,6 +125,23 @@ export async function updateUserLastLocation(
   await updateDoc(doc(usersCol, uid), { lastLocation: { lat, lng } });
 }
 
+/**
+ * Persist "everything up to now is seen" for the since-last-visit recap:
+ * the current timestamp plus a snapshot of how many reactions each of the
+ * user's own swims currently has. Stored on the user doc so the recap works
+ * across devices. `reactions` should already be pruned to swims with > 0.
+ */
+export async function recordLastVisit(
+  uid: string,
+  lastVisit: number,
+  reactions: Record<string, number>,
+) {
+  await updateDoc(doc(usersCol, uid), {
+    lastVisit,
+    lastVisitReactions: reactions,
+  });
+}
+
 export async function recordAchievements(uid: string, ids: string[]) {
   if (ids.length === 0) return;
   const updates: Record<string, number> = {};

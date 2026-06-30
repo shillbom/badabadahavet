@@ -3,6 +3,10 @@ import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
+// Pre-filled Swish payment link (amount + message are editable by the payer).
+const SWISH_URL =
+  "https://app.swish.nu/1/p/sw/?sw=0734323512&amt=20.00&cur=SEK&msg=Badligan%20rulez&edit=amt,msg&src=qr";
+
 export default function AboutPage() {
   const navigate = useNavigate();
   const t = useT();
@@ -113,6 +117,19 @@ export default function AboutPage() {
           </a>
           .
         </p>
+      </Section>
+
+      <Section title={t("about.support.title")}>
+        <p>{t("about.support.body")}</p>
+        <a
+          href={SWISH_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 flex items-center justify-center gap-2 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:from-pink-600 hover:to-rose-600 active:scale-[0.98]"
+        >
+          <span className="text-base">🍻</span>
+          {t("about.support.cta")}
+        </a>
       </Section>
 
       <div className="mt-8 text-center text-xs text-slate-500">

@@ -6,10 +6,19 @@ import {
   useNavigate,
 } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Map as MapIcon, Trophy, Plus, ListChecks, LogIn } from "lucide-react";
+import {
+  Map as MapIcon,
+  Trophy,
+  Plus,
+  ListChecks,
+  LogIn,
+  History,
+  Info,
+} from "lucide-react";
 import { Suspense } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
+import { openRecap } from "@/components/SinceLastVisit";
 import { cn, rememberReturnPath } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 
@@ -113,7 +122,25 @@ export default function Layout() {
               {t("layout.sign_in")}
             </Link>
           ) : (
-            <div className="w-8" aria-hidden />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openRecap}
+                aria-label={t("sincevisit.open")}
+                title={t("sincevisit.open")}
+                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+              >
+                <History className="h-4 w-4" />
+              </button>
+              <Link
+                to="/about"
+                aria-label={t("about.title")}
+                title={t("about.title")}
+                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+              >
+                <Info className="h-4 w-4" />
+              </Link>
+            </div>
           )}
         </div>
       </header>
