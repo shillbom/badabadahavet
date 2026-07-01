@@ -183,6 +183,30 @@ function clusterPosKey(lat: number, lng: number): string {
   return `${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
 
+// Reuses the same [lat, lng] tuple across renders for a given place so
+// <Marker position={...}> only gets a new array when the coordinates
+// actually change. Leaflet's Marker.setLatLng fires a "move" event
+// unconditionally (even when the value is unchanged), and inside a
+// MarkerClusterGroup that event unconditionally rips the marker out of the
+// cluster grid and re-adds it (leaflet.markercluster's _childMarkerMoved ->
+// _moveChild). A fresh `[p.lat, p.lng]` literal on every render — which
+// `places.map(...)` produces every time the Firestore listener re-emits —
+// was therefore rebuilding every marker on the map on every re-render,
+// which is what made clicking a pin (which re-renders SwimMap 2-3 times via
+// popup autoPan + the temp-refresh echoing back) visibly flicker.
+const positionCache = new Map<string, [number, number]>();
+function stablePosition(
+  id: string,
+  lat: number,
+  lng: number,
+): [number, number] {
+  const cached = positionCache.get(id);
+  if (cached && cached[0] === lat && cached[1] === lng) return cached;
+  const next: [number, number] = [lat, lng];
+  positionCache.set(id, next);
+  return next;
+}
+
 // Cluster badge: child count, plus the average of any fresh temps below it.
 // `factor` is the freshness of the most-recently-swum child, so a cluster
 // greys out only once *all* its places are stale.
@@ -563,7 +587,7 @@ export default function SwimMap({
                   if (m) markerRefs.current.set(p.id, m);
                   else markerRefs.current.delete(p.id);
                 }}
-                position={[p.lat, p.lng]}
+                position={stablePosition(p.id, p.lat, p.lng)}
                 icon={pinIcon(
                   hasFreshTemp(p) ? p.waterTemp : null,
                   pinRingFor(p.lastSwimBorder),
@@ -662,7 +686,7 @@ export default function SwimMap({
                 if (m) markerRefs.current.set(p.id, m);
                 else markerRefs.current.delete(p.id);
               }}
-              position={[p.lat, p.lng]}
+              position={stablePosition(p.id, p.lat, p.lng)}
               icon={activePlaceIcon}
               eventHandlers={{
                 mouseover: () => maybeRefreshPlaceTemp(p),
