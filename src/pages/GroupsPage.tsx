@@ -590,6 +590,23 @@ function GroupDetailSheet({
     });
   }, [profiles, memberStats, sortBy]);
 
+  // Whoever's on top of the points board — but only a single member, and only
+  // when they actually beat everyone else. With nobody on the board yet (0
+  // points) there's no "lead" to award, and when two or more share the top
+  // score it's a tie, not a lead — handled separately below.
+  const topPoints = sortedMembers.length
+    ? (memberStats.get(sortedMembers[0].uid)?.points ?? 0)
+    : 0;
+  const leaderUids = useMemo(() => {
+    if (topPoints <= 0) return new Set<string>();
+    return new Set(
+      sortedMembers
+        .filter((m) => (memberStats.get(m.uid)?.points ?? 0) === topPoints)
+        .map((m) => m.uid),
+    );
+  }, [sortedMembers, memberStats, topPoints]);
+  const tiedForLead = leaderUids.size > 1;
+
   async function onKick(member: UserDoc) {
     if (!shown) return;
     if (
@@ -819,7 +836,7 @@ function GroupDetailSheet({
               </div>
             ) : (
               <ul className="space-y-2 pb-4">
-                {sortedMembers.map((member, i) => {
+                {sortedMembers.map((member) => {
                   const stats = memberStats.get(member.uid) ?? {
                     points: 0,
                     swims: 0,
@@ -837,10 +854,24 @@ function GroupDetailSheet({
                     >
                       <div className="relative flex h-8 w-8 flex-none items-center justify-center rounded-full bg-wave-100 text-lg">
                         {member.emoji ?? "🌊"}
-                        {i === 0 && sortBy === "points" && (
-                          <span className="absolute -top-1 -right-1 text-[10px]">
-                            🥇
-                          </span>
+                        {sortBy === "points" && leaderUids.has(member.uid) && (
+                          <motion.span
+                            initial={{ scale: 0 }}
+                            animate={{ scale: 1 }}
+                            transition={{
+                              type: "spring",
+                              stiffness: 500,
+                              damping: 20,
+                            }}
+                            className="absolute -top-1 -right-1 text-[10px]"
+                            title={
+                              tiedForLead
+                                ? t("groups.detail.tied")
+                                : t("groups.detail.lead")
+                            }
+                          >
+                            {tiedForLead ? "🪢" : "🥇"}
+                          </motion.span>
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
