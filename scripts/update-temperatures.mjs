@@ -4,7 +4,8 @@
  *
  *   - Places preferring Hav och Vatten (SE) are read from the `badplatsen`
  *     API first. Most baths have no real-time sensor, so when that returns
- *     nothing we fall back to Open-Meteo.
+ *     nothing (or something stale) we also try the nearest SMHI ocean
+ *     observation station before falling back to Open-Meteo.
  *   - Places preferring SMHI are read from the nearest SMHI ocean
  *     observation station's sea temperature sensor first.
  *   - Every other place (EEA DK/FI, OSM NO, user-added, or any place
@@ -247,21 +248,46 @@ async function resolveReading(data) {
   let official = null;
   if (tempSource === "havochvatten" && data.externalId) {
     official = await fetchTemp(data.externalId);
-  } else if (
-    tempSource === "smhi" &&
+  }
+  // Hav och Vatten baths often have no live sensor, so when that comes
+  // back empty (or stale) also try the nearest SMHI station before
+  // falling back to Open-Meteo — whichever official reading is more
+  // recent wins.
+  const wantsSmhi =
+    tempSource === "smhi" ||
+    (tempSource === "havochvatten" &&
+      (!official || Date.now() - official.stamp > FRESH_WINDOW_MS));
+  if (
+    wantsSmhi &&
     typeof data.lat === "number" &&
     typeof data.lng === "number"
   ) {
-    official = await fetchSmhi(data.lat, data.lng);
+    const smhi = await fetchSmhi(data.lat, data.lng);
+    if (smhi && (!official || smhi.stamp > official.stamp)) {
+      official = smhi;
+    }
   }
-  if (official && Date.now() - official.stamp <= FRESH_WINDOW_MS) {
-    return official;
+  let reading =
+    official && Date.now() - official.stamp <= FRESH_WINDOW_MS
+      ? official
+      : null;
+  if (
+    !reading &&
+    typeof data.lat === "number" &&
+    typeof data.lng === "number"
+  ) {
+    reading = await fetchOpenMeteo(data.lat, data.lng);
   }
-  if (typeof data.lat === "number" && typeof data.lng === "number") {
-    const meteo = await fetchOpenMeteo(data.lat, data.lng);
-    if (meteo) return meteo;
+  if (!reading) reading = official; // stale official (or null) as last resort
+  if (!reading) return null;
+
+  // Hav och Vatten had nothing (or nothing fresh) and SMHI actually
+  // supplied the reading — prefer SMHI going forward instead of paying
+  // for a Hav och Vatten call that keeps coming back empty.
+  if (tempSource === "havochvatten" && reading.provider === "smhi") {
+    return { ...reading, promoteTempSource: "smhi" };
   }
-  return official; // stale official (or null) as last resort
+  return reading;
 }
 
 async function main() {
@@ -312,11 +338,14 @@ async function main() {
       await sleep(REQUEST_DELAY_MS);
       continue;
     }
-    // Skip if the stored reading is already the same and recent.
+    // Skip if the stored reading is already the same and recent, and no
+    // tempSource promotion is pending.
     if (
       data.waterTemp === reading.temp &&
       data.waterTempAt === reading.stamp &&
-      data.waterTempProvider === reading.provider
+      data.waterTempProvider === reading.provider &&
+      (!reading.promoteTempSource ||
+        data.tempSource === reading.promoteTempSource)
     ) {
       skipped++;
       writeProgress();
@@ -324,11 +353,15 @@ async function main() {
       continue;
     }
     if (WRITE) {
-      batch.update(doc.ref, {
+      const docUpdates = {
         waterTemp: reading.temp,
         waterTempAt: reading.stamp,
         waterTempProvider: reading.provider,
-      });
+      };
+      if (reading.promoteTempSource) {
+        docUpdates.tempSource = reading.promoteTempSource;
+      }
+      batch.update(doc.ref, docUpdates);
       inBatch++;
       if (inBatch >= 400) {
         await batch.commit();

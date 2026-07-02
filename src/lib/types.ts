@@ -50,10 +50,12 @@ export type PlaceDoc = {
   /** External provider's identifier (e.g. badplatsen nutsCode). */
   externalId?: string;
   /** Which upstream the temperature refresh should prefer. "havochvatten"
-   *  tries the official SE bathing-spot feed first; "smhi" tries the
-   *  nearest SMHI ocean-observation station first; both fall back to
-   *  Open-Meteo. The default (or "open-meteo") goes straight to Open-Meteo
-   *  satellite data. */
+   *  tries the official SE bathing-spot feed first, then the nearest SMHI
+   *  ocean-observation station, then Open-Meteo; "smhi" tries the nearest
+   *  SMHI station first and falls back to Open-Meteo. The default (or
+   *  "open-meteo") goes straight to Open-Meteo satellite data. Auto-promoted
+   *  from "havochvatten" to "smhi" server-side once SMHI actually supplies a
+   *  reading for a place whose official feed has nothing. */
   tempSource?: "havochvatten" | "smhi" | "open-meteo";
   /** Latest measured water temperature in °C (if known). */
   waterTemp?: number;
