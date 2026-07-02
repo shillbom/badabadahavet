@@ -83,21 +83,29 @@ async function fetchOpenMeteoTemp(lat, lng) {
   return { temp, stamp, source: "open-meteo" };
 }
 
-// SMHI's open oceanographic data — parameter 1 is sea water temperature
-// from fixed coastal/buoy stations. There's no per-place station id, so we
-// resolve the nearest active station to a place's coordinates on the fly.
-const SMHI_STATIONS_URL =
-  "https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/1.json";
-const SMHI_DATA_URL = (stationId) =>
-  `https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/1/station/${stationId}/period/latest-hour/data.json`;
+// SMHI's open oceanographic data has a "Havstemperatur" (sea water
+// temperature) parameter, but we resolve its numeric id dynamically
+// instead of hardcoding one — SMHI's ids aren't documented as stable, and
+// getting it wrong silently returns *some other* quantity that can still
+// look like a plausible temperature (this bit us once: a hardcoded wrong
+// id quietly reported a winter reading in July). There's also no
+// per-place station id, so the nearest active station to a place's
+// coordinates is resolved on the fly too.
+const SMHI_PARAMETER_LIST_URL =
+  "https://opendata-download-ocobs.smhi.se/api/version/1.0.json";
+const SMHI_STATIONS_URL = (parameterId) =>
+  `https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/${parameterId}.json`;
+const SMHI_DATA_URL = (parameterId, stationId) =>
+  `https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/${parameterId}/station/${stationId}/period/latest-hour/data.json`;
 
 // Don't match a place to a station further away than this — a spot with no
 // nearby sensor should just get no SMHI reading rather than a bogus one.
 const MAX_SMHI_STATION_DISTANCE_M = 40_000;
 
-// The station list barely changes; cache it per-instance instead of
-// re-fetching it on every single refresh call.
-const SMHI_STATIONS_CACHE_MS = 6 * 60 * 60 * 1000;
+// Parameter ids and station lists barely change; cache them per-instance
+// instead of re-fetching on every single refresh call.
+const SMHI_METADATA_CACHE_MS = 6 * 60 * 60 * 1000;
+let smhiParameterIdCache = null; // { at: number, id: string | null }
 let smhiStationsCache = null; // { at: number, stations: {id, lat, lng}[] }
 
 function haversineMeters(a, b) {
@@ -112,15 +120,38 @@ function haversineMeters(a, b) {
   return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
 }
 
-async function fetchSmhiStations() {
+async function findSmhiTempParameterId() {
+  const now = Date.now();
+  if (
+    smhiParameterIdCache &&
+    now - smhiParameterIdCache.at < SMHI_METADATA_CACHE_MS
+  ) {
+    return smhiParameterIdCache.id;
+  }
+  const res = await fetch(SMHI_PARAMETER_LIST_URL, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) return smhiParameterIdCache?.id ?? null;
+  const data = await res.json();
+  const match = (data?.resource ?? []).find((r) =>
+    String(r.title ?? "")
+      .toLowerCase()
+      .includes("havstemperatur"),
+  );
+  const id = match?.key ?? null;
+  smhiParameterIdCache = { at: now, id };
+  return id;
+}
+
+async function fetchSmhiStations(parameterId) {
   const now = Date.now();
   if (
     smhiStationsCache &&
-    now - smhiStationsCache.at < SMHI_STATIONS_CACHE_MS
+    now - smhiStationsCache.at < SMHI_METADATA_CACHE_MS
   ) {
     return smhiStationsCache.stations;
   }
-  const res = await fetch(SMHI_STATIONS_URL, {
+  const res = await fetch(SMHI_STATIONS_URL(parameterId), {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) return smhiStationsCache?.stations ?? [];
@@ -136,8 +167,8 @@ async function fetchSmhiStations() {
   return stations;
 }
 
-async function findNearestSmhiStation(lat, lng) {
-  const stations = await fetchSmhiStations();
+async function findNearestSmhiStation(parameterId, lat, lng) {
+  const stations = await fetchSmhiStations(parameterId);
   let best = null;
   let bestDist = Infinity;
   for (const s of stations) {
@@ -151,9 +182,11 @@ async function findNearestSmhiStation(lat, lng) {
 }
 
 async function fetchSmhiTemp(lat, lng) {
-  const stationId = await findNearestSmhiStation(lat, lng);
+  const parameterId = await findSmhiTempParameterId();
+  if (parameterId == null) return null;
+  const stationId = await findNearestSmhiStation(parameterId, lat, lng);
   if (stationId == null) return null;
-  const res = await fetch(SMHI_DATA_URL(stationId), {
+  const res = await fetch(SMHI_DATA_URL(parameterId, stationId), {
     headers: { Accept: "application/json" },
   });
   if (!res.ok) return null;
