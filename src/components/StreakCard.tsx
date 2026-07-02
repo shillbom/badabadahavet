@@ -2,18 +2,9 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Flame } from "lucide-react";
 import { useT } from "@/lib/i18n";
-import type { StreakInfo } from "@/lib/streak";
+import { streakTier, type StreakInfo } from "@/lib/streak";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
-
-type Tier = "plain" | "bubbly" | "fire" | "disco";
-
-function tierFor(current: number): Tier {
-  if (current >= 30) return "disco";
-  if (current >= 7) return "fire";
-  if (current >= 3) return "bubbly";
-  return "plain";
-}
 
 /**
  * The front-page streak stat card. Escalates with the streak:
@@ -21,7 +12,7 @@ function tierFor(current: number): Tier {
  */
 export default function StreakCard({ streak }: { streak: StreakInfo }) {
   const t = useT();
-  const tier = tierFor(streak.current);
+  const tier = streakTier(streak.current);
   const lit = tier !== "plain";
 
   const sub = streak.atRisk

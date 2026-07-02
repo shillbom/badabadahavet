@@ -1,4 +1,5 @@
 import { WEEK_MS, weekStartMs } from "./date";
+import { computeStreak } from "./streak";
 import type { SessionDoc } from "./types";
 
 export type Achievement = {
@@ -45,6 +46,11 @@ function bestWeekStreak(sessions: SessionDoc[]): number {
     } else run = 1;
   }
   return best;
+}
+
+/** Longest day streak ever, buoy rules included — see lib/streak.ts. */
+function bestDayStreak(sessions: SessionDoc[]): number {
+  return computeStreak(sessions.map((s) => s.date)).longest;
 }
 
 function rangeKm(sessions: SessionDoc[]): number {
@@ -196,6 +202,24 @@ export const ACHIEVEMENTS: Achievement[] = [
     tier: 3,
     test: (c) => bestWeekStreak(c.mySessions) >= 6,
     progress: (c) => Math.min(1, bestWeekStreak(c.mySessions) / 6),
+  }),
+  ach({
+    id: "DAY_STREAK_7",
+    name: "Week of water",
+    description: "Seven days in a row",
+    emoji: "🌊",
+    tier: 2,
+    test: (c) => bestDayStreak(c.mySessions) >= 7,
+    progress: (c) => Math.min(1, bestDayStreak(c.mySessions) / 7),
+  }),
+  ach({
+    id: "DAY_STREAK_30",
+    name: "Disco dipper",
+    description: "Thirty days in a row",
+    emoji: "🪩",
+    tier: 3,
+    test: (c) => bestDayStreak(c.mySessions) >= 30,
+    progress: (c) => Math.min(1, bestDayStreak(c.mySessions) / 30),
   }),
   ach({
     id: "GLOBETROTTER",

@@ -16,6 +16,17 @@ import { DAY_MS, dayStartMs } from "./date";
 /** Swim days needed to earn one skip day. */
 export const SWIM_DAYS_PER_SKIP = 4;
 
+export type StreakTier = "plain" | "bubbly" | "fire" | "disco";
+
+/** Escalation thresholds shared by the streak card and celebrations:
+ *  3+ bubbly, 7+ on fire, 30+ disco. */
+export function streakTier(current: number): StreakTier {
+  if (current >= 30) return "disco";
+  if (current >= 7) return "fire";
+  if (current >= 3) return "bubbly";
+  return "plain";
+}
+
 export type StreakDayType = "swim" | "skip";
 
 export type StreakInfo = {

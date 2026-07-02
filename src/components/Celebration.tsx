@@ -2,8 +2,10 @@ import { create } from "zustand";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
 import type { Achievement } from "@/lib/achievements";
+import type { StreakTier } from "@/lib/streak";
 import { Sparkles } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 type Splash =
   | {
@@ -15,6 +17,11 @@ type Splash =
   | {
       kind: "achievement";
       achievement: Achievement;
+    }
+  | {
+      kind: "streak";
+      tier: Exclude<StreakTier, "plain">;
+      days: number;
     };
 
 type State = {
@@ -36,6 +43,8 @@ export const celebrate = {
       .show({ kind: "swim", points, isNewSpot, isWinter }),
   achievement: (achievement: Achievement) =>
     useCelebration.getState().show({ kind: "achievement", achievement }),
+  streak: (tier: Exclude<StreakTier, "plain">, days: number) =>
+    useCelebration.getState().show({ kind: "streak", tier, days }),
 };
 
 const PARTICLES = Array.from({ length: 16 }, (_, i) => i);
@@ -47,7 +56,7 @@ export function CelebrationOverlay() {
 
   useEffect(() => {
     if (!current) return;
-    const ms = current.kind === "achievement" ? 2400 : 1500;
+    const ms = current.kind === "swim" ? 1500 : 2400;
     const t = setTimeout(pop, ms);
     return () => clearTimeout(t);
   }, [current, pop]);
@@ -64,6 +73,8 @@ export function CelebrationOverlay() {
         >
           {current.kind === "swim" ? (
             <SwimSplash data={current} />
+          ) : current.kind === "streak" ? (
+            <StreakSplash data={current} />
           ) : (
             <AchievementSplash data={current} />
           )}
@@ -74,8 +85,15 @@ export function CelebrationOverlay() {
   );
 }
 
+const TIER_EMOJI: Record<Exclude<StreakTier, "plain">, string> = {
+  bubbly: "🫧",
+  fire: "🔥",
+  disco: "🪩",
+};
+
 function emojiFor(s: Splash): string {
   if (s.kind === "achievement") return s.achievement.emoji;
+  if (s.kind === "streak") return TIER_EMOJI[s.tier];
   if (s.isWinter) return "❄️";
   if (s.isNewSpot) return "✨";
   return "💧";
@@ -124,6 +142,72 @@ function SwimSplash({ data }: { data: Extract<Splash, { kind: "swim" }> }) {
           </span>
         ) : null}
       </div>
+    </motion.div>
+  );
+}
+
+function StreakSplash({ data }: { data: Extract<Splash, { kind: "streak" }> }) {
+  const t = useT();
+  return (
+    <motion.div
+      initial={{ scale: 0.6, opacity: 0, y: 20 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      exit={{ scale: 0.6, opacity: 0, y: -20 }}
+      transition={{ type: "spring", stiffness: 320, damping: 22 }}
+      className="pointer-events-auto relative flex flex-col items-center"
+    >
+      {/* expanding rings, tinted per tier */}
+      {[0, 1, 2].map((i) => (
+        <motion.span
+          key={i}
+          initial={{ scale: 0.6, opacity: 0.5 }}
+          animate={{ scale: 3.5, opacity: 0 }}
+          transition={{ duration: 1.2, delay: i * 0.18, ease: "easeOut" }}
+          className={cn(
+            "absolute h-32 w-32 rounded-full border-2",
+            data.tier === "bubbly" && "border-wave-400/70",
+            data.tier === "fire" && "border-orange-400/70",
+            data.tier === "disco" && "border-fuchsia-400/70",
+          )}
+        />
+      ))}
+      <motion.div
+        animate={
+          data.tier === "disco"
+            ? { rotate: [0, -6, 6, 0], scale: [1, 1.06, 1] }
+            : data.tier === "fire"
+              ? { scale: [1, 1.08, 1] }
+              : undefined
+        }
+        transition={{ duration: 0.9, repeat: Infinity }}
+        className={cn(
+          "relative flex h-32 w-32 items-center justify-center rounded-full text-6xl shadow-2xl",
+          data.tier === "bubbly" &&
+            "bg-gradient-to-br from-wave-300 to-wave-700",
+          data.tier === "fire" &&
+            "bg-gradient-to-br from-amber-300 via-orange-500 to-red-600",
+          data.tier === "disco" &&
+            "bg-gradient-to-br from-fuchsia-400 via-purple-500 to-cyan-400",
+        )}
+      >
+        {TIER_EMOJI[data.tier]}
+      </motion.div>
+      <motion.div
+        initial={{ y: 8, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.18 }}
+        className="mt-3 rounded-full bg-white/95 px-5 py-2 font-display text-2xl font-black text-wave-800 shadow-lg"
+      >
+        {t("celebration.streak.days", { n: data.days })}
+      </motion.div>
+      <motion.div
+        initial={{ y: 8, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.3 }}
+        className="mt-2 rounded-full bg-white/80 px-4 py-1 text-sm font-semibold text-slate-700 shadow"
+      >
+        {t(`celebration.streak.${data.tier}`)}
+      </motion.div>
     </motion.div>
   );
 }
