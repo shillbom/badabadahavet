@@ -54,6 +54,102 @@ async function fetchOpenMeteoTemp(lat, lng) {
   return { temp, stamp, source: "open-meteo" };
 }
 
+// SMHI's open oceanographic data — parameter 1 is sea water temperature
+// from fixed coastal/buoy stations. There's no per-place station id, so we
+// resolve the nearest active station to a place's coordinates on the fly.
+const SMHI_STATIONS_URL =
+  "https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/1.json";
+const SMHI_DATA_URL = (stationId) =>
+  `https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/1/station/${stationId}/period/latest-hour/data.json`;
+
+// Don't match a place to a station further away than this — a spot with no
+// nearby sensor should just get no SMHI reading rather than a bogus one.
+const MAX_SMHI_STATION_DISTANCE_M = 40_000;
+
+// The station list barely changes; cache it per-instance instead of
+// re-fetching it on every single refresh call.
+const SMHI_STATIONS_CACHE_MS = 6 * 60 * 60 * 1000;
+let smhiStationsCache = null; // { at: number, stations: {id, lat, lng}[] }
+
+function haversineMeters(a, b) {
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+}
+
+async function fetchSmhiStations() {
+  const now = Date.now();
+  if (
+    smhiStationsCache &&
+    now - smhiStationsCache.at < SMHI_STATIONS_CACHE_MS
+  ) {
+    return smhiStationsCache.stations;
+  }
+  const res = await fetch(SMHI_STATIONS_URL, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) return smhiStationsCache?.stations ?? [];
+  const data = await res.json();
+  const stations = (data?.station ?? [])
+    .filter((s) => s.active !== false)
+    .map((s) => ({ id: s.id, lat: s.latitude, lng: s.longitude }))
+    .filter(
+      (s) =>
+        s.id != null && typeof s.lat === "number" && typeof s.lng === "number",
+    );
+  smhiStationsCache = { at: now, stations };
+  return stations;
+}
+
+async function findNearestSmhiStation(lat, lng) {
+  const stations = await fetchSmhiStations();
+  let best = null;
+  let bestDist = Infinity;
+  for (const s of stations) {
+    const dist = haversineMeters({ lat, lng }, s);
+    if (dist < bestDist) {
+      best = s;
+      bestDist = dist;
+    }
+  }
+  return best && bestDist <= MAX_SMHI_STATION_DISTANCE_M ? best.id : null;
+}
+
+async function fetchSmhiTemp(lat, lng) {
+  const stationId = await findNearestSmhiStation(lat, lng);
+  if (stationId == null) return null;
+  const res = await fetch(SMHI_DATA_URL(stationId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const values = Array.isArray(data?.value) ? data.value : [];
+  if (!values.length) return null;
+  // Don't assume ordering — take the most recent sample's own timestamp,
+  // never "now" (the fetch time).
+  const latest = values.reduce((a, b) => (b.date > a.date ? b : a));
+  const raw = latest.value;
+  const temp = typeof raw === "string" ? Number(raw) : raw;
+  const stamp = latest.date;
+  if (
+    typeof temp !== "number" ||
+    Number.isNaN(temp) ||
+    temp < -5 ||
+    temp > 40 ||
+    typeof stamp !== "number" ||
+    Number.isNaN(stamp)
+  ) {
+    return null;
+  }
+  return { temp, stamp, source: "smhi" };
+}
+
 /**
  * Callable: refresh a single place's water temperature on demand.
  *
@@ -123,7 +219,7 @@ export const refreshPlaceTemp = onCall(
       place.tempSource ??
       (place.source === "havochvatten.se" ? "havochvatten" : "open-meteo");
 
-    // Try the official SE feed first when that's the preferred source.
+    // Try the official/in-situ feed first when that's the preferred source.
     let official = null;
     if (tempSource === "havochvatten" && place.externalId) {
       try {
@@ -160,6 +256,16 @@ export const refreshPlaceTemp = onCall(
         }
       } catch (e) {
         logger.warn("upstream fetch failed", { placeId, error: String(e) });
+      }
+    } else if (
+      tempSource === "smhi" &&
+      typeof place.lat === "number" &&
+      typeof place.lng === "number"
+    ) {
+      try {
+        official = await fetchSmhiTemp(place.lat, place.lng);
+      } catch (e) {
+        logger.warn("smhi fetch failed", { placeId, error: String(e) });
       }
     }
 

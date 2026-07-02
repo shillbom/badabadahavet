@@ -5,15 +5,18 @@
  *   - Places preferring Hav och Vatten (SE) are read from the `badplatsen`
  *     API first. Most baths have no real-time sensor, so when that returns
  *     nothing we fall back to Open-Meteo.
- *   - Every other place (EEA DK/FI, OSM NO, user-added, or any SE bath
- *     without an official reading) gets its temperature from Open-Meteo's
- *     marine satellite data, keyed on the place's lat/lng.
+ *   - Places preferring SMHI are read from the nearest SMHI ocean
+ *     observation station's sea temperature sensor first.
+ *   - Every other place (EEA DK/FI, OSM NO, user-added, or any place
+ *     without a fresh official reading) gets its temperature from
+ *     Open-Meteo's marine satellite data, keyed on the place's lat/lng.
  *
  * The preferred upstream is the place's `tempSource` field
- * ("havochvatten" | "open-meteo"), falling back to the legacy `source`
- * field for docs seeded before `tempSource` existed. Each updated doc
- * records `waterTempProvider` — which upstream actually produced the
- * reading.
+ * ("havochvatten" | "smhi" | "open-meteo"), falling back to the legacy
+ * `source` field for docs seeded before `tempSource` existed. Each updated
+ * doc records `waterTempProvider` — which upstream actually produced the
+ * reading, using that reading's own measurement date (never the time we
+ * happened to fetch it).
  *
  * Usage (local):
  *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
@@ -133,6 +136,102 @@ async function fetchOpenMeteo(lat, lng) {
   }
 }
 
+// SMHI's open oceanographic data — parameter 1 is sea water temperature
+// from fixed coastal/buoy stations. There's no per-place station id, so we
+// resolve the nearest active station to a place's coordinates on the fly.
+const SMHI_STATIONS_URL =
+  "https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/1.json";
+const SMHI_DATA_URL = (stationId) =>
+  `https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/1/station/${stationId}/period/latest-hour/data.json`;
+
+// Don't match a place to a station further away than this — a spot with no
+// nearby sensor should just get no SMHI reading rather than a bogus one.
+const MAX_SMHI_STATION_DISTANCE_M = 40_000;
+
+let smhiStations = null; // cached for the life of this run
+
+function haversineMeters(a, b) {
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+}
+
+async function fetchSmhiStations() {
+  if (smhiStations) return smhiStations;
+  try {
+    const res = await fetch(SMHI_STATIONS_URL, {
+      headers: { Accept: "application/json" },
+    });
+    smhiStations = res.ok
+      ? ((await res.json())?.station
+          ?.filter((s) => s.active !== false)
+          .map((s) => ({ id: s.id, lat: s.latitude, lng: s.longitude }))
+          .filter(
+            (s) =>
+              s.id != null &&
+              typeof s.lat === "number" &&
+              typeof s.lng === "number",
+          ) ?? [])
+      : [];
+  } catch {
+    smhiStations = [];
+  }
+  return smhiStations;
+}
+
+async function findNearestSmhiStation(lat, lng) {
+  const stations = await fetchSmhiStations();
+  let best = null;
+  let bestDist = Infinity;
+  for (const s of stations) {
+    const dist = haversineMeters({ lat, lng }, s);
+    if (dist < bestDist) {
+      best = s;
+      bestDist = dist;
+    }
+  }
+  return best && bestDist <= MAX_SMHI_STATION_DISTANCE_M ? best.id : null;
+}
+
+async function fetchSmhi(lat, lng) {
+  try {
+    const stationId = await findNearestSmhiStation(lat, lng);
+    if (stationId == null) return null;
+    const res = await fetch(SMHI_DATA_URL(stationId), {
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const values = Array.isArray(data?.value) ? data.value : [];
+    if (!values.length) return null;
+    // Don't assume ordering — take the most recent sample's own
+    // timestamp, never "now" (the fetch time).
+    const latest = values.reduce((a, b) => (b.date > a.date ? b : a));
+    const raw = latest.value;
+    const temp = typeof raw === "string" ? Number(raw) : raw;
+    const stamp = latest.date;
+    if (
+      typeof temp !== "number" ||
+      Number.isNaN(temp) ||
+      temp < -5 ||
+      temp > 40 ||
+      typeof stamp !== "number" ||
+      Number.isNaN(stamp)
+    ) {
+      return null;
+    }
+    return { temp, stamp, provider: "smhi" };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolve the best reading for a place. A *fresh* official reading wins
  * (it's a real measured water temp); but the app only displays temps
@@ -148,9 +247,15 @@ async function resolveReading(data) {
   let official = null;
   if (tempSource === "havochvatten" && data.externalId) {
     official = await fetchTemp(data.externalId);
-    if (official && Date.now() - official.stamp <= FRESH_WINDOW_MS) {
-      return official;
-    }
+  } else if (
+    tempSource === "smhi" &&
+    typeof data.lat === "number" &&
+    typeof data.lng === "number"
+  ) {
+    official = await fetchSmhi(data.lat, data.lng);
+  }
+  if (official && Date.now() - official.stamp <= FRESH_WINDOW_MS) {
+    return official;
   }
   if (typeof data.lat === "number" && typeof data.lng === "number") {
     const meteo = await fetchOpenMeteo(data.lat, data.lng);
