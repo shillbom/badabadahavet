@@ -280,6 +280,18 @@ export default function LogSessionPage() {
         createdBy: user.uid,
         date: ts,
       });
+      // Rate limit: max one swim per hour at the same place. A violation
+      // implies an earlier session at this place, so `place` can't be a
+      // just-created orphan when we bail here.
+      const HOUR_MS = 3_600_000;
+      if (
+        mySessions.some(
+          (s) => s.placeId === place.id && Math.abs(s.date - ts) < HOUR_MS,
+        )
+      ) {
+        toast.error(t("log.error.too_soon"));
+        return;
+      }
       const myBorder = resolveBorder(
         profile.selectedBorder,
         unlockedAchievements.size,

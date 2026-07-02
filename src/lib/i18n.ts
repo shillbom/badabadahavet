@@ -684,6 +684,21 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "celebration.streak.fire": "Du brinner — fortsätt! 🔥",
     "celebration.streak.disco": "STREAKFEST! Helt ostoppbar! 🪩",
     "log.buoy_earned": "Livboj intjänad! 🛟 Streaken tål nu en missad dag.",
+    "log.error.too_soon":
+      "Lugn i vattnet! 🦦 Max ett bad per timme på samma plats.",
+
+    "map.nudge.button": "🎲 Doppförslag",
+    "nudge.title": "Dags för ett dopp?",
+    "nudge.title.at_risk": "Rädda streaken! 🛟",
+    "nudge.body":
+      "Här är en plats du aldrig badat på — nytt vatten ger dessutom ny plats-bonus ✨",
+    "nudge.body.at_risk":
+      "Din streak på {n} dagar dör vid midnatt! Ett snabbdopp här räddar den — och ger ny plats-bonus ✨",
+    "nudge.distance": "bara {dist} bort",
+    "nudge.friend": "{name} har badat här — häng på! 💪",
+    "nudge.cta": "Visa platsen",
+    "nudge.empty":
+      "Du har badat överallt vi känner till! 🤯 Hitta en ny plats via kartan.",
 
     "whileaway.title": "Medan du var borta 🌊",
     "whileaway.subtitle": "Det här har hänt sen sist",
@@ -1286,6 +1301,21 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "celebration.streak.disco": "STREAK PARTY! Unstoppable! 🪩",
     "log.buoy_earned":
       "Life buoy earned! 🛟 Your streak can now survive a missed day.",
+    "log.error.too_soon":
+      "Easy in the water! 🦦 Max one swim per hour at the same place.",
+
+    "map.nudge.button": "🎲 Swim idea",
+    "nudge.title": "Time for a dip?",
+    "nudge.title.at_risk": "Save the streak! 🛟",
+    "nudge.body":
+      "Here's a spot you've never swum at — new water also means a new-spot bonus ✨",
+    "nudge.body.at_risk":
+      "Your {n}-day streak dies at midnight! A quick dip here saves it — with a new-spot bonus on top ✨",
+    "nudge.distance": "only {dist} away",
+    "nudge.friend": "{name} has swum here — join in! 💪",
+    "nudge.cta": "Show the spot",
+    "nudge.empty":
+      "You've swum everywhere we know of! 🤯 Find a new spot on the map.",
 
     "whileaway.title": "While you were away 🌊",
     "whileaway.subtitle": "Here's what you missed",
