@@ -2,7 +2,6 @@ import { useState, useTransition } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft,
   Award,
   CalendarHeart,
   Check,
@@ -48,9 +47,11 @@ import type { MyStats } from "@/lib/stats";
 import { formatDate, cn } from "@/lib/utils";
 import { monthShort, useT } from "@/lib/i18n";
 import { Button } from "@/components/ui/Button";
+import Stat from "@/components/ui/Stat";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { Input } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
+import BackButton from "@/components/ui/BackButton";
 
 const EMOJI_POOL = [
   "🐬",
@@ -174,13 +175,7 @@ export default function ProfilePage() {
   return (
     <div className="px-4 pt-2 pb-12">
       <div className="mb-5 flex items-center gap-2">
-        <button
-          onClick={() => navigate(-1)}
-          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        <BackButton />
         <h2 className="font-display text-2xl font-black text-wave-900">
           {t("profile.title")}
         </h2>
@@ -643,13 +638,13 @@ function Vibes({ stats }: { stats: MyStats }) {
       </h3>
 
       <div className="grid grid-cols-2 gap-2">
-        <VibesMini
+        <Stat
           icon={<Flame className="h-4 w-4 text-amber-500" />}
           label={t("vibes.streak")}
           value={streakValue}
           sub={streakSub}
         />
-        <VibesMini
+        <Stat
           icon={<Clock className="h-4 w-4 text-wave-600" />}
           label={t("vibes.last_swim")}
           value={lastValue}
@@ -728,31 +723,6 @@ function Vibes({ stats }: { stats: MyStats }) {
           </div>
         </Link>
       ) : null}
-    </div>
-  );
-}
-
-function VibesMini({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="glass flex flex-col gap-0.5 px-3 py-2.5">
-      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-        {icon}
-        {label}
-      </div>
-      <div className="font-display text-lg font-black text-wave-900">
-        {value}
-      </div>
-      {sub ? <div className="text-[10px] text-slate-500">{sub}</div> : null}
     </div>
   );
 }

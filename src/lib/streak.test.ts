@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computeStreak, dayStartMs, longestStreakInYear } from "./streak";
+import { computeStreak, longestStreakInYear } from "./streak";
+import { dayStartMs } from "./date";
 
 const DAY = 86_400_000;
 // Noon `n` days ago — noon avoids midnight/timezone edge cases in day math.

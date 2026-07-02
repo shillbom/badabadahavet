@@ -41,6 +41,7 @@ import SwimListItem from "@/components/SwimListItem";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
 import { buttonClasses } from "@/components/ui/Button";
+import Stat from "@/components/ui/Stat";
 import { toast } from "@/components/ui/Toast";
 
 /**
@@ -512,28 +513,6 @@ export default function SpotPage() {
     );
   }
   return <SpotView placeId={placeId} variant="page" />;
-}
-
-function Stat({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: number;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <div className="glass flex flex-col items-start gap-0.5 px-3 py-2">
-      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-wave-700 uppercase">
-        {icon}
-        {label}
-      </div>
-      <div className="font-display text-xl font-black text-wave-900">
-        {value}
-      </div>
-    </div>
-  );
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;

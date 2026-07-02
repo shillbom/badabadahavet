@@ -10,6 +10,7 @@ import BottomSheet from "@/components/BottomSheet";
 import SpotSheet from "@/components/SpotSheet";
 import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";
+import EmojiAvatar from "@/components/EmojiAvatar";
 
 // How long to wait for Firestore snapshots to settle before computing the
 // recap. The timer resets on every data change, so this is "quiet time"
@@ -337,9 +338,11 @@ function Sheet({
 
   const header = shown ? (
     <div className="flex min-w-0 items-center gap-3">
-      <div className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-wave-100 text-2xl ring-1 ring-wave-200">
-        {shown.mode === "month" ? "🗓️" : "👋"}
-      </div>
+      <EmojiAvatar
+        emoji={shown.mode === "month" ? "🗓️" : "👋"}
+        size="lg"
+        ring
+      />
       <div className="min-w-0">
         <h3 className="truncate font-display text-xl font-black text-wave-900">
           {shown.mode === "month"

@@ -7,7 +7,6 @@ import {
   CalendarDays,
   Camera,
   X,
-  ArrowLeft,
   Sparkles,
   Search,
 } from "lucide-react";
@@ -34,6 +33,8 @@ import {
 import { resolveBorder } from "@/lib/borders";
 import type { SessionDoc } from "@/lib/types";
 import { useLocale, useT } from "@/lib/i18n";
+import BackButton from "@/components/ui/BackButton";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 
 type Mode = "now" | "pick";
 
@@ -337,44 +338,38 @@ export default function LogSessionPage() {
   return (
     <form onSubmit={submit} className="px-4 pt-2 pb-10">
       <div className="mb-3 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        <BackButton />
         <h2 className="font-display text-xl font-black text-wave-900">
           {t("log.title")}
         </h2>
         <span className="w-8" />
       </div>
 
-      <div className="flex rounded-full bg-slate-100 p-1">
-        <button
-          type="button"
-          data-active={mode === "now"}
-          onClick={() => {
-            intentionalNowRef.current = true;
-            setMode("now");
-          }}
-          className="pill-tab"
-        >
-          <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
-        </button>
-        <button
-          type="button"
-          data-active={mode === "pick"}
-          onClick={() => {
-            intentionalNowRef.current = false;
-            setMode("pick");
-          }}
-          className="pill-tab"
-        >
-          <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
-        </button>
-      </div>
+      <SegmentedControl
+        value={mode}
+        onChange={(next) => {
+          intentionalNowRef.current = next === "now";
+          setMode(next);
+        }}
+        options={[
+          {
+            value: "now",
+            label: (
+              <>
+                <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
+              </>
+            ),
+          },
+          {
+            value: "pick",
+            label: (
+              <>
+                <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
+              </>
+            ),
+          },
+        ]}
+      />
 
       <p className="mt-2 px-1 text-center text-[11px] text-slate-500">
         {mode === "now" ? t("log.mode.now.hint") : t("log.mode.pick.hint")}

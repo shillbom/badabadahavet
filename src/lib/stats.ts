@@ -1,4 +1,5 @@
 import { computeStreak, type StreakInfo } from "./streak";
+import { DAY_MS, WEEK_MS, dayStartMs, weekStartMs } from "./date";
 import type { SessionDoc } from "./types";
 
 export type MyStats = {
@@ -22,26 +23,9 @@ export type MyStats = {
   swimsLastMonth: number;
 };
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 function weekKey(ts: number): string {
-  const d = new Date(ts);
-  // Anchor weeks to Monday
-  const day = (d.getDay() + 6) % 7;
-  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
+  const start = new Date(weekStartMs(ts));
   return `${start.getFullYear()}-${start.getMonth()}-${start.getDate()}`;
-}
-
-function weekStartMs(ts: number): number {
-  const d = new Date(ts);
-  const day = (d.getDay() + 6) % 7;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - day).getTime();
-}
-
-function dayStartMs(ts: number): number {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 }
 
 export function computeMyStats(sessions: SessionDoc[]): MyStats {

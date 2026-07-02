@@ -17,6 +17,7 @@ import {
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 import { Input, Label } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
 import {
@@ -31,12 +32,12 @@ import {
 } from "@/lib/data";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
-import { longestStreakInYear, dayStartMs as dayStart } from "@/lib/streak";
+import { longestStreakInYear } from "@/lib/streak";
+import { DAY_MS, dayStartMs as dayStart } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
+import EmojiAvatar from "@/components/EmojiAvatar";
 import BottomSheet from "@/components/BottomSheet";
-
-const DAY_MS = 86_400_000;
 
 /** Short "last swim" recency label + colour, for the competitive at-a-glance. */
 function recency(
@@ -293,9 +294,7 @@ export default function GroupsPage() {
                 className="glass flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-white/60"
                 onClick={() => setOpenGroup(g)}
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-wave-100 text-xl">
-                  {g.emoji ?? "👥"}
-                </div>
+                <EmojiAvatar emoji={g.emoji ?? "👥"} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-semibold text-wave-900">
                     {g.name}
@@ -365,9 +364,7 @@ export default function GroupsPage() {
       >
         {join ? (
           <div className="flex flex-col items-center gap-3 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-wave-100 text-4xl ring-1 ring-wave-200">
-              {join.emoji ?? "👥"}
-            </div>
+            <EmojiAvatar emoji={join.emoji ?? "👥"} size="xl" ring />
             <div>
               <p className="text-sm text-slate-500">
                 {t("groups.join.confirm.body")}
@@ -790,29 +787,18 @@ function GroupDetailSheet({
             <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
               {t("groups.detail.members")}
             </h4>
-            <div className="mb-3 flex rounded-full bg-slate-100 p-0.5 text-[11px] font-semibold">
-              {(
-                [
-                  ["points", t("groups.sort.points")],
-                  ["recent", t("groups.sort.recent")],
-                  ["streak", t("groups.sort.streak")],
-                ] as const
-              ).map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setSortBy(key)}
-                  className={cn(
-                    "flex-1 rounded-full px-2 py-1 transition",
-                    sortBy === key
-                      ? "bg-white text-wave-800 shadow-sm"
-                      : "text-slate-500",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              className="mb-3 flex"
+              size="sm"
+              grow
+              value={sortBy}
+              onChange={setSortBy}
+              options={[
+                { value: "points", label: t("groups.sort.points") },
+                { value: "recent", label: t("groups.sort.recent") },
+                { value: "streak", label: t("groups.sort.streak") },
+              ]}
+            />
             {loadingProfiles ? (
               <div className="flex h-20 items-center justify-center">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-wave-600 border-r-transparent" />
@@ -835,8 +821,7 @@ function GroupDetailSheet({
                       onClick={() => setSelectedMember(member)}
                       className="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/70 px-3 py-2.5 ring-1 ring-white/60 transition hover:bg-white/90 active:scale-[0.99]"
                     >
-                      <div className="relative flex h-8 w-8 flex-none items-center justify-center rounded-full bg-wave-100 text-lg">
-                        {member.emoji ?? "🌊"}
+                      <EmojiAvatar emoji={member.emoji} size="sm">
                         {sortBy === "points" && leaderUids.has(member.uid) && (
                           <motion.span
                             initial={{ scale: 0 }}
@@ -856,7 +841,7 @@ function GroupDetailSheet({
                             {tiedForLead ? "🪢" : "🥇"}
                           </motion.span>
                         )}
-                      </div>
+                      </EmojiAvatar>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-wave-900">
                           {member.displayName}
@@ -932,16 +917,12 @@ function GroupDetailSheet({
       </BottomSheet>
 
       {/* Member-detail map overlay (stacks above the group sheet) */}
-      <AnimatePresence>
-        {selectedMember ? (
-          <MemberSwimsSheet
-            member={selectedMember}
-            sessions={allSessions}
-            places={places}
-            onClose={() => setSelectedMember(null)}
-          />
-        ) : null}
-      </AnimatePresence>
+      <MemberSwimsSheet
+        member={selectedMember}
+        sessions={allSessions}
+        places={places}
+        onClose={() => setSelectedMember(null)}
+      />
     </>
   );
 }

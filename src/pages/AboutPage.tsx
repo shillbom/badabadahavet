@@ -1,26 +1,19 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import BackButton from "@/components/ui/BackButton";
 
 // Pre-filled Swish payment link (amount + message are editable by the payer).
 const SWISH_URL =
   "https://app.swish.nu/1/p/sw/?sw=0734323512&amt=20.00&cur=SEK&msg=Badligan%20rulez&edit=amt,msg&src=qr";
 
 export default function AboutPage() {
-  const navigate = useNavigate();
   const t = useT();
 
   return (
     <div className="px-4 pt-2 pb-12">
       <div className="mb-4 flex items-center gap-2">
-        <button
-          onClick={() => navigate(-1)}
-          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        <BackButton />
         <h2 className="font-display text-2xl font-black text-wave-900">
           {t("about.title")}
         </h2>

@@ -5,7 +5,8 @@ import { ChevronRight, MapPin, Snowflake, Sparkles } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { formatDateTime } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
-import { computeStreak, dayStartMs } from "@/lib/streak";
+import { computeStreak } from "@/lib/streak";
+import { dayStartMs } from "@/lib/date";
 import Photo from "@/components/Photo";
 import type { SessionDoc } from "@/lib/types";
 
