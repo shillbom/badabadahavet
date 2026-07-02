@@ -1,14 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ChevronLeft, ChevronRight, Award } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Award,
+  Share2,
+} from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { startOfYear, endOfYear } from "@/lib/scoring";
 import { computeMyStats } from "@/lib/stats";
 import { ACHIEVEMENTS_BY_ID, evaluateAchievements } from "@/lib/achievements";
 import { monthShort, useT } from "@/lib/i18n";
-import { buttonClasses } from "@/components/ui/Button";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { toast } from "@/components/ui/Toast";
+import { shareRecapCard } from "@/lib/recapCard";
 
 const slideVariants = {
   enter: (dir: 1 | -1) => ({
@@ -178,6 +186,70 @@ export default function RecapPage() {
 
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
+  const [sharing, setSharing] = useState(false);
+
+  async function onShare() {
+    setSharing(true);
+    try {
+      const fav = stats.favouriteSpot;
+      const result = await shareRecapCard({
+        year,
+        appName: t("app.name"),
+        title: t("recap.share.title"),
+        big: {
+          value: String(yearSessions.length),
+          label:
+            yearSessions.length === 1
+              ? t("recap.intro.label_one")
+              : t("recap.intro.label_many"),
+        },
+        rows: [
+          {
+            emoji: "🏆",
+            value: String(stats.totalPoints),
+            label: t("recap.points.label"),
+          },
+          {
+            emoji: "📍",
+            value: String(stats.uniquePlaces),
+            label: t("recap.spots.label"),
+          },
+          {
+            emoji: "❄️",
+            value: String(stats.winterSwims),
+            label:
+              stats.winterSwims === 1
+                ? t("recap.winter.label_one")
+                : t("recap.winter.label_many"),
+          },
+          {
+            emoji: "🔥",
+            value: String(stats.streak.longest),
+            label: t("recap.share.streak_label"),
+          },
+          ...(fav
+            ? [
+                {
+                  emoji: "⭐",
+                  value: String(fav.count),
+                  label:
+                    fav.name.length > 24
+                      ? `${fav.name.slice(0, 23)}…`
+                      : fav.name,
+                },
+              ]
+            : []),
+        ],
+        footer: t("app.tagline"),
+      });
+      if (result === "downloaded") toast.success(t("recap.share.downloaded"));
+      else if (result === "failed") toast.error(t("recap.share.error"));
+    } catch {
+      toast.error(t("recap.share.error"));
+    } finally {
+      setSharing(false);
+    }
+  }
 
   // Reset to first slide when browsing a different year
   useEffect(() => {
@@ -276,11 +348,25 @@ export default function RecapPage() {
           <ChevronLeft className="h-5 w-5" />
         </motion.button>
         {isLast ? (
-          <motion.div whileTap={{ scale: 0.96 }}>
-            <Link to="/" className={buttonClasses("primary", "lg", "text-sm")}>
-              {t("recap.back_to_map")}
-            </Link>
-          </motion.div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="lg"
+              className="text-sm"
+              icon={<Share2 className="h-4 w-4" />}
+              loading={sharing}
+              onClick={onShare}
+            >
+              {t("recap.share.button", { year })}
+            </Button>
+            <motion.div whileTap={{ scale: 0.96 }}>
+              <Link
+                to="/"
+                className={buttonClasses("secondary", "lg", "text-sm")}
+              >
+                {t("recap.back_to_map")}
+              </Link>
+            </motion.div>
+          </div>
         ) : (
           <motion.button
             whileTap={{ scale: 0.92 }}

@@ -31,6 +31,7 @@ import {
   previewPoints,
 } from "@/lib/scoring";
 import { resolveBorder } from "@/lib/borders";
+import { computeStreak, streakTier, SWIM_DAYS_PER_SKIP } from "@/lib/streak";
 import type { SessionDoc } from "@/lib/types";
 import { useLocale, useT } from "@/lib/i18n";
 import BackButton from "@/components/ui/BackButton";
@@ -51,6 +52,7 @@ export default function LogSessionPage() {
   const inputLang = locale === "sv" ? "sv-SE" : "en-GB";
   const places = useStore((s) => s.places);
   const allSessions = useStore((s) => s.allSessions);
+  const mySessions = useStore((s) => s.mySessions);
   const myPlaceIds = useStore((s) => s.myPlaceIds);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
 
@@ -278,6 +280,18 @@ export default function LogSessionPage() {
         createdBy: user.uid,
         date: ts,
       });
+      // Rate limit: max one swim per hour at the same place. A violation
+      // implies an earlier session at this place, so `place` can't be a
+      // just-created orphan when we bail here.
+      const HOUR_MS = 3_600_000;
+      if (
+        mySessions.some(
+          (s) => s.placeId === place.id && Math.abs(s.date - ts) < HOUR_MS,
+        )
+      ) {
+        toast.error(t("log.error.too_soon"));
+        return;
+      }
       const myBorder = resolveBorder(
         profile.selectedBorder,
         unlockedAchievements.size,
@@ -295,6 +309,26 @@ export default function LogSessionPage() {
         border: myBorder.id,
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
+      // Streak feedback, computed against the pre-log session list: crossing
+      // a tier (3/7/30) queues a celebration after the swim splash; banking
+      // a new life buoy (every 4th swim day) gets a toast.
+      const dates = mySessions.map((s) => s.date);
+      const before = computeStreak(dates);
+      const after = computeStreak([...dates, ts]);
+      const tier = streakTier(after.current);
+      if (
+        after.current > before.current &&
+        tier !== "plain" &&
+        tier !== streakTier(before.current)
+      ) {
+        celebrate.streak(tier, after.current);
+      } else if (
+        after.currentStart !== null &&
+        Math.floor(after.swimDays / SWIM_DAYS_PER_SKIP) >
+          Math.floor(before.swimDays / SWIM_DAYS_PER_SKIP)
+      ) {
+        toast.success(t("log.buoy_earned"));
+      }
       navigate("/history");
     } catch (err) {
       // A too-large / unreadable photo gets a specific message; everything

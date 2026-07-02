@@ -580,6 +580,11 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "recap.outro.title": "Fortsätt",
     "recap.outro.subtitle": "Varje dopp räknas.",
     "recap.back_to_map": "Tillbaka till kartan",
+    "recap.share.button": "Dela {year}",
+    "recap.share.title": "Mitt badår",
+    "recap.share.streak_label": "längsta streak",
+    "recap.share.downloaded": "Bild nedladdad 📸",
+    "recap.share.error": "Kunde inte skapa bilden",
 
     "about.title": "Om Badligan",
     "about.tagline":
@@ -674,6 +679,26 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "celebration.swim.new_spot": "ny plats",
     "celebration.swim.winter": "vinter",
     "celebration.swim.points": "+{n} p",
+    "celebration.streak.days": "{n} dagar i rad!",
+    "celebration.streak.bubbly": "Nu bubblar det! 🫧",
+    "celebration.streak.fire": "Du brinner — fortsätt! 🔥",
+    "celebration.streak.disco": "STREAKFEST! Helt ostoppbar! 🪩",
+    "log.buoy_earned": "Livboj intjänad! 🛟 Streaken tål nu en missad dag.",
+    "log.error.too_soon":
+      "Lugn i vattnet! 🦦 Max ett bad per timme på samma plats.",
+
+    "map.nudge.button": "🎲 Doppförslag",
+    "nudge.title": "Dags för ett dopp?",
+    "nudge.title.at_risk": "Rädda streaken! 🛟",
+    "nudge.body":
+      "Här är en plats du aldrig badat på — nytt vatten ger dessutom ny plats-bonus ✨",
+    "nudge.body.at_risk":
+      "Din streak på {n} dagar dör vid midnatt! Ett snabbdopp här räddar den — och ger ny plats-bonus ✨",
+    "nudge.distance": "bara {dist} bort",
+    "nudge.friend": "{name} har badat här — häng på! 💪",
+    "nudge.cta": "Visa platsen",
+    "nudge.empty":
+      "Du har badat överallt vi känner till! 🤯 Hitta en ny plats via kartan.",
 
     "whileaway.title": "Medan du var borta 🌊",
     "whileaway.subtitle": "Det här har hänt sen sist",
@@ -727,6 +752,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "achievement.STREAK_3.desc": "Tre veckor i rad",
     "achievement.STREAK_6.name": "Ostoppbar",
     "achievement.STREAK_6.desc": "Sex veckor i rad",
+    "achievement.DAY_STREAK_7.name": "Vecka i vattnet",
+    "achievement.DAY_STREAK_7.desc": "Sju dagar i rad",
+    "achievement.DAY_STREAK_30.name": "Discodoppare",
+    "achievement.DAY_STREAK_30.desc": "Trettio dagar i rad 🪩",
     "achievement.GLOBETROTTER.name": "Världsvan",
     "achievement.GLOBETROTTER.desc": "Platserna spänner 50 km",
     "achievement.WANDERLUST.name": "Reslysten",
@@ -1168,6 +1197,11 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "recap.outro.title": "Keep going",
     "recap.outro.subtitle": "Every dip counts.",
     "recap.back_to_map": "Back to map",
+    "recap.share.button": "Share {year}",
+    "recap.share.title": "My swim year",
+    "recap.share.streak_label": "longest streak",
+    "recap.share.downloaded": "Image downloaded 📸",
+    "recap.share.error": "Couldn't create the image",
 
     "about.title": "About Badligan",
     "about.tagline":
@@ -1261,6 +1295,27 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "celebration.swim.new_spot": "new spot",
     "celebration.swim.winter": "winter",
     "celebration.swim.points": "+{n} pts",
+    "celebration.streak.days": "{n} days in a row!",
+    "celebration.streak.bubbly": "Things are bubbling! 🫧",
+    "celebration.streak.fire": "You're on fire — keep going! 🔥",
+    "celebration.streak.disco": "STREAK PARTY! Unstoppable! 🪩",
+    "log.buoy_earned":
+      "Life buoy earned! 🛟 Your streak can now survive a missed day.",
+    "log.error.too_soon":
+      "Easy in the water! 🦦 Max one swim per hour at the same place.",
+
+    "map.nudge.button": "🎲 Swim idea",
+    "nudge.title": "Time for a dip?",
+    "nudge.title.at_risk": "Save the streak! 🛟",
+    "nudge.body":
+      "Here's a spot you've never swum at — new water also means a new-spot bonus ✨",
+    "nudge.body.at_risk":
+      "Your {n}-day streak dies at midnight! A quick dip here saves it — with a new-spot bonus on top ✨",
+    "nudge.distance": "only {dist} away",
+    "nudge.friend": "{name} has swum here — join in! 💪",
+    "nudge.cta": "Show the spot",
+    "nudge.empty":
+      "You've swum everywhere we know of! 🤯 Find a new spot on the map.",
 
     "whileaway.title": "While you were away 🌊",
     "whileaway.subtitle": "Here's what you missed",
@@ -1314,6 +1369,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "achievement.STREAK_3.desc": "Three weeks in a row",
     "achievement.STREAK_6.name": "Unstoppable",
     "achievement.STREAK_6.desc": "Six weeks in a row",
+    "achievement.DAY_STREAK_7.name": "Week of water",
+    "achievement.DAY_STREAK_7.desc": "Seven days in a row",
+    "achievement.DAY_STREAK_30.name": "Disco dipper",
+    "achievement.DAY_STREAK_30.desc": "Thirty days in a row 🪩",
     "achievement.GLOBETROTTER.name": "Globetrotter",
     "achievement.GLOBETROTTER.desc": "Spots span 50 km",
     "achievement.WANDERLUST.name": "Wanderlust",
