@@ -1,10 +1,4 @@
-import {
-  Link,
-  NavLink,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Map as MapIcon,
@@ -15,20 +9,25 @@ import {
   History,
   Info,
   UsersRound,
+  WavesLadder,
 } from "lucide-react";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import { openRecap } from "@/components/SinceLastVisit";
 import { cn, rememberReturnPath } from "@/lib/utils";
 import { buttonClasses } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
+import SwimNudge from "@/components/SwimNudge";
 
 export default function Layout() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const t = useT();
+  const myStats = useStore((s) => s.myStats);
+
+  const [nudgeOpen, setNudgeOpen] = useState(false);
 
   const groupCount = useStore((s) => s.groups.length);
   const groupSubtitle =
@@ -45,6 +44,21 @@ export default function Layout() {
     location.pathname.startsWith("/log");
 
   const isGuest = !user;
+
+  // Last-chance nudge: when the streak dies unless the user swims today,
+  // suggest the nearest new spot — once per calendar day, and only after
+  // the page has settled so it doesn't fight the since-last-visit digest.
+  const atRisk = myStats.streak.atRisk;
+  useEffect(() => {
+    if (!user || !atRisk) return;
+    const key = `nudge-shown-${new Date().toDateString()}`;
+    if (localStorage.getItem(key)) return;
+    const timer = setTimeout(() => {
+      localStorage.setItem(key, "1");
+      setNudgeOpen(true);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [user, atRisk]);
 
   // The map page is non-scrolling — the map fills available space. Remove
   // the bottom padding so it doesn't create dead scroll space below the map.
@@ -125,6 +139,15 @@ export default function Layout() {
             </Link>
           ) : (
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setNudgeOpen(true)}
+                aria-label={t("map.nudge.button")}
+                title={t("map.nudge.button")}
+                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+              >
+                <WavesLadder className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={openRecap}
@@ -244,6 +267,13 @@ export default function Layout() {
           </motion.nav>
         ) : null}
       </AnimatePresence>
+
+      <SwimNudge
+        open={nudgeOpen}
+        onClose={() => setNudgeOpen(false)}
+        atRisk={atRisk}
+        streakDays={myStats.streak.current}
+      />
     </div>
   );
 }

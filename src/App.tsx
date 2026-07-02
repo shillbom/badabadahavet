@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useNavigate } from "react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useStore } from "@/store/sessions";
 import { useT } from "@/lib/i18n";

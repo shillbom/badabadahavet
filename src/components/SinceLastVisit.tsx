@@ -108,24 +108,20 @@ function computeActivity(
   // Merge swims and reaction batches into one feed, newest first. Each side is
   // capped first so a long absence can't blow up either category.
   const items: FeedItem[] = [
-    ...friendSwims.slice(0, MAX_FRIEND_SWIMS).map(
-      (s): FeedItem => ({
-        kind: "swim",
-        ts: s.createdAt ?? s.date,
-        session: s,
-      }),
-    ),
+    ...friendSwims.slice(0, MAX_FRIEND_SWIMS).map((s): FeedItem => ({
+      kind: "swim",
+      ts: s.createdAt ?? s.date,
+      session: s,
+    })),
     ...reactionItems
       .sort((a, b) => b.ts - a.ts)
       .slice(0, MAX_REACTION_ITEMS)
-      .map(
-        (r): FeedItem => ({
-          kind: "reaction",
-          ts: r.ts,
-          session: r.session,
-          delta: r.delta,
-        }),
-      ),
+      .map((r): FeedItem => ({
+        kind: "reaction",
+        ts: r.ts,
+        session: r.session,
+        delta: r.delta,
+      })),
   ].sort((a, b) => b.ts - a.ts);
 
   return {

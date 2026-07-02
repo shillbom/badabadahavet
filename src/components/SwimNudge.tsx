@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { MapPin, Thermometer } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
@@ -42,11 +42,11 @@ export default function SwimNudge({
     if (candidates.length === 0) return null;
 
     let place = candidates[0];
-    let distM: number | null = null;
+    let distM = 2 * 10 * 1000; // 20 km, arbitrary "far away" default
     if (origin) {
       for (const p of candidates) {
         const d = haversineMeters(origin, p);
-        if (distM === null || d < distM) {
+        if (d < distM) {
           distM = d;
           place = p;
         }

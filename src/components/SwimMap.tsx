@@ -15,7 +15,7 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Layers, LocateFixed } from "lucide-react";
 import { MAP_THEMES } from "@/lib/mapThemes";
 import Photo from "@/components/Photo";

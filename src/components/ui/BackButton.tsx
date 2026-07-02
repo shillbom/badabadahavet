@@ -1,5 +1,5 @@
 import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useT } from "@/lib/i18n";
 
 /** The standard round page-header back button. Pops history unless `onClick`

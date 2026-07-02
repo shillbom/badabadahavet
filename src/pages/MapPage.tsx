@@ -7,7 +7,6 @@ import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
 import StreakCard from "@/components/StreakCard";
 import Stat from "@/components/ui/Stat";
-import SwimNudge from "@/components/SwimNudge";
 const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
@@ -28,22 +27,6 @@ export default function MapPage() {
 
   const [fitToken, setFitToken] = useState(0);
   const [showAll, setShowAll] = useState(true);
-  const [nudgeOpen, setNudgeOpen] = useState(false);
-
-  // Last-chance nudge: when the streak dies unless the user swims today,
-  // suggest the nearest new spot — once per calendar day, and only after
-  // the page has settled so it doesn't fight the since-last-visit digest.
-  const atRisk = myStats.streak.atRisk;
-  useEffect(() => {
-    if (!user || !atRisk) return;
-    const key = `nudge-shown-${new Date().toDateString()}`;
-    if (localStorage.getItem(key)) return;
-    const timer = setTimeout(() => {
-      localStorage.setItem(key, "1");
-      setNudgeOpen(true);
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, [user, atRisk]);
 
   // Re-fit whenever the toggle changes so switching to "my places" zooms
   // in to fit them, and switching to "all" re-centres on user position.
@@ -157,10 +140,6 @@ export default function MapPage() {
                         label: showAll ? t("map.show.mine") : t("map.show.all"),
                         onClick: () => setShowAll((v) => !v),
                       },
-                      {
-                        label: t("map.nudge.button"),
-                        onClick: () => setNudgeOpen(true),
-                      },
                     ]
               }
             />
@@ -169,13 +148,6 @@ export default function MapPage() {
           )}
         </div>
       </div>
-
-      <SwimNudge
-        open={nudgeOpen}
-        onClose={() => setNudgeOpen(false)}
-        atRisk={atRisk}
-        streakDays={myStats.streak.current}
-      />
     </div>
   );
 }
