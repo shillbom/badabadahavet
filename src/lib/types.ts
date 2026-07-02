@@ -50,17 +50,22 @@ export type PlaceDoc = {
   /** External provider's identifier (e.g. badplatsen nutsCode). */
   externalId?: string;
   /** Which upstream the temperature refresh should prefer. "havochvatten"
-   *  tries the official SE feed first and falls back to Open-Meteo; the
-   *  default (or "open-meteo") goes straight to Open-Meteo satellite data. */
-  tempSource?: "havochvatten" | "open-meteo";
+   *  tries the official SE bathing-spot feed first, then the nearest SMHI
+   *  ocean-observation station, then Open-Meteo; "smhi" tries the nearest
+   *  SMHI station first and falls back to Open-Meteo. The default (or
+   *  "open-meteo") goes straight to Open-Meteo satellite data. Auto-promoted
+   *  from "havochvatten" to "smhi" server-side once SMHI actually supplies a
+   *  reading for a place whose official feed has nothing. */
+  tempSource?: "havochvatten" | "smhi" | "open-meteo";
   /** Latest measured water temperature in °C (if known). */
   waterTemp?: number;
   /** Epoch ms — when waterTemp was sampled. */
   waterTempAt?: number;
   /** Which upstream actually produced the current `waterTemp`. Distinct
-   *  from `tempSource` (the preference) — a "havochvatten" place can end
-   *  up with an "open-meteo" reading when the official feed has none. */
-  waterTempProvider?: "havochvatten" | "open-meteo";
+   *  from `tempSource` (the preference) — a "havochvatten" or "smhi" place
+   *  can end up with an "open-meteo" reading when its preferred feed has
+   *  none. */
+  waterTempProvider?: "havochvatten" | "smhi" | "open-meteo";
   /** Denormalised "last swim here", maintained by the logSession /
    *  removeSession Cloud Functions. Lets the map outline each pin with the
    *  most recent swimmer's frame without loading any sessions. */

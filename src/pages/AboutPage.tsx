@@ -86,6 +86,18 @@ export default function AboutPage() {
           .
         </p>
         <p className="mt-2">
+          {t("about.data.smhi")}{" "}
+          <a
+            href="https://www.smhi.se/data/oceanografi/havstemperatur"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-wave-700 underline hover:text-wave-800"
+          >
+            smhi.se
+          </a>
+          .
+        </p>
+        <p className="mt-2">
           {t("about.data.meteo")}{" "}
           <a
             href="https://open-meteo.com/"

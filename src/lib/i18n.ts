@@ -583,8 +583,14 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Svenska badplatser och deras vattentemperaturer kommer från Havs- och vattenmyndighetens öppna data,",
     "about.data.eea":
       "Badplatser i Danmark och Finland kommer från Europeiska miljöbyrån (EEA),",
+    "about.data.smhi":
+      "Vissa vattentemperaturer mäts vid SMHI:s oceanografiska mätstationer,",
     "about.data.meteo":
       "För platser utan en officiell mätning uppskattas vattentemperaturen från satellitdata via Open-Meteo,",
+    "temp.source.havochvatten": "Havs- och vattenmyndigheten",
+    "temp.source.smhi": "SMHI",
+    "temp.source.open-meteo": "satellituppskattning",
+    "spot.temp.source": "Källa: {source}",
     "about.data.maps":
       "Kartbilder kommer från OpenStreetMap och CARTO, satellitvyn från Esri, och vilket land ett bad ligger i slås upp med BigDataCloud.",
     "about.privacy.title": "Integritet",
@@ -1134,6 +1140,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Swedish swim spots and their water temperatures come from the Swedish Agency for Marine and Water Management's open data,",
     "about.data.eea":
       "Swim spots in Denmark and Finland come from the European Environment Agency (EEA),",
+    "about.data.smhi":
+      "Some water temperatures are measured at SMHI's oceanographic observation stations,",
+    "temp.source.havochvatten":
+      "Swedish Agency for Marine and Water Management",
+    "temp.source.smhi": "SMHI",
+    "temp.source.open-meteo": "satellite estimate",
+    "spot.temp.source": "Source: {source}",
     "about.data.meteo":
       "For spots without an official reading, water temperature is estimated from satellite data via Open-Meteo,",
     "about.data.maps":

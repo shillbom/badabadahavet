@@ -33,6 +33,35 @@ const PER_USER_PER_HOUR = 60;
 const DETAIL_URL = (nutsCode) =>
   `https://badplatsen.havochvatten.se/badplatsen/api/detail/${encodeURIComponent(nutsCode)}`;
 
+async function fetchHavochvattenTemp(nutsCode) {
+  const res = await fetch(DETAIL_URL(nutsCode), {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const raw =
+    data?.sampleTemperature ??
+    data?.value ??
+    data?.temperature ??
+    data?.celsius;
+  const temp = typeof raw === "string" ? Number(raw) : raw;
+  const stampRaw =
+    data?.sampleDate ?? data?.date ?? data?.timestamp ?? data?.measuredAt;
+  const stamp =
+    typeof stampRaw === "number" ? stampRaw : Date.parse(stampRaw ?? "");
+  if (
+    typeof temp !== "number" ||
+    Number.isNaN(temp) ||
+    temp < -5 ||
+    temp > 40 ||
+    !stamp ||
+    Number.isNaN(stamp)
+  ) {
+    return null;
+  }
+  return { temp, stamp, source: "havochvatten" };
+}
+
 // Open-Meteo's marine model is sea/ocean-only — its grid has no values
 // over inland lakes, so a lake coordinate returns null sea_surface_temperature.
 // That's expected: lake spots without an official reading just show no temp.
@@ -52,6 +81,102 @@ async function fetchOpenMeteoTemp(lat, lng) {
   const stamp = timeStr ? Date.parse(timeStr) : null;
   if (!stamp || Number.isNaN(stamp)) return null;
   return { temp, stamp, source: "open-meteo" };
+}
+
+// SMHI's open oceanographic data — parameter 1 is sea water temperature
+// from fixed coastal/buoy stations. There's no per-place station id, so we
+// resolve the nearest active station to a place's coordinates on the fly.
+const SMHI_STATIONS_URL =
+  "https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/1.json";
+const SMHI_DATA_URL = (stationId) =>
+  `https://opendata-download-ocobs.smhi.se/api/version/1.0/parameter/1/station/${stationId}/period/latest-hour/data.json`;
+
+// Don't match a place to a station further away than this — a spot with no
+// nearby sensor should just get no SMHI reading rather than a bogus one.
+const MAX_SMHI_STATION_DISTANCE_M = 40_000;
+
+// The station list barely changes; cache it per-instance instead of
+// re-fetching it on every single refresh call.
+const SMHI_STATIONS_CACHE_MS = 6 * 60 * 60 * 1000;
+let smhiStationsCache = null; // { at: number, stations: {id, lat, lng}[] }
+
+function haversineMeters(a, b) {
+  const toRad = (x) => (x * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  return 2 * 6_371_000 * Math.asin(Math.sqrt(h));
+}
+
+async function fetchSmhiStations() {
+  const now = Date.now();
+  if (
+    smhiStationsCache &&
+    now - smhiStationsCache.at < SMHI_STATIONS_CACHE_MS
+  ) {
+    return smhiStationsCache.stations;
+  }
+  const res = await fetch(SMHI_STATIONS_URL, {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) return smhiStationsCache?.stations ?? [];
+  const data = await res.json();
+  const stations = (data?.station ?? [])
+    .filter((s) => s.active !== false)
+    .map((s) => ({ id: s.id, lat: s.latitude, lng: s.longitude }))
+    .filter(
+      (s) =>
+        s.id != null && typeof s.lat === "number" && typeof s.lng === "number",
+    );
+  smhiStationsCache = { at: now, stations };
+  return stations;
+}
+
+async function findNearestSmhiStation(lat, lng) {
+  const stations = await fetchSmhiStations();
+  let best = null;
+  let bestDist = Infinity;
+  for (const s of stations) {
+    const dist = haversineMeters({ lat, lng }, s);
+    if (dist < bestDist) {
+      best = s;
+      bestDist = dist;
+    }
+  }
+  return best && bestDist <= MAX_SMHI_STATION_DISTANCE_M ? best.id : null;
+}
+
+async function fetchSmhiTemp(lat, lng) {
+  const stationId = await findNearestSmhiStation(lat, lng);
+  if (stationId == null) return null;
+  const res = await fetch(SMHI_DATA_URL(stationId), {
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const values = Array.isArray(data?.value) ? data.value : [];
+  if (!values.length) return null;
+  // Don't assume ordering — take the most recent sample's own timestamp,
+  // never "now" (the fetch time).
+  const latest = values.reduce((a, b) => (b.date > a.date ? b : a));
+  const raw = latest.value;
+  const temp = typeof raw === "string" ? Number(raw) : raw;
+  const stamp = latest.date;
+  if (
+    typeof temp !== "number" ||
+    Number.isNaN(temp) ||
+    temp < -5 ||
+    temp > 40 ||
+    typeof stamp !== "number" ||
+    Number.isNaN(stamp)
+  ) {
+    return null;
+  }
+  return { temp, stamp, source: "smhi" };
 }
 
 /**
@@ -123,43 +248,35 @@ export const refreshPlaceTemp = onCall(
       place.tempSource ??
       (place.source === "havochvatten.se" ? "havochvatten" : "open-meteo");
 
-    // Try the official SE feed first when that's the preferred source.
+    // Try the official/in-situ feed(s) for the preferred source. Hav och
+    // Vatten baths often have no live sensor, so when that comes back
+    // empty (or stale) we also try the nearest SMHI station before
+    // falling back to Open-Meteo — whichever official reading is more
+    // recent wins.
     let official = null;
     if (tempSource === "havochvatten" && place.externalId) {
       try {
-        const res = await fetch(DETAIL_URL(place.externalId), {
-          headers: { Accept: "application/json" },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const raw =
-            data?.sampleTemperature ??
-            data?.value ??
-            data?.temperature ??
-            data?.celsius;
-          const temp = typeof raw === "string" ? Number(raw) : raw;
-          const stampRaw =
-            data?.sampleDate ??
-            data?.date ??
-            data?.timestamp ??
-            data?.measuredAt;
-          const stamp =
-            typeof stampRaw === "number"
-              ? stampRaw
-              : Date.parse(stampRaw ?? "");
-          if (
-            typeof temp === "number" &&
-            !Number.isNaN(temp) &&
-            temp >= -5 &&
-            temp <= 40 &&
-            stamp &&
-            !Number.isNaN(stamp)
-          ) {
-            official = { temp, stamp, source: "havochvatten" };
-          }
-        }
+        official = await fetchHavochvattenTemp(place.externalId);
       } catch (e) {
         logger.warn("upstream fetch failed", { placeId, error: String(e) });
+      }
+    }
+    const wantsSmhi =
+      tempSource === "smhi" ||
+      (tempSource === "havochvatten" &&
+        (!official || now - official.stamp > DISPLAY_FRESH_MS));
+    if (
+      wantsSmhi &&
+      typeof place.lat === "number" &&
+      typeof place.lng === "number"
+    ) {
+      try {
+        const smhi = await fetchSmhiTemp(place.lat, place.lng);
+        if (smhi && (!official || smhi.stamp > official.stamp)) {
+          official = smhi;
+        }
+      } catch (e) {
+        logger.warn("smhi fetch failed", { placeId, error: String(e) });
       }
     }
 
@@ -191,19 +308,29 @@ export const refreshPlaceTemp = onCall(
       return { status: "no-data" };
     }
 
-    // Only write if it actually changed.
+    // Only write what actually changed.
+    const updates = {};
+    if (place.waterTemp !== reading.temp) updates.waterTemp = reading.temp;
+    if (place.waterTempAt !== reading.stamp)
+      updates.waterTempAt = reading.stamp;
+    if (place.waterTempProvider !== reading.source) {
+      // Which upstream actually produced this reading ("havochvatten",
+      // "smhi", or "open-meteo") — distinct from `tempSource` (the
+      // preference).
+      updates.waterTempProvider = reading.source;
+    }
+    // Hav och Vatten had nothing (or nothing fresh) and SMHI actually
+    // supplied the reading — prefer SMHI going forward instead of paying
+    // for a Hav och Vatten call that keeps coming back empty.
     if (
-      place.waterTemp !== reading.temp ||
-      place.waterTempAt !== reading.stamp ||
-      place.waterTempProvider !== reading.source
+      tempSource === "havochvatten" &&
+      reading.source === "smhi" &&
+      place.tempSource !== "smhi"
     ) {
-      await placeRef.update({
-        waterTemp: reading.temp,
-        waterTempAt: reading.stamp,
-        // Which upstream actually produced this reading ("havochvatten"
-        // or "open-meteo") — distinct from `tempSource` (the preference).
-        waterTempProvider: reading.source,
-      });
+      updates.tempSource = "smhi";
+    }
+    if (Object.keys(updates).length > 0) {
+      await placeRef.update(updates);
     }
 
     return {
