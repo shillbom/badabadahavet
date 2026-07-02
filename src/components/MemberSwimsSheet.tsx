@@ -1,18 +1,13 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import {
-  X,
-  Calendar,
-  List as ListIcon,
-  Map as MapIcon,
-  MapPin,
-} from "lucide-react";
+import { X, List as ListIcon, Map as MapIcon, MapPin } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
-import { cn, formatDateTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import SwimMap from "@/components/SwimMap";
 import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
+import SwimListItem from "@/components/SwimListItem";
 import type { PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 
 /**
@@ -193,59 +188,37 @@ export default function MemberSwimsSheet({
               ) : (
                 <ul className="h-[60dvh] space-y-2 overflow-y-auto pr-0.5">
                   {memberSwims.map((s, i) => (
-                    <motion.li
+                    <SwimListItem
                       key={s.id}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: Math.min(i, 8) * 0.03 }}
-                      className="glass flex items-start gap-3 p-3"
-                    >
-                      {s.photoUrl ? (
-                        <SwimPhoto
-                          session={s}
-                          className="h-14 w-14 flex-none rounded-lg"
-                        />
-                      ) : (
-                        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
-                          🌊
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        {/* Tap the place to reveal it on the map. */}
+                      index={i}
+                      thumb={
+                        s.photoUrl ? (
+                          <SwimPhoto
+                            session={s}
+                            className="h-14 w-14 flex-none rounded-lg"
+                          />
+                        ) : undefined
+                      }
+                      title={
+                        /* Tap the place to reveal it on the map. */
                         <button
                           type="button"
                           onClick={() => showOnMap(s.placeId)}
                           title={t("groups.member.show_on_map")}
-                          className="block w-full text-left"
+                          className="flex w-full min-w-0 items-center gap-1 text-left font-semibold text-wave-900"
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex min-w-0 items-center gap-1 font-semibold text-wave-900">
-                              <span className="truncate">{s.placeName}</span>
-                              <MapPin className="h-3 w-3 flex-none text-wave-500" />
-                            </div>
-                            <div className="flex-none font-display text-base font-black text-wave-700">
-                              +{s.points}
-                            </div>
-                          </div>
-                          <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
-                            <Calendar className="h-3 w-3" />
-                            {formatDateTime(s.date)}
-                            {s.isWinter ? (
-                              <span className="ml-1">❄️</span>
-                            ) : null}
-                            {s.isUniqueForUser ? (
-                              <span className="ml-0.5">✨</span>
-                            ) : null}
-                          </div>
+                          <span className="truncate">{s.placeName}</span>
+                          <MapPin className="h-3 w-3 flex-none text-wave-500" />
                         </button>
-                        {s.note ? (
-                          <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
-                            {s.note}
-                          </p>
-                        ) : null}
-                        <ReactionBar session={s} myUid={user?.uid} />
-                      </div>
-                    </motion.li>
+                      }
+                      points={s.points}
+                      date={s.date}
+                      winter={s.isWinter}
+                      unique={s.isUniqueForUser}
+                      note={s.note}
+                    >
+                      <ReactionBar session={s} myUid={user?.uid} />
+                    </SwimListItem>
                   ))}
                 </ul>
               )}

@@ -47,6 +47,7 @@ import { sumScores } from "@/lib/scoring";
 import type { MyStats } from "@/lib/stats";
 import { formatDate, cn } from "@/lib/utils";
 import { monthShort, useT } from "@/lib/i18n";
+import { Button } from "@/components/ui/Button";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { Input } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
@@ -240,13 +241,12 @@ export default function ProfilePage() {
               maxLength={40}
               className="text-center font-display text-lg font-bold"
             />
-            <button
+            <Button
               type="submit"
+              size="icon-sm"
               disabled={busy}
-              className="rounded-full bg-wave-600 p-2 text-white shadow disabled:opacity-50"
-            >
-              <Check className="h-4 w-4" />
-            </button>
+              icon={<Check className="h-4 w-4" />}
+            />
             <button
               type="button"
               onClick={() => {

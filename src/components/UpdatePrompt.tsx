@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { RefreshCw, X } from "lucide-react";
+import { Button } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
 
 /**
@@ -34,13 +35,9 @@ export default function UpdatePrompt({
             <span className="min-w-0 flex-1 text-slate-700">
               {t("update.prompt")}
             </span>
-            <button
-              type="button"
-              onClick={onReload}
-              className="flex-none rounded-full bg-wave-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-wave-700 active:scale-95"
-            >
+            <Button size="xs" className="flex-none" onClick={onReload}>
               {t("update.reload")}
-            </button>
+            </Button>
             <button
               type="button"
               onClick={onDismiss}

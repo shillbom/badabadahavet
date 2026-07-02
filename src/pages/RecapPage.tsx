@@ -8,6 +8,7 @@ import { startOfYear, endOfYear } from "@/lib/scoring";
 import { computeMyStats } from "@/lib/stats";
 import { ACHIEVEMENTS_BY_ID, evaluateAchievements } from "@/lib/achievements";
 import { monthShort, useT } from "@/lib/i18n";
+import { buttonClasses } from "@/components/ui/Button";
 
 const slideVariants = {
   enter: (dir: 1 | -1) => ({
@@ -276,10 +277,7 @@ export default function RecapPage() {
         </motion.button>
         {isLast ? (
           <motion.div whileTap={{ scale: 0.96 }}>
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-5 py-3 text-sm font-medium text-white shadow"
-            >
+            <Link to="/" className={buttonClasses("primary", "lg", "text-sm")}>
               {t("recap.back_to_map")}
             </Link>
           </motion.div>
@@ -287,7 +285,7 @@ export default function RecapPage() {
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={() => advance(1)}
-            className="rounded-full bg-wave-600 p-3 text-white shadow"
+            className={buttonClasses("primary", "icon", "h-11 w-11")}
             aria-label={t("common.next")}
           >
             <ChevronRight className="h-5 w-5" />

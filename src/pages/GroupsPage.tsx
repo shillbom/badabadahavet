@@ -732,16 +732,15 @@ function GroupDetailSheet({
                 maxLength={60}
                 className="min-w-0 flex-1 rounded-lg border border-wave-300 bg-white px-2 py-1 font-display text-lg font-black text-wave-900 outline-none focus:ring-2 focus:ring-wave-400"
               />
-              <button
+              <Button
+                size="icon-sm"
                 onClick={saveName}
-                disabled={savingMeta}
-                className="rounded-full bg-wave-600 p-1.5 text-white hover:bg-wave-700 disabled:opacity-50"
-              >
-                <Check className="h-3.5 w-3.5" />
-              </button>
+                loading={savingMeta}
+                icon={<Check className="h-3.5 w-3.5" />}
+              />
               <button
                 onClick={() => setEditingName(false)}
-                className="rounded-full bg-slate-100 p-1.5 text-slate-500 hover:bg-slate-200"
+                className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
               >
                 <X className="h-3.5 w-3.5" />
               </button>

@@ -16,6 +16,7 @@ import { addToSwim, removeFromSwim } from "@/lib/data";
 import { useT } from "@/lib/i18n";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
 import type { PlaceDoc, ToswimEntry } from "@/lib/types";
 
 type View = "todo" | "done";
@@ -153,13 +154,14 @@ export default function ToswimPage() {
                         {t("toswim.on_list")}
                       </span>
                     ) : (
-                      <button
+                      <Button
+                        size="xs"
+                        className="flex-none"
+                        icon={<Plus className="h-3 w-3" />}
                         onClick={() => onAdd(p.id, p.name)}
-                        className="inline-flex flex-none items-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm shadow-wave-700/30 transition hover:bg-wave-700 active:scale-95"
                       >
-                        <Plus className="h-3 w-3" />
                         {t("toswim.add")}
-                      </button>
+                      </Button>
                     )}
                   </li>
                 );

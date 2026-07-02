@@ -621,13 +621,9 @@ function TermsModal({
           </ul>
         </div>
         <div className="border-t border-slate-200 px-4 py-3">
-          <button
-            type="button"
-            onClick={onAccept}
-            className="w-full rounded-xl bg-wave-600 px-3 py-2 text-sm font-bold text-white shadow hover:bg-wave-700"
-          >
+          <Button type="button" onClick={onAccept} className="w-full">
             {t("terms.accept")}
-          </button>
+          </Button>
         </div>
       </motion.div>
     </motion.div>

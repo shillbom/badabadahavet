@@ -1,17 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
-import { motion } from "framer-motion";
-import { Calendar } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { reactorUids, reactionAddedAt, fetchUsers } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
-import { formatDateTime } from "@/lib/utils";
 import Photo from "@/components/Photo";
 import Lightbox from "@/components/Lightbox";
 import BottomSheet from "@/components/BottomSheet";
 import SpotSheet from "@/components/SpotSheet";
 import ReactionBar from "@/components/ReactionBar";
+import SwimListItem from "@/components/SwimListItem";
 
 // How long to wait for Firestore snapshots to settle before computing the
 // recap. The timer resets on every data change, so this is "quiet time"
@@ -377,65 +375,47 @@ function Sheet({
                 const s = liveById.get(item.session.id) ?? item.session;
                 if (item.kind === "swim") {
                   return (
-                    <motion.li
+                    <SwimListItem
                       key={`swim-${s.id}`}
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: Math.min(i, 8) * 0.03 }}
-                      className="glass flex items-start gap-3 p-3"
+                      index={i}
+                      thumb={
+                        s.photoUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setLightboxFor(s)}
+                            className="flex-none"
+                            aria-label={t("common.open")}
+                          >
+                            <Photo
+                              src={s.photoUrl}
+                              thumb={s.photoThumb}
+                              className="h-14 w-14 flex-none rounded-lg"
+                            />
+                          </button>
+                        ) : undefined
+                      }
+                      title={
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-wave-900">
+                            {s.displayName}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSpotFor(s.placeId)}
+                            className="block max-w-full truncate text-left text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
+                          >
+                            {s.placeName}
+                          </button>
+                        </div>
+                      }
+                      points={s.points}
+                      date={s.date}
+                      winter={s.isWinter}
+                      unique={s.isUniqueForUser}
+                      note={s.note}
                     >
-                      {s.photoUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => setLightboxFor(s)}
-                          className="flex-none"
-                          aria-label={t("common.open")}
-                        >
-                          <Photo
-                            src={s.photoUrl}
-                            thumb={s.photoThumb}
-                            className="h-14 w-14 flex-none rounded-lg"
-                          />
-                        </button>
-                      ) : (
-                        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
-                          🌊
-                        </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-wave-900">
-                              {s.displayName}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setSpotFor(s.placeId)}
-                              className="block max-w-full truncate text-left text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
-                            >
-                              {s.placeName}
-                            </button>
-                          </div>
-                          <div className="flex-none font-display text-base font-black text-wave-700">
-                            +{s.points}
-                          </div>
-                        </div>
-                        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
-                          <Calendar className="h-3 w-3" />
-                          {formatDateTime(s.date)}
-                          {s.isWinter ? <span className="ml-1">❄️</span> : null}
-                          {s.isUniqueForUser ? (
-                            <span className="ml-0.5">✨</span>
-                          ) : null}
-                        </div>
-                        {s.note ? (
-                          <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
-                            {s.note}
-                          </p>
-                        ) : null}
-                        <ReactionBar session={s} myUid={myUid} />
-                      </div>
-                    </motion.li>
+                      <ReactionBar session={s} myUid={myUid} />
+                    </SwimListItem>
                   );
                 }
 
@@ -455,70 +435,66 @@ function Sheet({
                   ),
                 ].map((uid) => nameByUid.get(uid) ?? t("common.someone"));
                 return (
-                  <motion.li
+                  <SwimListItem
                     key={`reaction-${s.id}`}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: Math.min(i, 8) * 0.03 }}
-                    className="glass flex items-start gap-3 p-3"
+                    index={i}
+                    thumb={
+                      s.photoUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => setLightboxFor(s)}
+                          className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-amber-50 text-2xl ring-1 ring-amber-200"
+                          aria-label={t("common.open")}
+                        >
+                          {emojis[0] ?? "💗"}
+                        </button>
+                      ) : (
+                        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-amber-50 text-2xl ring-1 ring-amber-200">
+                          {emojis[0] ?? "💗"}
+                        </div>
+                      )
+                    }
+                    title={
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-wave-900">
+                          {t("sincevisit.reacted", {
+                            name: reactorNames.join(", "),
+                          })}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSpotFor(s.placeId)}
+                          className="block max-w-full truncate text-left text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
+                        >
+                          {s.placeName}
+                        </button>
+                      </div>
+                    }
+                    aside={
+                      <div className="flex-none rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">
+                        +{item.delta}
+                      </div>
+                    }
+                    date={s.date}
                   >
-                    {s.photoUrl ? (
-                      <button
-                        type="button"
-                        onClick={() => setLightboxFor(s)}
-                        className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-amber-50 text-2xl ring-1 ring-amber-200"
-                        aria-label={t("common.open")}
-                      >
-                        {emojis[0] ?? "💗"}
-                      </button>
-                    ) : (
-                      <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-amber-50 text-2xl ring-1 ring-amber-200">
-                        {emojis[0] ?? "💗"}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-wave-900">
-                            {t("sincevisit.reacted", {
-                              name: reactorNames.join(", "),
-                            })}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setSpotFor(s.placeId)}
-                            className="block max-w-full truncate text-left text-[11px] text-slate-500 hover:text-wave-700 hover:underline"
-                          >
-                            {s.placeName}
-                          </button>
-                        </div>
-                        <div className="flex-none rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">
-                          +{item.delta}
-                        </div>
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
-                        <Calendar className="h-3 w-3" />
-                        {formatDateTime(s.date)}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1">
-                        {emojis.map((e) => (
-                          <span
-                            key={e}
-                            className="inline-flex items-center gap-0.5 rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] text-slate-500 ring-1 ring-slate-200"
-                          >
-                            {e}
-                            <span className="tabular-nums">
-                              {
-                                reactorUids(reactions[e]).filter(
-                                  (u) => u !== myUid,
-                                ).length
-                              }
-                            </span>
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {emojis.map((e) => (
+                        <span
+                          key={e}
+                          className="inline-flex items-center gap-0.5 rounded-full bg-white/70 px-1.5 py-0.5 text-[11px] text-slate-500 ring-1 ring-slate-200"
+                        >
+                          {e}
+                          <span className="tabular-nums">
+                            {
+                              reactorUids(reactions[e]).filter(
+                                (u) => u !== myUid,
+                              ).length
+                            }
                           </span>
-                        ))}
-                      </div>
+                        </span>
+                      ))}
                     </div>
-                  </motion.li>
+                  </SwimListItem>
                 );
               })}
             </ul>
