@@ -582,10 +582,18 @@ function WaterTempCard({
 
   const isWarm = place.waterTemp >= 17;
   const isCool = place.waterTemp < 10;
+  const mutedColor = isWarm
+    ? "text-amber-600"
+    : isCool
+      ? "text-sky-600"
+      : "text-teal-600";
+  const sourceLabel = place.waterTempProvider
+    ? t(`temp.source.${place.waterTempProvider}`)
+    : null;
 
   return (
     <div
-      className={`mt-3 flex items-center gap-2.5 rounded-2xl px-3 py-2.5 ring-1 ${
+      className={`mt-3 rounded-2xl px-3 py-2.5 ring-1 ${
         isWarm
           ? "bg-amber-50/80 ring-amber-200"
           : isCool
@@ -593,19 +601,22 @@ function WaterTempCard({
             : "bg-teal-50/80 ring-teal-200"
       }`}
     >
-      <Thermometer
-        className={`h-4 w-4 flex-none ${isWarm ? "text-amber-500" : isCool ? "text-sky-500" : "text-teal-500"}`}
-      />
-      <span
-        className={`font-semibold ${isWarm ? "text-amber-900" : isCool ? "text-sky-900" : "text-teal-900"}`}
-      >
-        {place.waterTemp.toFixed(1)} °C
-      </span>
-      <span
-        className={`text-xs ${isWarm ? "text-amber-600" : isCool ? "text-sky-600" : "text-teal-600"}`}
-      >
-        {ageLabel}
-      </span>
+      <div className="flex items-center gap-2.5">
+        <Thermometer
+          className={`h-4 w-4 flex-none ${isWarm ? "text-amber-500" : isCool ? "text-sky-500" : "text-teal-500"}`}
+        />
+        <span
+          className={`font-semibold ${isWarm ? "text-amber-900" : isCool ? "text-sky-900" : "text-teal-900"}`}
+        >
+          {place.waterTemp.toFixed(1)} °C
+        </span>
+        <span className={`text-xs ${mutedColor}`}>{ageLabel}</span>
+      </div>
+      {sourceLabel ? (
+        <div className={`mt-0.5 pl-[26px] text-[11px] ${mutedColor}`}>
+          {t("spot.temp.source", { source: sourceLabel })}
+        </div>
+      ) : null}
     </div>
   );
 }
