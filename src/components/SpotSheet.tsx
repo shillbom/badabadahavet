@@ -1,6 +1,9 @@
-import { useRef } from "react";
+import { lazy, Suspense, useRef } from "react";
 import BottomSheet from "@/components/BottomSheet";
-import { SpotView } from "@/pages/SpotPage";
+
+const SpotView = lazy(() =>
+  import("@/pages/SpotPage").then((m) => ({ default: m.SpotView })),
+);
 
 /**
  * Opens a spot's detail UI ({@link SpotView}) inside a {@link BottomSheet}
@@ -24,7 +27,13 @@ export default function SpotSheet({
   return (
     <BottomSheet open={!!placeId} onClose={onClose} size="large">
       {shown ? (
-        <SpotView placeId={shown} variant="sheet" onClose={onClose} />
+        <Suspense
+          fallback={
+            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
+          }
+        >
+          <SpotView placeId={shown} variant="sheet" onClose={onClose} />
+        </Suspense>
       ) : null}
     </BottomSheet>
   );

@@ -50,7 +50,10 @@
       rel="preload"
       as="style"
       href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap"
-      onload="this.onload=null;this.rel='stylesheet'"
+      onload="
+        this.onload = null;
+        this.rel = 'stylesheet';
+      "
     />
     <noscript>
       <link
@@ -102,8 +105,8 @@
         animation: app-splash-bob 2s ease-in-out infinite;
       }
       .app-splash__word {
-        font-family: "Caveat Brush", "Bricolage Grotesque", system-ui,
-          sans-serif;
+        font-family:
+          "Caveat Brush", "Bricolage Grotesque", system-ui, sans-serif;
         font-size: 0.875rem;
         font-weight: 700;
         letter-spacing: 0.1em;

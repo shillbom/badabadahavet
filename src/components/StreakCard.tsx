@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { Flame } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { streakTier, type StreakInfo } from "@/lib/streak";

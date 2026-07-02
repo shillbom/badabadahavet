@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { motion } from "framer-motion";
 import { useT } from "@/lib/i18n";
 import BackButton from "@/components/ui/BackButton";
