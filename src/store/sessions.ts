@@ -31,6 +31,7 @@ import {
   type AchievementContext,
 } from "@/lib/achievements";
 import { computeMyStats, type MyStats } from "@/lib/stats";
+import { computeStreak } from "@/lib/streak";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useLocale } from "@/lib/i18n";
 
@@ -43,6 +44,7 @@ const EMPTY_STATS: MyStats = {
   totalPoints: 0,
   uniquePlaces: 0,
   winterSwims: 0,
+  streak: computeStreak([]),
   currentDayStreak: 0,
   daysSinceLast: null,
   currentWeekStreak: 0,

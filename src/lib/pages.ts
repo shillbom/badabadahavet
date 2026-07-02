@@ -44,6 +44,10 @@ const PAGES = [
     load: withStaleReload(() => import("@/pages/AchievementsPage")),
   },
   {
+    key: "Streak",
+    load: withStaleReload(() => import("@/pages/StreakPage")),
+  },
+  {
     key: "Profile",
     load: withStaleReload(() => import("@/pages/ProfilePage")),
   },

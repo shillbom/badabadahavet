@@ -30,6 +30,74 @@
   --animate-bob: bob 3s ease-in-out infinite;
   --animate-ripple: ripple 1.6s ease-out infinite;
   --animate-highlight: highlight 2.4s ease-out 1;
+  /* Streak-card tier effects (see components/StreakCard.tsx) */
+  --animate-bubble-rise: bubble-rise 3s ease-in infinite;
+  --animate-flame-flicker: flame-flicker 0.9s ease-in-out infinite;
+  --animate-ember-rise: ember-rise 1.8s ease-in infinite;
+  --animate-disco-shift: disco-shift 6s linear infinite;
+  --animate-laser-spin: laser-spin 4s linear infinite;
+}
+
+@keyframes bubble-rise {
+  0% {
+    transform: translateY(120%) scale(0.5);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-160%) scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes flame-flicker {
+  0%,
+  100% {
+    transform: scale(1) rotate(-3deg);
+  }
+  30% {
+    transform: scale(1.2) rotate(3deg);
+  }
+  60% {
+    transform: scale(0.95) rotate(-1deg);
+  }
+}
+
+@keyframes ember-rise {
+  0% {
+    transform: translateY(60%) scale(1);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-260%) scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes disco-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes laser-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes bob {

@@ -1,13 +1,13 @@
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Flame, MapPin, Trophy } from "lucide-react";
+import { MapPin, Trophy } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { sumScores } from "@/lib/scoring";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
+import StreakCard from "@/components/StreakCard";
 const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
@@ -115,18 +115,7 @@ export default function MapPage() {
             icon={<MapPin className="h-4 w-4" />}
             sub={t("map.stat.spots.sub", { n: myStats.swimsLastMonth })}
           />
-          <Stat
-            to="/history?view=streak"
-            label={t("map.stat.streak")}
-            value={myStats.currentDayStreak}
-            icon={<Flame className="h-4 w-4" />}
-            subTone="warn"
-            sub={
-              myStats.currentDayStreak > 0 && myStats.daysSinceLast === 1
-                ? t("map.streak.at_risk")
-                : undefined
-            }
-          />
+          <StreakCard streak={myStats.streak} />
         </div>
       ) : null}
 
@@ -167,7 +156,6 @@ function Stat({
   value,
   icon,
   sub,
-  subTone = "muted",
 }: {
   to?: string;
   onClick?: () => void;
@@ -175,7 +163,6 @@ function Stat({
   value: number;
   icon: React.ReactNode;
   sub?: string;
-  subTone?: "muted" | "warn";
 }) {
   const inner = (
     <>
@@ -187,16 +174,7 @@ function Stat({
         value={value}
         className="font-display text-2xl font-black text-wave-900"
       />
-      {sub ? (
-        <div
-          className={cn(
-            "text-[10px]",
-            subTone === "warn" ? "text-amber-700" : "text-slate-500",
-          )}
-        >
-          {sub}
-        </div>
-      ) : null}
+      {sub ? <div className="text-[10px] text-slate-500">{sub}</div> : null}
     </>
   );
   return (

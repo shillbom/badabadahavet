@@ -1,3 +1,4 @@
+import { computeStreak, type StreakInfo } from "./streak";
 import type { SessionDoc } from "./types";
 
 export type MyStats = {
@@ -5,6 +6,8 @@ export type MyStats = {
   totalPoints: number;
   uniquePlaces: number;
   winterSwims: number;
+  /** Skip-day-aware day streak; `currentDayStreak` mirrors `streak.current`. */
+  streak: StreakInfo;
   currentDayStreak: number;
   daysSinceLast: number | null;
   currentWeekStreak: number;
@@ -48,6 +51,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
       totalPoints: 0,
       uniquePlaces: 0,
       winterSwims: 0,
+      streak: computeStreak([]),
       currentDayStreak: 0,
       daysSinceLast: null,
       currentWeekStreak: 0,
@@ -101,15 +105,8 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
     (dayStartMs(Date.now()) - dayStartMs(lastDate)) / DAY_MS,
   );
 
-  // Day streak: consecutive calendar days (today or yesterday counts as active).
-  const daysWithSwim = new Set<number>(sessions.map((s) => dayStartMs(s.date)));
-  let currentDayStreak = 0;
-  let dayCursor = dayStartMs(Date.now());
-  if (!daysWithSwim.has(dayCursor)) dayCursor -= DAY_MS;
-  while (daysWithSwim.has(dayCursor)) {
-    currentDayStreak++;
-    dayCursor -= DAY_MS;
-  }
+  // Day streak with skip days — see lib/streak.ts for the rules.
+  const streak = computeStreak(sessions.map((s) => s.date));
 
   // Week streaks: walk back week-by-week from the most recent swim's week.
   const weeksWithSwim = new Set<number>(
@@ -189,7 +186,8 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
     totalPoints,
     uniquePlaces: placeCounts.size,
     winterSwims,
-    currentDayStreak,
+    streak,
+    currentDayStreak: streak.current,
     daysSinceLast,
     currentWeekStreak,
     longestWeekStreak,

@@ -5,26 +5,14 @@ import { ChevronRight, MapPin, Snowflake, Sparkles } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { formatDateTime } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
+import { computeStreak, dayStartMs } from "@/lib/streak";
 import Photo from "@/components/Photo";
 import type { SessionDoc } from "@/lib/types";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function dayStartMs(ts: number): number {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
 function streakSessions(sessions: SessionDoc[]): SessionDoc[] {
-  const days = new Set(sessions.map((s) => dayStartMs(s.date)));
-  let cursor = dayStartMs(Date.now());
-  if (!days.has(cursor)) cursor -= DAY_MS;
-  const streakDays = new Set<number>();
-  while (days.has(cursor)) {
-    streakDays.add(cursor);
-    cursor -= DAY_MS;
-  }
-  return sessions.filter((s) => streakDays.has(dayStartMs(s.date)));
+  const start = computeStreak(sessions.map((s) => s.date)).currentStart;
+  if (start === null) return [];
+  return sessions.filter((s) => dayStartMs(s.date) >= start);
 }
 
 export default function HistoryPage() {

@@ -31,30 +31,12 @@ import {
 } from "@/lib/data";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
+import { longestStreakInYear, dayStartMs as dayStart } from "@/lib/streak";
 import { cn } from "@/lib/utils";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import BottomSheet from "@/components/BottomSheet";
 
 const DAY_MS = 86_400_000;
-
-function dayStart(ts: number): number {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
-/** Current consecutive-day swim streak ending today or yesterday. */
-function currentDayStreak(dates: number[]): number {
-  if (dates.length === 0) return 0;
-  const days = new Set(dates.map(dayStart));
-  let cursor = dayStart(Date.now());
-  if (!days.has(cursor)) cursor -= DAY_MS; // yesterday still keeps it alive
-  let streak = 0;
-  while (days.has(cursor)) {
-    streak++;
-    cursor -= DAY_MS;
-  }
-  return streak;
-}
 
 /** Short "last swim" recency label + colour, for the competitive at-a-glance. */
 function recency(
@@ -571,7 +553,9 @@ function GroupDetailSheet({
         swims: e.swims,
         spots: e.spots,
         lastSwim: e.lastSwim,
-        streak: currentDayStreak(e.dates),
+        // The year's best streak, not the live one — keeps the group
+        // comparison fair for members whose streak happens to be broken today.
+        streak: longestStreakInYear(e.dates, new Date().getFullYear()),
       });
     return map;
   }, [allSessions, shown?.members]);
