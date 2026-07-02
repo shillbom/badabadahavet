@@ -569,7 +569,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "recap.month.subtitle": "Din höjdpunkt",
     "recap.month.label": "{n} p",
     "recap.range.title": "Vattenräckvidd",
-    "recap.range.subtitle": "Avståndet mellan dina ytterligaste platser",
+    "recap.range.subtitle": "Avståndet mellan dina mest utspridda platser",
     "recap.range.label": "km bred",
     "recap.achievements.title": "Bedrifter klara",
     "recap.achievements.subtitle": "{n} klara i år",
@@ -681,7 +681,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "celebration.swim.points": "+{n} p",
     "celebration.streak.days": "{n} dagar i rad!",
     "celebration.streak.bubbly": "Nu bubblar det! 🫧",
-    "celebration.streak.fire": "Du brinner — fortsätt! 🔥",
+    "celebration.streak.fire": "Du har galet bra flyt — fortsätt! 🔥",
     "celebration.streak.disco": "STREAKFEST! Helt ostoppbar! 🪩",
     "log.buoy_earned": "Livboj intjänad! 🛟 Streaken tål nu en missad dag.",
     "log.error.too_soon":
@@ -691,14 +691,14 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "nudge.title": "Dags för ett dopp?",
     "nudge.title.at_risk": "Rädda streaken! 🛟",
     "nudge.body":
-      "Här är en plats du aldrig badat på — nytt vatten ger dessutom ny plats-bonus ✨",
+      "Här är en plats du aldrig badat på — ny badplats ger dessutom bonus ✨",
     "nudge.body.at_risk":
       "Din streak på {n} dagar dör vid midnatt! Ett snabbdopp här räddar den — och ger ny plats-bonus ✨",
     "nudge.distance": "bara {dist} bort",
     "nudge.friend": "{name} har badat här — häng på! 💪",
     "nudge.cta": "Visa platsen",
     "nudge.empty":
-      "Du har badat överallt vi känner till! 🤯 Hitta en ny plats via kartan.",
+      "Du har badat på alla platser i närheten! 🤯 Hitta en ny plats via kartan.",
 
     "whileaway.title": "Medan du var borta 🌊",
     "whileaway.subtitle": "Det här har hänt sen sist",
@@ -1315,7 +1315,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "nudge.friend": "{name} has swum here — join in! 💪",
     "nudge.cta": "Show the spot",
     "nudge.empty":
-      "You've swum everywhere we know of! 🤯 Find a new spot on the map.",
+      "You've swum on all nearby spots! 🤯 Find a new spot on the map.",
 
     "whileaway.title": "While you were away 🌊",
     "whileaway.subtitle": "Here's what you missed",

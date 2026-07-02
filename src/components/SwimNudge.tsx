@@ -42,11 +42,11 @@ export default function SwimNudge({
     if (candidates.length === 0) return null;
 
     let place = candidates[0];
-    let distM: number | null = null;
+    let distM = 2 * 10 * 1000; // 20 km, arbitrary "far away" default
     if (origin) {
       for (const p of candidates) {
         const d = haversineMeters(origin, p);
-        if (distM === null || d < distM) {
+        if (d < distM) {
           distM = d;
           place = p;
         }
