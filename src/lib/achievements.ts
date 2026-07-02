@@ -1,3 +1,4 @@
+import { WEEK_MS, weekStartMs } from "./date";
 import type { SessionDoc } from "./types";
 
 export type Achievement = {
@@ -20,8 +21,6 @@ export type AchievementContext = {
   allSessions: SessionDoc[];
 };
 
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
 function uniquePlaces(sessions: SessionDoc[]): number {
   const set = new Set<string>();
   for (const s of sessions) set.add(s.placeId);
@@ -32,15 +31,9 @@ function winterCount(sessions: SessionDoc[]): number {
   return sessions.filter((s) => s.isWinter).length;
 }
 
-function weekStart(ts: number): number {
-  const d = new Date(ts);
-  const day = (d.getDay() + 6) % 7;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() - day).getTime();
-}
-
 function bestWeekStreak(sessions: SessionDoc[]): number {
   if (sessions.length === 0) return 0;
-  const weeks = [...new Set(sessions.map((s) => weekStart(s.date)))].sort(
+  const weeks = [...new Set(sessions.map((s) => weekStartMs(s.date)))].sort(
     (a, b) => a - b,
   );
   let best = 1;

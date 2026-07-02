@@ -11,15 +11,10 @@
  * over a missed day but doesn't make it longer.
  */
 
-const DAY_MS = 86_400_000;
+import { DAY_MS, dayStartMs } from "./date";
 
 /** Swim days needed to earn one skip day. */
 export const SWIM_DAYS_PER_SKIP = 4;
-
-export function dayStartMs(ts: number): number {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
 
 export type StreakDayType = "swim" | "skip";
 

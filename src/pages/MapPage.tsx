@@ -1,13 +1,12 @@
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { MapPin, Trophy } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { sumScores } from "@/lib/scoring";
 import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
-import { AnimatedNumber } from "@/components/AnimatedNumber";
 import StreakCard from "@/components/StreakCard";
+import Stat from "@/components/ui/Stat";
 const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
@@ -103,6 +102,8 @@ export default function MapPage() {
         <div className="grid grid-cols-3 gap-2">
           <Stat
             to="/history"
+            size="lg"
+            animate
             label={t("map.stat.points")}
             value={totalPoints}
             icon={<Trophy className="h-4 w-4" />}
@@ -110,6 +111,8 @@ export default function MapPage() {
           />
           <Stat
             onClick={() => setFitToken((n) => n + 1)}
+            size="lg"
+            animate
             label={t("map.stat.spots")}
             value={myStats.uniquePlaces}
             icon={<MapPin className="h-4 w-4" />}
@@ -146,62 +149,5 @@ export default function MapPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-function Stat({
-  to,
-  onClick,
-  label,
-  value,
-  icon,
-  sub,
-}: {
-  to?: string;
-  onClick?: () => void;
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  sub?: string;
-}) {
-  const inner = (
-    <>
-      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-wave-700 uppercase">
-        {icon}
-        {label}
-      </div>
-      <AnimatedNumber
-        value={value}
-        className="font-display text-2xl font-black text-wave-900"
-      />
-      {sub ? <div className="text-[10px] text-slate-500">{sub}</div> : null}
-    </>
-  );
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 280, damping: 24 }}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.98 }}
-      className="h-full"
-    >
-      {to ? (
-        <Link
-          to={to}
-          className="glass flex h-full flex-col items-start gap-1 px-3 py-2.5"
-        >
-          {inner}
-        </Link>
-      ) : (
-        <button
-          type="button"
-          onClick={onClick}
-          className="glass flex h-full w-full flex-col items-start gap-1 px-3 py-2.5 text-left"
-        >
-          {inner}
-        </button>
-      )}
-    </motion.div>
   );
 }

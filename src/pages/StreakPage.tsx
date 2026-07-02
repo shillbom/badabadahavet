@@ -1,21 +1,20 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Flame,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useStore } from "@/store/sessions";
 import { useT, useLocale, localeBcp, monthLong } from "@/lib/i18n";
-import { dayStartMs, type StreakInfo } from "@/lib/streak";
+import type { StreakInfo } from "@/lib/streak";
+import { DAY_MS, dayStartMs } from "@/lib/date";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
-
-const DAY_MS = 86_400_000;
+import BackButton from "@/components/ui/BackButton";
+import Stat from "@/components/ui/Stat";
 
 type DayState = "swim" | "skip" | "missed" | "today" | "none";
 
@@ -35,7 +34,6 @@ function dayState(
 }
 
 export default function StreakPage() {
-  const navigate = useNavigate();
   const t = useT();
   const locale = useLocale((s) => s.locale);
   const bcp = localeBcp(locale);
@@ -79,13 +77,7 @@ export default function StreakPage() {
   return (
     <div className="px-4 pt-2 pb-12">
       <div className="mb-3 flex items-center gap-2">
-        <button
-          onClick={() => navigate(-1)}
-          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        <BackButton />
         <div>
           <h2 className="font-display text-2xl font-black text-wave-900">
             {recentSwims >= 5
@@ -199,30 +191,12 @@ export default function StreakPage() {
 
       {/* Quick stats. */}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <MiniStat label={t("streak.stat.longest")} value={streak.longest} />
-        <MiniStat
-          label={t("streak.stat.buoys_used")}
-          value={streak.skipsUsed}
-        />
+        <Stat label={t("streak.stat.longest")} value={streak.longest} />
+        <Stat label={t("streak.stat.buoys_used")} value={streak.skipsUsed} />
       </div>
 
       <Calendar streak={streak} today={today} firstDay={firstDay} />
     </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: number }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="glass flex flex-col items-start gap-0.5 px-3 py-2.5"
-    >
-      <span className="font-display text-xl font-black text-wave-900">
-        {value}
-      </span>
-      <span className="text-[10px] leading-tight text-slate-500">{label}</span>
-    </motion.div>
   );
 }
 

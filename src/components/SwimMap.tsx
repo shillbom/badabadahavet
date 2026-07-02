@@ -23,6 +23,7 @@ import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import { pinRingFor } from "@/lib/borders";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
 import { formatDate, cn } from "@/lib/utils";
+import { buttonClasses } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
 
 // Fix default marker icon paths for bundlers (Leaflet's default icons are broken under Vite).
@@ -656,7 +657,11 @@ export default function SwimMap({
                       {linkToSpot ? (
                         <Link
                           to={`/spot/${p.id}`}
-                          className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
+                          className={buttonClasses(
+                            "primary",
+                            "xs",
+                            "mt-2 w-full !text-white no-underline hover:!text-white",
+                          )}
                         >
                           {t("map.popup.view_spot")}
                         </Link>
@@ -747,7 +752,11 @@ export default function SwimMap({
                     {linkToSpot ? (
                       <Link
                         to={`/spot/${p.id}`}
-                        className="mt-2 flex w-full items-center justify-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold !text-white no-underline shadow-sm transition hover:bg-wave-700 hover:!text-white"
+                        className={buttonClasses(
+                          "primary",
+                          "xs",
+                          "mt-2 w-full !text-white no-underline hover:!text-white",
+                        )}
                       >
                         {t("map.popup.view_spot")}
                       </Link>

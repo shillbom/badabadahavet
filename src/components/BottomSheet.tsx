@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { X } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 /**
  * Reusable swipe-to-dismiss bottom sheet: a dimmed backdrop plus a rounded
@@ -26,12 +27,16 @@ export default function BottomSheet({
   size = "large",
   title,
   children,
+  zBase = 1100,
 }: {
   open: boolean;
   onClose: () => void;
   size?: "large" | "small";
   title?: ReactNode;
   children?: ReactNode;
+  /** Backdrop z-index; the sheet sits at zBase + 100. Raise it for sheets
+   *  that stack on top of another sheet. */
+  zBase?: number;
 }) {
   const t = useT();
   const dragControls = useDragControls();
@@ -47,7 +52,8 @@ export default function BottomSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-[1100] bg-black/40 backdrop-blur-sm"
+            style={{ zIndex: zBase }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm"
           />
           <motion.div
             key="bs-sheet"
@@ -61,27 +67,40 @@ export default function BottomSheet({
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.4 }}
             onDragEnd={(_e, info) => {
-              if (info.offset.y > 120 || info.velocity.y > 500) onClose();
+              if (info.offset.y > 80 || info.velocity.y > 350) onClose();
             }}
-            style={isLarge ? { maxHeight: "92dvh" } : undefined}
+            style={{
+              zIndex: zBase + 100,
+              ...(isLarge ? { maxHeight: "92dvh" } : undefined),
+            }}
             className={
               isLarge
-                ? "fixed inset-x-0 bottom-0 z-[1200] mx-auto flex max-w-md flex-col overflow-hidden rounded-t-3xl bg-white/95 shadow-2xl backdrop-blur-sm"
-                : "fixed inset-x-0 bottom-0 z-[1200] mx-auto max-w-md touch-none rounded-t-3xl bg-white/95 px-6 pt-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)] shadow-2xl backdrop-blur-sm"
+                ? "fixed inset-x-0 bottom-0 mx-auto flex max-w-md flex-col overflow-hidden rounded-t-3xl bg-white/95 shadow-2xl backdrop-blur-sm"
+                : "fixed inset-x-0 bottom-0 mx-auto max-w-md touch-none rounded-t-3xl bg-white/95 px-6 pt-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)] shadow-2xl backdrop-blur-sm"
             }
           >
             {isLarge ? (
               <>
-                {/* Drag handle — grab here to dismiss; the body stays scrollable. */}
+                {/* Drag handle — grab here to dismiss; the body stays scrollable.
+                    The generous padding (and overlap into the title row) makes
+                    the touch target comfortably taller than the visual bar. */}
                 <div
                   onPointerDown={(e) => dragControls.start(e)}
-                  className="flex flex-none cursor-grab touch-none justify-center pt-4 pb-3 active:cursor-grabbing"
+                  className={cn(
+                    "relative z-10 flex flex-none cursor-grab touch-none justify-center pt-4 pb-7 active:cursor-grabbing",
+                    // Overlap into the title row for an even taller target —
+                    // but never over the scrollable body when there's no title.
+                    title != null && "-mb-4",
+                  )}
                 >
-                  <div className="h-1 w-10 rounded-full bg-slate-300" />
+                  <div className="h-1.5 w-12 rounded-full bg-slate-300" />
                 </div>
 
                 {title != null ? (
-                  <div className="flex flex-none items-center justify-between gap-3 px-5 pt-1 pb-3">
+                  <div
+                    onPointerDown={(e) => dragControls.start(e)}
+                    className="flex flex-none touch-none items-center justify-between gap-3 px-5 pt-5 pb-3"
+                  >
                     <div className="min-w-0 flex-1">{title}</div>
                     <button
                       onClick={onClose}

@@ -13,6 +13,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 import { Input, Label } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
 import { useLocale, useT } from "@/lib/i18n";
@@ -360,24 +361,14 @@ export default function LoginPage() {
         }}
         className="glass z-10 mt-8 w-full max-w-sm space-y-4 p-5"
       >
-        <div className="flex rounded-full bg-slate-100 p-1">
-          <button
-            type="button"
-            data-active={mode === "login"}
-            onClick={() => setMode("login")}
-            className="pill-tab"
-          >
-            {t("auth.login")}
-          </button>
-          <button
-            type="button"
-            data-active={mode === "signup"}
-            onClick={() => setMode("signup")}
-            className="pill-tab"
-          >
-            {t("auth.signup")}
-          </button>
-        </div>
+        <SegmentedControl
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "login", label: t("auth.login") },
+            { value: "signup", label: t("auth.signup") },
+          ]}
+        />
 
         <div className="space-y-1.5">
           <Label htmlFor="email">
@@ -621,13 +612,9 @@ function TermsModal({
           </ul>
         </div>
         <div className="border-t border-slate-200 px-4 py-3">
-          <button
-            type="button"
-            onClick={onAccept}
-            className="w-full rounded-xl bg-wave-600 px-3 py-2 text-sm font-bold text-white shadow hover:bg-wave-700"
-          >
+          <Button type="button" onClick={onAccept} className="w-full">
             {t("terms.accept")}
-          </button>
+          </Button>
         </div>
       </motion.div>
     </motion.div>

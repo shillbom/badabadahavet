@@ -21,6 +21,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import { openRecap } from "@/components/SinceLastVisit";
 import { cn, rememberReturnPath } from "@/lib/utils";
+import { buttonClasses } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
 
 export default function Layout() {
@@ -117,7 +118,7 @@ export default function Layout() {
             <Link
               to="/login"
               onClick={rememberReturnPath}
-              className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-wave-700"
+              className={buttonClasses("primary", "xs")}
             >
               <LogIn className="h-3.5 w-3.5" />
               {t("layout.sign_in")}

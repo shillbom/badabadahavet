@@ -16,6 +16,9 @@ import { addToSwim, removeFromSwim } from "@/lib/data";
 import { useT } from "@/lib/i18n";
 import { formatDate } from "@/lib/utils";
 import { toast } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 import type { PlaceDoc, ToswimEntry } from "@/lib/types";
 
 type View = "todo" | "done";
@@ -115,14 +118,13 @@ export default function ToswimPage() {
         >
           <Search className="h-3 w-3" /> {t("toswim.search.label")}
         </label>
-        <input
+        <Input
           id="toswim-search"
           type="search"
           autoComplete="off"
           placeholder={t("toswim.search.placeholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"
         />
         {search.trim() ? (
           <ul className="mt-2.5 max-h-64 space-y-1.5 overflow-y-auto">
@@ -153,13 +155,14 @@ export default function ToswimPage() {
                         {t("toswim.on_list")}
                       </span>
                     ) : (
-                      <button
+                      <Button
+                        size="xs"
+                        className="flex-none"
+                        icon={<Plus className="h-3 w-3" />}
                         onClick={() => onAdd(p.id, p.name)}
-                        className="inline-flex flex-none items-center gap-1 rounded-full bg-wave-600 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm shadow-wave-700/30 transition hover:bg-wave-700 active:scale-95"
                       >
-                        <Plus className="h-3 w-3" />
                         {t("toswim.add")}
-                      </button>
+                      </Button>
                     )}
                   </li>
                 );
@@ -169,24 +172,15 @@ export default function ToswimPage() {
         ) : null}
       </div>
 
-      <div className="mb-3 flex rounded-full bg-slate-100 p-1">
-        <button
-          type="button"
-          data-active={view === "todo"}
-          onClick={() => setView("todo")}
-          className="pill-tab"
-        >
-          {t("toswim.tab.todo", { n: todo.length })}
-        </button>
-        <button
-          type="button"
-          data-active={view === "done"}
-          onClick={() => setView("done")}
-          className="pill-tab"
-        >
-          {t("toswim.tab.done", { n: done.length })}
-        </button>
-      </div>
+      <SegmentedControl
+        className="mb-3"
+        value={view}
+        onChange={setView}
+        options={[
+          { value: "todo", label: t("toswim.tab.todo", { n: todo.length }) },
+          { value: "done", label: t("toswim.tab.done", { n: done.length }) },
+        ]}
+      />
 
       {visible.length === 0 ? (
         <div className="rounded-2xl bg-white/60 p-8 text-center text-sm text-slate-500 ring-1 ring-slate-200/60">

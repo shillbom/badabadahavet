@@ -5,13 +5,11 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { motion } from "framer-motion";
 import {
   ArrowLeft,
   Snowflake,
   Sparkles,
   Users,
-  Calendar,
   ListChecks,
   LogIn,
   MapPin,
@@ -34,18 +32,16 @@ import {
   watchPlaceSessions,
 } from "@/lib/data";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
-import {
-  formatDate,
-  formatDateTime,
-  rememberReturnPath,
-  shareOrCopy,
-} from "@/lib/utils";
+import { formatDate, rememberReturnPath, shareOrCopy } from "@/lib/utils";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import SwimMap from "@/components/SwimMap";
 import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
+import SwimListItem from "@/components/SwimListItem";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
+import { buttonClasses } from "@/components/ui/Button";
+import Stat from "@/components/ui/Stat";
 import { toast } from "@/components/ui/Toast";
 
 /**
@@ -417,81 +413,64 @@ export function SpotView({
       </h3>
       <ul className="space-y-2">
         {visibleSessions.map((s, i) => (
-          <motion.li
+          <SwimListItem
             key={s.id}
             ref={(el) => {
               if (el) sessionRefs.current.set(s.id, el);
               else sessionRefs.current.delete(s.id);
             }}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(i, 8) * 0.03 }}
-            className={`glass flex items-start gap-3 p-3 ${
-              focusedSessionId === s.id ? "animate-highlight" : ""
-            }`}
-          >
-            {s.photoUrl ? (
-              <SwimPhoto
-                session={s}
-                className="h-14 w-14 flex-none rounded-lg"
-              />
-            ) : (
-              <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
-                🌊
+            index={i}
+            className={
+              focusedSessionId === s.id ? "animate-highlight" : undefined
+            }
+            thumb={
+              s.photoUrl ? (
+                <SwimPhoto
+                  session={s}
+                  className="h-14 w-14 flex-none rounded-lg"
+                />
+              ) : undefined
+            }
+            title={
+              <div className="truncate font-semibold text-wave-900">
+                {s.displayName}
+                {s.uid === user?.uid ? (
+                  <span className="ml-1.5 text-[10px] text-wave-600">
+                    {t("common.you")}
+                  </span>
+                ) : null}
               </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <div className="truncate font-semibold text-wave-900">
-                  {s.displayName}
-                  {s.uid === user?.uid ? (
-                    <span className="ml-1.5 text-[10px] text-wave-600">
-                      {t("common.you")}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="font-display text-base font-black text-wave-700">
-                    +{s.points}
-                  </div>
+            }
+            points={s.points}
+            aside={
+              <>
+                <button
+                  onClick={() => onShareSession(s)}
+                  className="rounded-full bg-white/80 p-1 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+                  aria-label={t("spot.share_session")}
+                  title={t("spot.share_session")}
+                >
+                  <Share2 className="h-3 w-3" />
+                </button>
+                {!isGuest && isAdmin ? (
                   <button
-                    onClick={() => onShareSession(s)}
-                    className="rounded-full bg-white/80 p-1 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
-                    aria-label={t("spot.share_session")}
-                    title={t("spot.share_session")}
+                    onClick={() => onAdminDeleteSession(s.id)}
+                    className="rounded-full bg-white/80 p-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
+                    aria-label={t("admin.delete_session")}
+                    title={t("admin.delete_session")}
                   >
-                    <Share2 className="h-3 w-3" />
+                    <Trash2 className="h-3 w-3" />
                   </button>
-                  {!isGuest && isAdmin ? (
-                    <button
-                      onClick={() => onAdminDeleteSession(s.id)}
-                      className="rounded-full bg-white/80 p-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
-                      aria-label={t("admin.delete_session")}
-                      title={t("admin.delete_session")}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              {s.note ? (
-                <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
-                  {s.note}
-                </p>
-              ) : null}
-              <div className="flex items-end justify-between">
-                <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                  <Calendar className="h-3 w-3" />
-                  {formatDateTime(s.date)}
-                  {s.isWinter ? <span className="ml-1">❄️</span> : null}
-                  {s.isUniqueForUser ? (
-                    <span className="ml-0.5">✨</span>
-                  ) : null}
-                </div>
-                <ReactionBar session={s} myUid={user?.uid} />
-              </div>
-            </div>
-          </motion.li>
+                ) : null}
+              </>
+            }
+            date={s.date}
+            winter={s.isWinter}
+            unique={s.isUniqueForUser}
+            note={s.note}
+          >
+            <ReactionBar session={s} myUid={user?.uid} />
+          </SwimListItem>
         ))}
         {visibleSessions.length === 0 ? (
           <li className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
@@ -505,7 +484,7 @@ export function SpotView({
           <Link
             to="/login"
             onClick={rememberReturnPath}
-            className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-4 py-2 text-sm font-medium text-white shadow"
+            className={buttonClasses("primary", "md")}
           >
             <LogIn className="h-3.5 w-3.5" />
             {t("spot.guest.cta")}
@@ -513,7 +492,7 @@ export function SpotView({
         ) : (
           <Link
             to={`/log?placeId=${place.id}`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-4 py-2 text-sm font-medium text-white shadow"
+            className={buttonClasses("primary", "md")}
           >
             {t("spot.log_here")}
           </Link>
@@ -534,28 +513,6 @@ export default function SpotPage() {
     );
   }
   return <SpotView placeId={placeId} variant="page" />;
-}
-
-function Stat({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: number;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <div className="glass flex flex-col items-start gap-0.5 px-3 py-2">
-      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-wave-700 uppercase">
-        {icon}
-        {label}
-      </div>
-      <div className="font-display text-xl font-black text-wave-900">
-        {value}
-      </div>
-    </div>
-  );
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
