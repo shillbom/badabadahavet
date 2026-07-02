@@ -170,6 +170,7 @@ export default function App() {
                 path="achievements"
                 element={protectedRoute(<Pages.Achievements />)}
               />
+              <Route path="streak" element={protectedRoute(<Pages.Streak />)} />
               <Route path="recap" element={protectedRoute(<Pages.Recap />)} />
               <Route
                 path="profile"
