@@ -948,46 +948,53 @@ export default function SwimMap({
             icon: <Layers className="h-3.5 w-3.5" />,
           }}
         />
-        {fullscreenControl ? (
-          <MapActionButton
-            action={{
-              label: fullscreen
-                ? t("map.exit_fullscreen")
-                : t("map.fullscreen"),
-              onClick: toggleFullscreen,
-              icon: fullscreen ? (
-                <Minimize className="h-3.5 w-3.5" />
-              ) : (
-                <Maximize className="h-3.5 w-3.5" />
-              ),
-            }}
-          />
-        ) : null}
       </div>
 
-      {/* Locate me — bottom right, Google Maps style */}
-      {userLocation ? (
-        <button
-          type="button"
-          onClick={() => {
-            const map = mapRef.current;
-            if (map)
-              map.setView([userLocation.lat, userLocation.lng], 13, {
-                animate: true,
-              });
-          }}
-          className={cn(
-            "absolute right-3 z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95",
-            fullscreen
-              ? "bottom-[max(env(safe-area-inset-bottom),1.25rem)]"
-              : "bottom-5",
-          )}
-          aria-label={t("map.center_on_me")}
-          title={t("map.center_on_me")}
-        >
-          <LocateFixed className="h-5 w-5" />
-        </button>
-      ) : null}
+      {/* Round icon buttons — bottom right, Google Maps style: fullscreen
+          toggle stacked above "locate me". */}
+      <div
+        className={cn(
+          "absolute right-3 z-[600] flex flex-col gap-2",
+          fullscreen
+            ? "bottom-[max(env(safe-area-inset-bottom),1.25rem)]"
+            : "bottom-5",
+        )}
+      >
+        {fullscreenControl ? (
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+            aria-label={
+              fullscreen ? t("map.exit_fullscreen") : t("map.fullscreen")
+            }
+            title={fullscreen ? t("map.exit_fullscreen") : t("map.fullscreen")}
+          >
+            {fullscreen ? (
+              <Minimize className="h-5 w-5" />
+            ) : (
+              <Maximize className="h-5 w-5" />
+            )}
+          </button>
+        ) : null}
+        {userLocation ? (
+          <button
+            type="button"
+            onClick={() => {
+              const map = mapRef.current;
+              if (map)
+                map.setView([userLocation.lat, userLocation.lng], 13, {
+                  animate: true,
+                });
+            }}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+            aria-label={t("map.center_on_me")}
+            title={t("map.center_on_me")}
+          >
+            <LocateFixed className="h-5 w-5" />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
