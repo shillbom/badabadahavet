@@ -137,6 +137,7 @@ export default function MapPage() {
               fitToken={fitToken}
               fitBoundsToPlaces={!isGuest && !showAll}
               viewKey="main"
+              fullscreenControl
               topRightActions={
                 isGuest
                   ? undefined

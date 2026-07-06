@@ -16,7 +16,15 @@ import {
   type RefObject,
 } from "react";
 import { Link } from "react-router";
-import { Layers, LocateFixed } from "lucide-react";
+import {
+  Layers,
+  LocateFixed,
+  MapPin,
+  Maximize,
+  Minimize,
+  Search,
+  X,
+} from "lucide-react";
 import { MAP_THEMES } from "@/lib/mapThemes";
 import Photo from "@/components/Photo";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
@@ -328,6 +336,9 @@ export type SwimMapProps = {
    *  `focusToken` to re-trigger for the same place id. */
   focusPlaceId?: string | null;
   focusToken?: number;
+  /** Adds a fullscreen toggle to the action stack. Fullscreen expands the
+   *  map to cover the whole viewport and reveals a spot-search bar. */
+  fullscreenControl?: boolean;
 };
 
 const userLocationIcon = L.divIcon({
@@ -379,9 +390,11 @@ export default function SwimMap({
   topRightActions,
   focusPlaceId,
   focusToken,
+  fullscreenControl,
 }: SwimMapProps) {
   const t = useT();
   const [satellite, setSatellite] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   // How many clusterable pins are currently in the viewport (null until the
   // first measurement). Drives whether we cluster at all.
   const [inViewCount, setInViewCount] = useState<number | null>(null);
@@ -400,13 +413,69 @@ export default function SwimMap({
   // its popup. (Focused places render outside the cluster, so no cluster
   // reveal is needed.)
   const markerRefs = useRef(new Map<string, L.Marker>());
+  // ── Fullscreen spot search ────────────────────────────────────────────
+  // Picking a result focuses that place (fly + open popup) via the same
+  // machinery as the focusPlaceId prop. Coordinates are captured at pick
+  // time so a Firestore re-emit of `places` can't re-trigger the flight.
+  const [query, setQuery] = useState("");
+  const [searchFocus, setSearchFocus] = useState<{
+    lat: number;
+    lng: number;
+    id: string;
+    token: number;
+  } | null>(null);
+  const searchSeq = useRef(0);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const searchResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const starts: PlaceDoc[] = [];
+    const contains: PlaceDoc[] = [];
+    for (const p of places) {
+      const name = p.name.toLowerCase();
+      if (name.startsWith(q)) starts.push(p);
+      else if (name.includes(q)) contains.push(p);
+    }
+    const byName = (a: PlaceDoc, b: PlaceDoc) => a.name.localeCompare(b.name);
+    return [...starts.sort(byName), ...contains.sort(byName)].slice(0, 8);
+  }, [query, places]);
+
+  const pickSearchResult = useCallback((p: PlaceDoc) => {
+    setSearchFocus({
+      lat: p.lat,
+      lng: p.lng,
+      id: p.id,
+      token: ++searchSeq.current,
+    });
+    setQuery("");
+    searchInputRef.current?.blur();
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    setFullscreen((v) => !v);
+    setQuery("");
+    setSearchFocus(null);
+  }, []);
+
+  // Escape exits fullscreen (desktop nicety).
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") toggleFullscreen();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen, toggleFullscreen]);
+
   const focusTarget = useMemo(() => {
+    if (searchFocus) return searchFocus;
     if (!focusPlaceId) return null;
     const p = places.find((pl) => pl.id === focusPlaceId);
     return p
       ? { lat: p.lat, lng: p.lng, id: p.id, token: focusToken ?? 0 }
       : null;
-  }, [focusPlaceId, focusToken, places]);
+  }, [searchFocus, focusPlaceId, focusToken, places]);
   const saved = savedViews.get(viewKey);
 
   // Position → fresh temperature, so a cluster can average the temps of
@@ -476,8 +545,12 @@ export default function SwimMap({
   // entirely so every place stays individually tappable.
   const unclusteredIds = useMemo(
     () =>
-      new Set([activePlaceId, focusPlaceId].filter((id): id is string => !!id)),
-    [activePlaceId, focusPlaceId],
+      new Set(
+        [activePlaceId, focusPlaceId, searchFocus?.id].filter(
+          (id): id is string => !!id,
+        ),
+      ),
+    [activePlaceId, focusPlaceId, searchFocus],
   );
   const clusterablePlaces = useMemo(
     () => places.filter((p) => !unclusteredIds.has(p.id)),
@@ -505,7 +578,16 @@ export default function SwimMap({
   clusteringRef.current = shouldCluster;
 
   return (
-    <div className={cn("relative h-full w-full", className)}>
+    <div
+      className={
+        fullscreen
+          ? // Fullscreen keeps the same Leaflet instance mounted — the wrapper
+            // just becomes a viewport-covering fixed overlay (above the app
+            // chrome; header/nav sit at z-1000/1010).
+            "fixed inset-0 z-[1200] bg-slate-100"
+          : cn("relative h-full w-full", className)
+      }
+    >
       <MapContainer
         center={saved?.center ?? center ?? fallbackCenter}
         zoom={saved?.zoom ?? fallbackZoom}
@@ -515,7 +597,7 @@ export default function SwimMap({
         touchZoom
         boxZoom={!lockPan}
         keyboard={!lockPan}
-        className="h-full w-full rounded-2xl"
+        className={cn("h-full w-full", !fullscreen && "rounded-2xl")}
         ref={(m) => {
           mapRef.current = m;
           if (externalMapRef)
@@ -772,9 +854,88 @@ export default function SwimMap({
         ) : null}
         {onPick ? <ClickToPick onPick={onPick} /> : null}
       </MapContainer>
+      {/* Spot search — fullscreen only, pinned across the top (the action
+          stack moves down below it while it's visible). */}
+      {fullscreenControl && fullscreen ? (
+        // left-14 keeps clear of Leaflet's zoom control (top-left, ~44px).
+        <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 left-14 z-[650]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && searchResults[0])
+                  pickSearchResult(searchResults[0]);
+              }}
+              placeholder={t("map.search.placeholder")}
+              aria-label={t("map.search.placeholder")}
+              className="w-full rounded-full bg-white/95 py-2.5 pr-9 pl-9 text-sm text-wave-900 shadow-md ring-1 ring-slate-200 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-wave-400 [&::-webkit-search-cancel-button]:hidden"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label={t("common.close")}
+                className="absolute top-1/2 right-2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+          {query.trim() ? (
+            <ul className="mt-2 max-h-64 overflow-y-auto rounded-2xl bg-white/95 shadow-lg ring-1 ring-slate-200 backdrop-blur">
+              {searchResults.length === 0 ? (
+                <li className="px-3 py-2.5 text-sm text-slate-500">
+                  {t("map.search.no_results")}
+                </li>
+              ) : (
+                searchResults.map((p) => {
+                  const swims = sessionsByPlace.get(p.id)?.length ?? 0;
+                  return (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => pickSearchResult(p)}
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-wave-50"
+                      >
+                        <MapPin className="h-3.5 w-3.5 flex-none text-wave-600" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-wave-900">
+                          {p.name}
+                        </span>
+                        <span className="flex-none text-[11px] text-slate-500">
+                          {swims === 1
+                            ? t("map.popup.swims_one")
+                            : swims > 0
+                              ? t("map.popup.swims_many", { n: swims })
+                              : t("map.popup.no_swims_yet")}
+                          {hasFreshTemp(p)
+                            ? ` · 💧 ${Math.round(p.waterTemp)}°`
+                            : ""}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Stacked action buttons — caller-supplied actions on top, the
-          built-in satellite toggle at the bottom of the stack. */}
-      <div className="absolute top-3 right-3 z-[600] flex flex-col items-end gap-2">
+          built-in satellite + fullscreen toggles at the bottom of the stack.
+          In fullscreen the stack drops below the search bar. */}
+      <div
+        className={cn(
+          "absolute right-3 z-[600] flex flex-col items-end gap-2",
+          fullscreen
+            ? "top-[calc(max(env(safe-area-inset-top),0.75rem)+3.5rem)]"
+            : "top-3",
+        )}
+      >
         {topRightActions?.map((a, i) => (
           <MapActionButton key={i} action={a} />
         ))}
@@ -787,6 +948,21 @@ export default function SwimMap({
             icon: <Layers className="h-3.5 w-3.5" />,
           }}
         />
+        {fullscreenControl ? (
+          <MapActionButton
+            action={{
+              label: fullscreen
+                ? t("map.exit_fullscreen")
+                : t("map.fullscreen"),
+              onClick: toggleFullscreen,
+              icon: fullscreen ? (
+                <Minimize className="h-3.5 w-3.5" />
+              ) : (
+                <Maximize className="h-3.5 w-3.5" />
+              ),
+            }}
+          />
+        ) : null}
       </div>
 
       {/* Locate me — bottom right, Google Maps style */}
@@ -800,7 +976,12 @@ export default function SwimMap({
                 animate: true,
               });
           }}
-          className="absolute right-3 bottom-5 z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+          className={cn(
+            "absolute right-3 z-[600] flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95",
+            fullscreen
+              ? "bottom-[max(env(safe-area-inset-bottom),1.25rem)]"
+              : "bottom-5",
+          )}
           aria-label={t("map.center_on_me")}
           title={t("map.center_on_me")}
         >

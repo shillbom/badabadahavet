@@ -731,6 +731,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.show.mine": "📍 Mina platser",
     "map.toggle_satellite": "Satellit",
     "map.toggle_terrain": "Terräng",
+    "map.fullscreen": "Helskärm",
+    "map.exit_fullscreen": "Stäng helskärm",
+    "map.search.placeholder": "Sök badplats…",
+    "map.search.no_results": "Inga badplatser hittades",
 
     "achievement.ICE_BREAKER.name": "Isbrytaren",
     "achievement.ICE_BREAKER.desc": "Logga ditt första bad",
@@ -1348,6 +1352,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.show.mine": "📍 Just mine",
     "map.toggle_satellite": "Satellite",
     "map.toggle_terrain": "Terrain",
+    "map.fullscreen": "Fullscreen",
+    "map.exit_fullscreen": "Exit fullscreen",
+    "map.search.placeholder": "Search swim spots…",
+    "map.search.no_results": "No swim spots found",
 
     "achievement.ICE_BREAKER.name": "Ice breaker",
     "achievement.ICE_BREAKER.desc": "Log your first swim",
