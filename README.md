@@ -118,6 +118,7 @@ actually persist (dry-run by default):
 | `npm run update:temperatures` | Refresh water temps (official readings, Open-Meteo fallback) |
 | `npm run backfill:scores`     | Recompute every user's per-year score                        |
 | `npm run backfill:thumbnails` | Regenerate photo LQIP placeholders                           |
+| `npm run merge:places`        | Merge a duplicate spot into the one it duplicates            |
 
 ## Admin / moderation
 
