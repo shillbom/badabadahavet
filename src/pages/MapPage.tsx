@@ -1,7 +1,7 @@
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { MapPin, Trophy } from "lucide-react";
-import { useStore } from "@/store/sessions";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { sumScores } from "@/lib/scoring";
 import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
@@ -18,6 +18,11 @@ export default function MapPage() {
   const myStats = useStore((s) => s.myStats);
 
   const isGuest = !user;
+
+  // The map's pin popups show the season's swims per place, which come from
+  // the community feed — keep it subscribed while this page is on screen.
+  // Guests can't read sessions (rules), so don't even try for them.
+  useAllSessionsFeed(!isGuest);
 
   // Seed from Firestore so the map opens at the right place without waiting for GPS
   const currentLocation = useStore((s) => s.currentLocation);
@@ -132,6 +137,7 @@ export default function MapPage() {
               fitToken={fitToken}
               fitBoundsToPlaces={!isGuest && !showAll}
               viewKey="main"
+              fullscreenControl
               topRightActions={
                 isGuest
                   ? undefined

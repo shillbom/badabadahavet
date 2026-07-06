@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
-import { useStore } from "@/store/sessions";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { reactorUids, reactionAddedAt, fetchUsers } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
@@ -172,23 +172,45 @@ export default function SinceLastVisit() {
   const myUid = useStore((s) => s.myUid);
   const loading = useStore((s) => s.loading);
   const lastSeenResolved = useStore((s) => s.lastSeenResolved);
+  const lastSeenBaseline = useStore((s) => s.lastSeenBaseline);
   const allSessions = useStore((s) => s.allSessions);
+  const allSessionsReady = useStore((s) => s.allSessionsReady);
   const mySessions = useStore((s) => s.mySessions);
   const groups = useStore((s) => s.groups);
 
   const recapToken = useRecapTrigger((s) => s.token);
 
   const [activity, setActivity] = useState<Activity | null>(null);
+  // A manual month recap was requested but the feed isn't ready yet.
+  const [monthPending, setMonthPending] = useState(false);
   const doneRef = useRef(false);
+  // State mirror of doneRef, so the feed acquisition below can react to it.
+  const [digestDone, setDigestDone] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirror of `activity` so the auto-pop timeout can avoid stomping a sheet the
   // user opened manually in the meantime.
   const openRef = useRef(false);
   openRef.current = activity !== null;
 
+  // Friend swims come from the community feed (reactions live on my own
+  // sessions), so the feed is only needed when the user shares a group with
+  // someone — and only until the digest has been decided, plus while the
+  // sheet is open so reaction counts on friend swims stay live. First-ever
+  // visits (no baseline) never show a digest, so they skip the feed too.
+  const feedNeeded = groups.length > 0;
+  useAllSessionsFeed(
+    !!myUid &&
+      feedNeeded &&
+      ((!digestDone && lastSeenResolved && lastSeenBaseline !== null) ||
+        monthPending ||
+        activity !== null),
+  );
+  const feedReady = !feedNeeded || allSessionsReady;
+
   // Reset when the signed-in user changes (incl. logout).
   useEffect(() => {
     doneRef.current = false;
+    setDigestDone(false);
     setActivity(null);
   }, [myUid]);
 
@@ -197,25 +219,43 @@ export default function SinceLastVisit() {
   // half-loaded snapshot. `recapToShow` owns the "what to show" decision; here
   // we just trigger it after the data goes quiet.
   useEffect(() => {
-    if (!myUid || loading || !lastSeenResolved || doneRef.current) return;
+    if (!myUid || loading || !lastSeenResolved || !feedReady || doneRef.current)
+      return;
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       if (doneRef.current) return;
       doneRef.current = true;
+      setDigestDone(true);
       const result = recapToShow("visit");
       if (!openRef.current && result) setActivity(result);
     }, SETTLE_MS);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [myUid, loading, lastSeenResolved, allSessions, mySessions, groups]);
+  }, [
+    myUid,
+    loading,
+    lastSeenResolved,
+    feedReady,
+    allSessions,
+    mySessions,
+    groups,
+  ]);
 
   // Manual open (map button): run the same helper again for a "past month"
   // recap, which always shows (even when empty) since the user asked for it.
+  // Computed only once the feed is live (the acquisition above starts it),
+  // so the recap isn't built from an empty snapshot.
   useEffect(() => {
     if (recapToken === 0) return;
-    setActivity(recapToShow("month"));
+    setMonthPending(true);
   }, [recapToken]);
+
+  useEffect(() => {
+    if (!monthPending || !feedReady) return;
+    setMonthPending(false);
+    setActivity(recapToShow("month"));
+  }, [monthPending, feedReady]);
 
   return (
     <Sheet
