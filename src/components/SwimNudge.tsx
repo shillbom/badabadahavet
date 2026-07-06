@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router";
 import { MapPin, Thermometer } from "lucide-react";
-import { useStore } from "@/store/sessions";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
 import { haversineMeters } from "@/lib/utils";
@@ -34,6 +34,9 @@ export default function SwimNudge({
   const groups = useStore((s) => s.groups);
   const myUid = useStore((s) => s.myUid);
   const currentLocation = useStore((s) => s.currentLocation);
+  // The "a friend swam here" social proof reads the community feed — only
+  // worth subscribing while the sheet is actually open.
+  useAllSessionsFeed(open && !!myUid);
 
   const suggestion = useMemo(() => {
     if (!open) return null;

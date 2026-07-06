@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
-import { useStore } from "@/store/sessions";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc } from "@/lib/types";
 import { fetchUsers } from "@/lib/data";
@@ -27,6 +27,9 @@ export default function LeaderboardPage() {
   const groups = useStore((s) => s.groups);
   const { user } = useAuth();
   const t = useT();
+  // The whole board is built from the community feed; guests can't read
+  // sessions (rules), so only subscribe for signed-in viewers.
+  useAllSessionsFeed(!!user);
 
   const year = new Date().getFullYear();
   const [scope, setScope] = useState<string>("global");

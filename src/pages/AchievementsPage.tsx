@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { Lock } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
-import { useStore } from "@/store/sessions";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import {
   ACHIEVEMENTS,
   type Achievement,
@@ -18,6 +18,9 @@ export default function AchievementsPage() {
   const t = useT();
   const achievementCtx = useStore((s) => s.achievementCtx);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
+  // Community-dependent achievements (and their progress bars) evaluate
+  // against the year feed — keep it subscribed while this page is open.
+  useAllSessionsFeed();
 
   const tier = tierForCount(unlockedAchievements.size);
   const next = nextTier(unlockedAchievements.size);

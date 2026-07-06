@@ -8,7 +8,7 @@ import {
   Award,
   Share2,
 } from "lucide-react";
-import { useStore } from "@/store/sessions";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { startOfYear, endOfYear } from "@/lib/scoring";
 import { computeMyStats } from "@/lib/stats";
@@ -38,6 +38,9 @@ export default function RecapPage() {
   const t = useT();
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
+  // The recap's community slides read the year feed — keep it subscribed
+  // while the recap is open (this page is behind login).
+  useAllSessionsFeed();
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);

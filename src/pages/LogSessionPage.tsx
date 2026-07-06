@@ -11,7 +11,7 @@ import {
   Search,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
-import { useStore } from "@/store/sessions";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
@@ -55,6 +55,9 @@ export default function LogSessionPage() {
   const mySessions = useStore((s) => s.mySessions);
   const myPlaceIds = useStore((s) => s.myPlaceIds);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
+  // Pin popups + achievement checks read the community feed — keep it
+  // subscribed while logging (this page is behind login).
+  useAllSessionsFeed();
 
   // Pre-select a place when navigating from SpotPage (?placeId=xxx).
   const preselectedPlaceId = searchParams.get("placeId");
