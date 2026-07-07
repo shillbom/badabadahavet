@@ -9,6 +9,9 @@ export default function BackButton({ onClick }: { onClick?: () => void }) {
   const t = useT();
   return (
     <button
+      // Without an explicit type, a button inside a <form> is type="submit" —
+      // on LogSessionPage that made "back" log the swim instead of leaving.
+      type="button"
       onClick={onClick ?? (() => navigate(-1))}
       className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
       aria-label={t("common.back")}
