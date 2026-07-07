@@ -172,6 +172,21 @@ function pickEmoji(seed: string): string {
   return pool[h % pool.length];
 }
 
+/**
+ * Live leaderboard roster: every user ordered by their server-maintained
+ * score for `year`, highest first. Users with no score that year are
+ * absent from the query result — which is exactly "not on the board".
+ */
+export function watchUsersByYearScore(
+  year: number,
+  cb: (users: UserDoc[]) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(usersCol, orderBy(`scores.${year}`, "desc")),
+    (snap) => cb(snap.docs.map((d) => d.data() as UserDoc)),
+  );
+}
+
 export async function fetchUsers(uids: string[]): Promise<UserDoc[]> {
   const out: UserDoc[] = [];
   await Promise.all(

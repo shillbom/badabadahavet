@@ -2,9 +2,10 @@
 /**
  * One-time / re-runnable backfill from existing sessions. Two jobs:
  *
- *   1. users/{uid}.scores  — per-year point totals (the score moved
- *      server-side; the leaderboard reads these). Recomputed from each
- *      user's sessions' stored `points`.
+ *   1. users/{uid}.scores + users/{uid}.statsByYear — per-year point totals
+ *      and leaderboard card stats (swims / new spots / winters / countries
+ *      abroad). The leaderboard reads both straight off the user doc.
+ *      Recomputed from each user's sessions' stored fields.
  *
  *   2. places/{id}.lastSwim* — the most recent swim at each place and that
  *      swimmer's border frame, so the map can outline each pin with the
@@ -51,17 +52,33 @@ const db = getFirestore(app);
 const snap = await db.collection("sessions").get();
 
 const byUser = new Map(); // uid -> { [year]: points }
+const statsByUser = new Map(); // uid -> { [year]: {swims,uniquePlaces,winters,abroad:Set} }
 const lastByPlace = new Map(); // placeId -> { date, uid, border|null }
 snap.forEach((d) => {
   const s = d.data();
   if (typeof s.uid !== "string" || typeof s.date !== "number") return;
 
-  // (1) yearly score
+  // (1) yearly score + leaderboard card stats
   const pts = typeof s.points === "number" ? s.points : 0;
   const year = String(swimYear(s.date));
   const scores = byUser.get(s.uid) ?? {};
   scores[year] = (scores[year] ?? 0) + pts;
   byUser.set(s.uid, scores);
+
+  const years = statsByUser.get(s.uid) ?? {};
+  const st = (years[year] ??= {
+    swims: 0,
+    uniquePlaces: 0,
+    winters: 0,
+    abroad: new Set(),
+  });
+  st.swims++;
+  if (s.isUniqueForUser) st.uniquePlaces++;
+  if (s.isWinter) st.winters++;
+  if (!s.isHomeCountry && typeof s.country === "string" && s.country) {
+    st.abroad.add(s.country);
+  }
+  statsByUser.set(s.uid, years);
 
   // (2) most recent swim per place
   if (typeof s.placeId === "string") {
@@ -109,7 +126,16 @@ for (const [uid, scores] of byUser) {
     missingUsers++;
     continue;
   }
-  await db.collection("users").doc(uid).update({ scores });
+  const statsByYear = {};
+  for (const [year, st] of Object.entries(statsByUser.get(uid) ?? {})) {
+    statsByYear[year] = {
+      swims: st.swims,
+      uniquePlaces: st.uniquePlaces,
+      winters: st.winters,
+      countriesAbroad: st.abroad.size,
+    };
+  }
+  await db.collection("users").doc(uid).update({ scores, statsByYear });
   scored++;
 }
 

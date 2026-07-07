@@ -73,16 +73,19 @@ service cloud.firestore {
                       !('isAdmin' in request.resource.data)
                       || request.resource.data.isAdmin == false
                     )
-                    // Score is server-owned; never set by a client.
-                    && !('scores' in request.resource.data);
+                    // Score + leaderboard stats are server-owned; never set
+                    // by a client.
+                    && !('scores' in request.resource.data)
+                    && !('statsByYear' in request.resource.data);
 
       allow update: if isSelf(uid)
                     && unchanged('uid')
                     && unchanged('createdAt')
                     && unchanged('isAdmin')
-                    // Score is maintained only by the logSession /
-                    // removeSession Cloud Functions (Admin SDK).
+                    // Score + leaderboard stats are maintained only by the
+                    // logSession / removeSession Cloud Functions (Admin SDK).
                     && unchanged('scores')
+                    && unchanged('statsByYear')
                     && request.resource.data.uid == uid
                     && request.resource.data.displayName is string
                     && request.resource.data.displayName.size() > 0

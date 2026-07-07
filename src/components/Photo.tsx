@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type PhotoProps = {
@@ -25,6 +25,12 @@ type PhotoProps = {
  * (no network), with the full `src` on top. Shared by the thumbnail strips,
  * the lists, and the full-screen Lightbox so the loading behaviour lives in
  * one place. Swims logged before thumbnails existed simply have no `thumb`.
+ *
+ * Cover-mode photos don't fetch the full image until the element is actually
+ * near the viewport (IntersectionObserver, 250px margin — works for both
+ * vertical lists and horizontal strips). Native loading="lazy" alone isn't
+ * enough: its prefetch distance is thousands of pixels, so a photo-heavy spot
+ * page would still download nearly everything up front.
  */
 export default function Photo({
   src,
@@ -35,6 +41,28 @@ export default function Photo({
   fit = "cover",
 }: PhotoProps) {
   const [loaded, setLoaded] = useState(false);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const [nearView, setNearView] = useState(false);
+  useEffect(() => {
+    if (fit === "contain") return; // lightbox: always eager
+    const el = boxRef.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setNearView(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setNearView(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "250px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [fit]);
 
   if (fit === "contain") {
     // Full-screen viewer: the full image is the in-flow sizer (capped to the
@@ -66,7 +94,10 @@ export default function Photo({
   }
 
   return (
-    <div className={cn("relative overflow-hidden bg-wave-100", className)}>
+    <div
+      ref={boxRef}
+      className={cn("relative overflow-hidden bg-wave-100", className)}
+    >
       {thumb ? (
         <img
           src={thumb}
@@ -78,18 +109,20 @@ export default function Photo({
           )}
         />
       ) : null}
-      <img
-        src={src}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        onLoad={() => setLoaded(true)}
-        className={cn(
-          "h-full w-full object-cover transition-opacity duration-500",
-          loaded || !thumb ? "opacity-100" : "opacity-0",
-          imgClassName,
-        )}
-      />
+      {nearView ? (
+        <img
+          src={src}
+          alt={alt}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+          className={cn(
+            "h-full w-full object-cover transition-opacity duration-500",
+            loaded || !thumb ? "opacity-100" : "opacity-0",
+            imgClassName,
+          )}
+        />
+      ) : null}
     </div>
   );
 }

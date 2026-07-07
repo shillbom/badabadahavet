@@ -9,6 +9,7 @@ import {
   yearBounds,
   swimPoints,
   sumYearPoints,
+  yearStats,
 } from "./scoring.js";
 
 initializeApp();
@@ -717,7 +718,10 @@ export const logSession = onCall(
         ...session,
         createdAtServer: FieldValue.serverTimestamp(),
       });
-      tx.update(userRef, { [`scores.${year}`]: yearTotal });
+      tx.update(userRef, {
+        [`scores.${year}`]: yearTotal,
+        [`statsByYear.${year}`]: yearStats(yearSnap, { extra: session }),
+      });
 
       // Stamp the place with this swim's frame when it's the most recent
       // swim there (so back-logged older swims don't override a newer one).
@@ -831,7 +835,12 @@ export const removeSession = onCall(
       const yearTotal = sumYearPoints(yearSnap, sessionId);
       tx.delete(sessionRef);
       if (ownerSnap.exists) {
-        tx.update(ownerRef, { [`scores.${year}`]: Math.max(0, yearTotal) });
+        tx.update(ownerRef, {
+          [`scores.${year}`]: Math.max(0, yearTotal),
+          [`statsByYear.${year}`]: yearStats(yearSnap, {
+            excludeId: sessionId,
+          }),
+        });
       }
       if (wasLastSwim) {
         tx.update(

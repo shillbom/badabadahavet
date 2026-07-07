@@ -1,5 +1,13 @@
 export type LatLng = { lat: number; lng: number };
 
+/** Leaderboard card stats for one calendar year — see UserDoc.statsByYear. */
+export type YearStats = {
+  swims: number;
+  uniquePlaces: number;
+  winters: number;
+  countriesAbroad: number;
+};
+
 export type UserDoc = {
   uid: string;
   displayName: string;
@@ -9,6 +17,10 @@ export type UserDoc = {
    *  Maintained server-side by the logSession / removeSession Cloud
    *  Functions only — clients can't write it (enforced by rules). */
   scores?: Record<string, number>;
+  /** Per-year leaderboard stats, keyed like `scores` ("2026" -> stats).
+   *  Maintained server-side alongside the score by the logSession /
+   *  removeSession Cloud Functions only — clients can't write it. */
+  statsByYear?: Record<string, YearStats>;
   /** Chosen cosmetic pin/avatar border id (see lib/borders.ts). Falls back
    *  to the highest earned tier when unset or no longer qualified-for. */
   selectedBorder?: string;
