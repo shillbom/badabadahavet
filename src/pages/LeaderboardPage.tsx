@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence, useInView } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
-import { useAllSessionsFeed, useStore } from "@/store/sessions";
+import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
-import type { SessionDoc } from "@/lib/types";
-import { fetchUsers } from "@/lib/data";
-import { unlockedAchievementsForUid } from "@/lib/achievements";
-import { resolveBorder, NONE_BORDER, type Border } from "@/lib/borders";
+import type { UserDoc, YearStats } from "@/lib/types";
+import { watchUsersByYearScore } from "@/lib/data";
+import { resolveBorder, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
@@ -15,73 +14,54 @@ type Row = {
   uid: string;
   displayName: string;
   points: number;
-  uniquePlaces: number;
-  winters: number;
-  sessions: number;
-  countriesAbroad: number;
   border: Border;
+  /** Server-maintained card stats; null for users logged before the
+   *  statsByYear backfill ran (renders as a placeholder). */
+  stats: YearStats | null;
 };
 
 export default function LeaderboardPage() {
-  const all = useStore((s) => s.allSessions);
   const groups = useStore((s) => s.groups);
   const { user } = useAuth();
   const t = useT();
-  // The whole board is built from the community feed; guests can't read
-  // sessions (rules), so only subscribe for signed-in viewers.
-  useAllSessionsFeed(!!user);
 
   const year = new Date().getFullYear();
   const [scope, setScope] = useState<string>("global");
 
-  // Each participant's chosen frame + server-stored yearly score, fetched
-  // from their user doc. Sessions alone don't carry either, so we look up
-  // the profiles of everyone on the board.
-  const [borderByUid, setBorderByUid] = useState<Map<string, string>>(
-    new Map(),
-  );
-  const [scoreByUid, setScoreByUid] = useState<Map<string, number>>(new Map());
-  const uidsKey = useMemo(
-    () => [...new Set(all.map((s) => s.uid))].sort().join(","),
-    [all],
-  );
+  // The whole board is one query over user docs: the server-maintained
+  // yearly score provides membership and order, and the doc carries
+  // everything the card shows (name, points, border, achievements, and the
+  // per-year stat chips). No session docs are read at all. Guests can't
+  // read user docs (rules), so the board is empty until signed in.
+  const [roster, setRoster] = useState<UserDoc[]>([]);
   useEffect(() => {
-    const uids = uidsKey ? uidsKey.split(",") : [];
-    if (uids.length === 0) {
-      setBorderByUid(new Map());
-      setScoreByUid(new Map());
+    if (!user) {
+      setRoster([]);
       return;
     }
-    let cancelled = false;
-    fetchUsers(uids)
-      .then((users) => {
-        if (cancelled) return;
-        const borders = new Map<string, string>();
-        const scores = new Map<string, number>();
-        for (const u of users) {
-          if (u.selectedBorder) borders.set(u.uid, u.selectedBorder);
-          const yearScore = u.scores?.[String(year)];
-          if (typeof yearScore === "number") scores.set(u.uid, yearScore);
-        }
-        setBorderByUid(borders);
-        setScoreByUid(scores);
-      })
-      .catch(() => {
-        /* fall back to session-summed points + auto tier on failure */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [uidsKey, year]);
+    return watchUsersByYearScore(year, setRoster);
+  }, [user, year]);
 
   const rows = useMemo<Row[]>(() => {
     const memberFilter: Set<string> | null =
       scope === "global"
         ? null
         : new Set(groups.find((g) => g.id === scope)?.members ?? []);
-    const rows = aggregate(all, memberFilter, all, borderByUid, scoreByUid);
-    return rows.sort((a, b) => b.points - a.points);
-  }, [all, groups, scope, borderByUid, scoreByUid]);
+    return roster
+      .filter((u) => !memberFilter || memberFilter.has(u.uid))
+      .map((u) => {
+        // Achievements persisted on the profile drive the border — richer
+        // than the old live computation (all-time, not just this year).
+        const unlocked = new Set(Object.keys(u.achievements ?? {}));
+        return {
+          uid: u.uid,
+          displayName: u.displayName,
+          points: u.scores?.[String(year)] ?? 0,
+          border: resolveBorder(u.selectedBorder, unlocked.size, unlocked),
+          stats: u.statsByYear?.[String(year)] ?? null,
+        };
+      });
+  }, [roster, groups, scope, year]);
 
   return (
     <div className="px-4 pt-2">
@@ -110,83 +90,9 @@ export default function LeaderboardPage() {
 
       <ol className="space-y-2">
         <AnimatePresence mode="popLayout">
-          {rows.map((r, i) => {
-            const isMe = user?.uid === r.uid;
-            const podium = podiumStyle(i);
-            return (
-              <motion.li
-                key={r.uid}
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                transition={{ type: "tween", duration: 0.2 }}
-                className={cn(
-                  "glass relative flex items-center gap-3 p-3 transition",
-                  podium.cardClass,
-                  isMe && "ring-2 ring-wave-400",
-                )}
-              >
-                <div className="relative flex-none">
-                  <div
-                    className={cn(
-                      "flex h-9 w-9 items-center justify-center rounded-full text-lg font-black",
-                      podium.medalClass,
-                      r.border.id !== "none" && `ring-2 ${r.border.ringClass}`,
-                    )}
-                  >
-                    {podium.medal ?? <span>{i + 1}</span>}
-                  </div>
-                  {r.border.id !== "none" ? (
-                    <span
-                      className="absolute -right-1 -bottom-1 text-[11px] leading-none drop-shadow-sm"
-                      title={t(`border.${r.border.id}`)}
-                    >
-                      {r.border.emoji}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-semibold text-wave-900">
-                    {r.displayName}
-                    {isMe ? (
-                      <span className="ml-2 rounded-full bg-wave-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-wave-700 uppercase">
-                        {t("common.you")}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                    <span className="inline-flex items-center gap-0.5">
-                      <MapPin className="h-3 w-3" />{" "}
-                      {r.uniquePlaces === 1
-                        ? t("leaderboard.spot")
-                        : t("leaderboard.spots", { n: r.uniquePlaces })}
-                    </span>
-                    <span className="inline-flex items-center gap-0.5">
-                      <Snowflake className="h-3 w-3" />{" "}
-                      {r.winters === 1
-                        ? t("leaderboard.winter")
-                        : t("leaderboard.winters", { n: r.winters })}
-                    </span>
-                    <span>
-                      {r.sessions === 1
-                        ? t("leaderboard.swim")
-                        : t("leaderboard.swims", { n: r.sessions })}
-                    </span>
-                    {r.countriesAbroad > 0 ? (
-                      <span className="text-teal-700">
-                        {t("leaderboard.countries", { n: r.countriesAbroad })}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <AnimatedNumber
-                  value={r.points}
-                  className="font-display text-2xl font-black text-wave-700"
-                />
-              </motion.li>
-            );
-          })}
+          {rows.map((r, i) => (
+            <BoardRow key={r.uid} row={r} rank={i} isMe={user?.uid === r.uid} />
+          ))}
         </AnimatePresence>
         {rows.length === 0 ? (
           <motion.li
@@ -199,6 +105,104 @@ export default function LeaderboardPage() {
         ) : null}
       </ol>
     </div>
+  );
+}
+
+function BoardRow({
+  row: r,
+  rank,
+  isMe,
+}: {
+  row: Row;
+  rank: number;
+  isMe: boolean;
+}) {
+  const t = useT();
+  const podium = podiumStyle(rank);
+  const stats = r.stats;
+
+  // Rows reveal — and their score rolls up from 0 — when they scroll into
+  // view rather than all at once on mount, so the odometer effect is
+  // actually seen as the user scrolls down the board.
+  const ref = useRef<HTMLLIElement | null>(null);
+  const inView = useInView(ref, { once: true, amount: 0.5 });
+
+  return (
+    <motion.li
+      ref={ref}
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+      exit={{ opacity: 0, y: -8, scale: 0.97 }}
+      transition={{ type: "tween", duration: 0.2 }}
+      className={cn(
+        "glass relative flex items-center gap-3 p-3 transition",
+        podium.cardClass,
+        isMe && "ring-2 ring-wave-400",
+      )}
+    >
+      <div className="relative flex-none">
+        <div
+          className={cn(
+            "flex h-9 w-9 items-center justify-center rounded-full text-lg font-black",
+            podium.medalClass,
+            r.border.id !== "none" && `ring-2 ${r.border.ringClass}`,
+          )}
+        >
+          {podium.medal ?? <span>{rank + 1}</span>}
+        </div>
+        {r.border.id !== "none" ? (
+          <span
+            className="absolute -right-1 -bottom-1 text-[11px] leading-none drop-shadow-sm"
+            title={t(`border.${r.border.id}`)}
+          >
+            {r.border.emoji}
+          </span>
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-semibold text-wave-900">
+          {r.displayName}
+          {isMe ? (
+            <span className="ml-2 rounded-full bg-wave-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-wave-700 uppercase">
+              {t("common.you")}
+            </span>
+          ) : null}
+        </div>
+        {stats ? (
+          <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+            <span className="inline-flex items-center gap-0.5">
+              <MapPin className="h-3 w-3" />{" "}
+              {stats.uniquePlaces === 1
+                ? t("leaderboard.spot")
+                : t("leaderboard.spots", { n: stats.uniquePlaces })}
+            </span>
+            <span className="inline-flex items-center gap-0.5">
+              <Snowflake className="h-3 w-3" />{" "}
+              {stats.winters === 1
+                ? t("leaderboard.winter")
+                : t("leaderboard.winters", { n: stats.winters })}
+            </span>
+            <span>
+              {stats.swims === 1
+                ? t("leaderboard.swim")
+                : t("leaderboard.swims", { n: stats.swims })}
+            </span>
+            {stats.countriesAbroad > 0 ? (
+              <span className="text-teal-700">
+                {t("leaderboard.countries", { n: stats.countriesAbroad + 1 })}
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-1 h-3 w-36 rounded bg-slate-200/70" />
+        )}
+      </div>
+      <AnimatedNumber
+        value={inView ? r.points : 0}
+        className="font-display text-2xl font-black text-wave-700"
+      />
+    </motion.li>
   );
 }
 
@@ -254,59 +258,4 @@ function ScopeChip({
       {label}
     </button>
   );
-}
-
-function aggregate(
-  sessions: SessionDoc[],
-  memberFilter: Set<string> | null,
-  allSessions: SessionDoc[],
-  borderByUid: Map<string, string>,
-  scoreByUid: Map<string, number>,
-): Row[] {
-  const map = new Map<string, Row>();
-  const abroadCountriesMap = new Map<string, Set<string>>();
-  for (const s of sessions) {
-    if (memberFilter && !memberFilter.has(s.uid)) continue;
-    let row = map.get(s.uid);
-    if (!row) {
-      row = {
-        uid: s.uid,
-        displayName: s.displayName,
-        points: 0,
-        uniquePlaces: 0,
-        winters: 0,
-        sessions: 0,
-        countriesAbroad: 0,
-        border: NONE_BORDER,
-      };
-      map.set(s.uid, row);
-    }
-    row.points += s.points;
-    row.sessions += 1;
-    if (s.isUniqueForUser) row.uniquePlaces += 1;
-    if (s.isWinter) row.winters += 1;
-    row.displayName = s.displayName;
-    if (!s.isHomeCountry && s.country) {
-      let c = abroadCountriesMap.get(s.uid);
-      if (!c) {
-        c = new Set();
-        abroadCountriesMap.set(s.uid, c);
-      }
-      c.add(s.country);
-    }
-  }
-  for (const row of map.values()) {
-    row.countriesAbroad = abroadCountriesMap.get(row.uid)?.size ?? 0;
-    const unlocked = unlockedAchievementsForUid(row.uid, allSessions);
-    row.border = resolveBorder(
-      borderByUid.get(row.uid),
-      unlocked.size,
-      unlocked,
-    );
-    // Prefer the server-stored yearly score; fall back to the session sum
-    // (already accumulated in row.points) for users not yet backfilled.
-    const stored = scoreByUid.get(row.uid);
-    if (typeof stored === "number") row.points = stored;
-  }
-  return [...map.values()];
 }

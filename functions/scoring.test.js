@@ -5,6 +5,7 @@ import {
   yearBounds,
   swimPoints,
   sumYearPoints,
+  yearStats,
   POINTS_PER_SWIM,
   POINTS_NEW_SPOT,
   POINTS_WINTER,
@@ -67,5 +68,87 @@ describe("sumYearPoints", () => {
   it("ignores non-numeric points and is 0 for empty", () => {
     expect(sumYearPoints(snap([]))).toBe(0);
     expect(sumYearPoints(snap([doc("a", undefined), doc("b", 2)]))).toBe(2);
+  });
+});
+
+describe("yearStats", () => {
+  const snap = (docs) => ({
+    forEach: (fn) => docs.forEach(fn),
+  });
+  const doc = (id, s) => ({ id, data: () => s });
+  const swim = (over = {}) => ({
+    isUniqueForUser: false,
+    isWinter: false,
+    isHomeCountry: true,
+    ...over,
+  });
+
+  it("counts swims, new spots, winters, and distinct countries abroad", () => {
+    const stats = yearStats(
+      snap([
+        doc("a", swim({ isUniqueForUser: true })),
+        doc("b", swim({ isWinter: true })),
+        doc("c", swim({ isHomeCountry: false, country: "NO" })),
+        doc("d", swim({ isHomeCountry: false, country: "NO" })),
+        doc("e", swim({ isHomeCountry: false, country: "DK" })),
+      ]),
+    );
+    expect(stats).toEqual({
+      swims: 5,
+      uniquePlaces: 1,
+      winters: 1,
+      countriesAbroad: 2,
+    });
+  });
+
+  it("does not count home-country or country-less swims as abroad", () => {
+    const stats = yearStats(
+      snap([
+        doc("a", swim({ isHomeCountry: true, country: "SE" })),
+        doc("b", swim({ isHomeCountry: false })),
+      ]),
+    );
+    expect(stats.countriesAbroad).toBe(0);
+  });
+
+  it("excludes one doc (removal)", () => {
+    const stats = yearStats(
+      snap([
+        doc("a", swim({ isUniqueForUser: true, isWinter: true })),
+        doc("b", swim()),
+      ]),
+      { excludeId: "a" },
+    );
+    expect(stats).toEqual({
+      swims: 1,
+      uniquePlaces: 0,
+      winters: 0,
+      countriesAbroad: 0,
+    });
+  });
+
+  it("folds in an unwritten extra session (creation)", () => {
+    const stats = yearStats(snap([doc("a", swim())]), {
+      extra: swim({
+        isUniqueForUser: true,
+        isHomeCountry: false,
+        country: "FI",
+      }),
+    });
+    expect(stats).toEqual({
+      swims: 2,
+      uniquePlaces: 1,
+      winters: 0,
+      countriesAbroad: 1,
+    });
+  });
+
+  it("is all zeroes for an empty year", () => {
+    expect(yearStats(snap([]))).toEqual({
+      swims: 0,
+      uniquePlaces: 0,
+      winters: 0,
+      countriesAbroad: 0,
+    });
   });
 });

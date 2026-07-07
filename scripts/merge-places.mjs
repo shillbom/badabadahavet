@@ -216,16 +216,39 @@ for (const { to } of pairs) {
   }
 }
 
-// 3. Recompute affected users' per-year scores from their (updated) sessions.
-const scoreUpdates = new Map(); // uid -> scores map
+// 3. Recompute affected users' per-year scores and leaderboard stats from
+//    their (updated) sessions — merging places changes isUniqueForUser, so
+//    both `scores` and `statsByYear.uniquePlaces` can shift.
+const scoreUpdates = new Map(); // uid -> { scores, statsByYear }
 for (const uid of affectedUids) {
   const scores = {};
+  const years = new Map(); // year -> {swims,uniquePlaces,winters,abroad:Set}
   for (const s of sessions) {
     if (s.uid !== uid) continue;
     const year = String(swimYear(s.date));
     scores[year] = (scores[year] ?? 0) + (s.points ?? 0);
+    let st = years.get(year);
+    if (!st) {
+      st = { swims: 0, uniquePlaces: 0, winters: 0, abroad: new Set() };
+      years.set(year, st);
+    }
+    st.swims++;
+    if (s.isUniqueForUser) st.uniquePlaces++;
+    if (s.isWinter) st.winters++;
+    if (!s.isHomeCountry && typeof s.country === "string" && s.country) {
+      st.abroad.add(s.country);
+    }
   }
-  scoreUpdates.set(uid, scores);
+  const statsByYear = {};
+  for (const [year, st] of years) {
+    statsByYear[year] = {
+      swims: st.swims,
+      uniquePlaces: st.uniquePlaces,
+      winters: st.winters,
+      countriesAbroad: st.abroad.size,
+    };
+  }
+  scoreUpdates.set(uid, { scores, statsByYear });
 }
 
 // 4. Restamp the kept places' denormalised fields from the merged sessions.
@@ -273,7 +296,7 @@ console.log(
     `${placeUpdates.size} place(s), re-key ${toswimUpdates.size} ` +
     `toswim list(s), delete ${pairs.filter((p) => places.has(p.from)).length} place(s).`,
 );
-for (const [uid, scores] of scoreUpdates) {
+for (const [uid, { scores }] of scoreUpdates) {
   const u = usersSnap.docs.find((d) => d.id === uid);
   console.log(
     `  scores: ${u?.data().displayName ?? uid} ` +
@@ -291,8 +314,8 @@ if (!WRITE) {
 for (const [id, upd] of sessionUpdates) {
   await db.collection("sessions").doc(id).update(upd);
 }
-for (const [uid, scores] of scoreUpdates) {
-  await db.collection("users").doc(uid).update({ scores });
+for (const [uid, { scores, statsByYear }] of scoreUpdates) {
+  await db.collection("users").doc(uid).update({ scores, statsByYear });
 }
 for (const [uid, upd] of toswimUpdates) {
   await db.collection("users").doc(uid).update(upd);

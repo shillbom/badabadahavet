@@ -45,3 +45,33 @@ export function sumYearPoints(querySnap, excludeId) {
   });
   return total;
 }
+
+/**
+ * Aggregate the leaderboard card stats over a user's year of sessions:
+ * swim count, new-spot count, winter count, and distinct countries swum
+ * outside the home country. Stored as users/{uid}.statsByYear[year] so the
+ * leaderboard never has to read session docs.
+ *
+ * Same snapshot-shaped input as sumYearPoints. `excludeId` drops one doc
+ * (removal); `extra` folds in a session that isn't written yet (creation).
+ */
+export function yearStats(querySnap, { excludeId, extra } = {}) {
+  let swims = 0;
+  let uniquePlaces = 0;
+  let winters = 0;
+  const abroad = new Set();
+  const add = (s) => {
+    swims++;
+    if (s.isUniqueForUser) uniquePlaces++;
+    if (s.isWinter) winters++;
+    if (!s.isHomeCountry && typeof s.country === "string" && s.country) {
+      abroad.add(s.country);
+    }
+  };
+  querySnap.forEach((d) => {
+    if (excludeId && d.id === excludeId) return;
+    add(d.data());
+  });
+  if (extra) add(extra);
+  return { swims, uniquePlaces, winters, countriesAbroad: abroad.size };
+}
