@@ -601,13 +601,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Bedrifter ger inga poäng — de låser upp ramar som du själv väljer mellan: en färgad ring runt dina platser på kartan och din profil. Vissa bedrifter låser upp egna teman.",
     "about.rules.title": "Ligans regler",
     "about.rules.no_cheating":
-      "Fuska inte. Poseidon ser allt, och han skvallrar.",
+      "Fuska inte. Badligan ser allt, och den skvallrar.",
     "about.rules.shoulders":
       "Ett bad räknas när axlarna varit under vattnet. Tådoppning är sightseeing, inte badning.",
     "about.rules.scream":
       "Att skrika vid vinterdopp är tillåtet, uppmuntrat och ibland ofrivilligt.",
     "about.rules.brag":
-      "Skryt lagom om dina dopp — fast lite skryt är ju halva poängen.",
+      "Skryt lagom om dina dopp, fast lite skryt är ju halva poängen.",
     "about.rules.have_fun":
       "Ha de gött. Det är egentligen regel nummer ett, den står bara sist.",
     "border.none": "Ingen ram",
@@ -1233,13 +1233,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Achievements grant no points — they unlock frames you can choose between: a coloured ring around your spots on the map and your profile. Some achievements unlock their own themed frame.",
     "about.rules.title": "League rules",
     "about.rules.no_cheating":
-      "No cheating. Poseidon sees everything, and he's a snitch.",
+      "No cheating. Badligan sees everything, and it's a snitch.",
     "about.rules.shoulders":
       "A swim counts once your shoulders have been under the water. Toe-dipping is sightseeing, not swimming.",
     "about.rules.scream":
       "Screaming during winter dips is allowed, encouraged, and occasionally involuntary.",
     "about.rules.brag":
-      "Keep the bragging reasonable — although a little bragging is half the point.",
+      "Keep the bragging reasonable, although a little bragging is half the point.",
     "about.rules.have_fun":
       "Have a good time. That's really rule number one, it just happens to be listed last.",
     "border.none": "No frame",
