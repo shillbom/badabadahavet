@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence, useInView } from "framer-motion";
+import { motion, useInView } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
@@ -89,11 +89,9 @@ export default function LeaderboardPage() {
       </div>
 
       <ol className="space-y-2">
-        <AnimatePresence mode="popLayout">
-          {rows.map((r, i) => (
-            <BoardRow key={r.uid} row={r} rank={i} isMe={user?.uid === r.uid} />
-          ))}
-        </AnimatePresence>
+        {rows.map((r, i) => (
+          <BoardRow key={r.uid} row={r} rank={i} isMe={user?.uid === r.uid} />
+        ))}
         {rows.length === 0 ? (
           <motion.li
             initial={{ opacity: 0, y: 6 }}
@@ -128,12 +126,13 @@ function BoardRow({
   const inView = useInView(ref, { once: true, amount: 0.5 });
 
   return (
+    // No `layout`/AnimatePresence here on purpose: they force framer-motion
+    // to measure every row on any roster change, which scales badly — the
+    // board can hold up to LEADERBOARD_LIMIT rows.
     <motion.li
       ref={ref}
-      layout
       initial={{ opacity: 0, y: 8 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-      exit={{ opacity: 0, y: -8, scale: 0.97 }}
       transition={{ type: "tween", duration: 0.2 }}
       className={cn(
         "glass relative flex items-center gap-3 p-3 transition",

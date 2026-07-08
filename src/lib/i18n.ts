@@ -246,6 +246,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "layout.sign_in": "Logga in",
 
     "nav.map": "Karta",
+    "nav.about": "Om Badligan",
     "nav.history": "Historik",
     "nav.top": "Topp",
     "nav.groups": "Grupper",
@@ -870,6 +871,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "layout.sign_in": "Sign in",
 
     "nav.map": "Map",
+    "nav.about": "About Badligan",
     "nav.history": "History",
     "nav.top": "Top",
     "nav.groups": "Groups",

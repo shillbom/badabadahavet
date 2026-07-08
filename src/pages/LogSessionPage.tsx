@@ -32,7 +32,6 @@ import {
 } from "@/lib/scoring";
 import { resolveBorder } from "@/lib/borders";
 import { computeStreak, streakTier, SWIM_DAYS_PER_SKIP } from "@/lib/streak";
-import type { SessionDoc } from "@/lib/types";
 import { useLocale, useT } from "@/lib/i18n";
 import BackButton from "@/components/ui/BackButton";
 import SegmentedControl from "@/components/ui/SegmentedControl";
@@ -51,7 +50,6 @@ export default function LogSessionPage() {
   const locale = useLocale((s) => s.locale);
   const inputLang = locale === "sv" ? "sv-SE" : "en-GB";
   const places = useStore((s) => s.places);
-  const allSessions = useStore((s) => s.allSessions);
   const mySessions = useStore((s) => s.mySessions);
   const myPlaceIds = useStore((s) => s.myPlaceIds);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
@@ -282,6 +280,7 @@ export default function LogSessionPage() {
         lng: coords.lng,
         createdBy: user.uid,
         date: ts,
+        existingPlaces: places,
       });
       // Rate limit: max one swim per hour at the same place. A violation
       // implies an earlier session at this place, so `place` can't be a
@@ -362,15 +361,7 @@ export default function LogSessionPage() {
     isNewSpot,
     isWinter: isWinterSwim,
   });
-  const sessionsByPlace = useMemo(() => {
-    const m = new Map<string, SessionDoc[]>();
-    for (const s of allSessions) {
-      const arr = m.get(s.placeId) ?? [];
-      arr.push(s);
-      m.set(s.placeId, arr);
-    }
-    return m;
-  }, [allSessions]);
+  const sessionsByPlace = useStore((s) => s.sessionsByPlace);
 
   return (
     <form onSubmit={submit} className="px-4 pt-2 pb-10">
