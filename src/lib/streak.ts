@@ -27,6 +27,19 @@ export function streakTier(current: number): StreakTier {
   return "plain";
 }
 
+/**
+ * Intensity within a tier, so long streaks keep escalating between tier
+ * jumps: fire ramps at 10 and 20 days, disco at 40 and 50 (level 3 disco
+ * spills out of the card and covers the whole app — see <DiscoRays />).
+ * Plain/bubbly have a single level.
+ */
+export function streakLevel(current: number): 1 | 2 | 3 {
+  const tier = streakTier(current);
+  if (tier === "fire") return current >= 20 ? 3 : current >= 10 ? 2 : 1;
+  if (tier === "disco") return current >= 50 ? 3 : current >= 40 ? 2 : 1;
+  return 1;
+}
+
 export type StreakDayType = "swim" | "skip";
 
 export type StreakInfo = {

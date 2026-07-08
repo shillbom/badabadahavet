@@ -19,6 +19,7 @@ import { cn, rememberReturnPath } from "@/lib/utils";
 import { buttonClasses } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
 import SwimNudge from "@/components/SwimNudge";
+import DiscoRays from "@/components/DiscoRays";
 
 export default function Layout() {
   const { user, profile } = useAuth();
@@ -274,6 +275,9 @@ export default function Layout() {
         atRisk={atRisk}
         streakDays={myStats.streak.current}
       />
+
+      {/* 50+ day streak: the mega-disco rays cover the whole app (self-gating). */}
+      <DiscoRays />
     </div>
   );
 }

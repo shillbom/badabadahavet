@@ -31,7 +31,12 @@ import {
   previewPoints,
 } from "@/lib/scoring";
 import { resolveBorder } from "@/lib/borders";
-import { computeStreak, streakTier, SWIM_DAYS_PER_SKIP } from "@/lib/streak";
+import {
+  computeStreak,
+  streakLevel,
+  streakTier,
+  SWIM_DAYS_PER_SKIP,
+} from "@/lib/streak";
 import { useLocale, useT } from "@/lib/i18n";
 import BackButton from "@/components/ui/BackButton";
 import SegmentedControl from "@/components/ui/SegmentedControl";
@@ -312,8 +317,9 @@ export default function LogSessionPage() {
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
       // Streak feedback, computed against the pre-log session list: crossing
-      // a tier (3/7/30) queues a celebration after the swim splash; banking
-      // a new life buoy (every 4th swim day) gets a toast.
+      // a tier (3/7/30) or an intensity step within one (10/20/40/50) queues
+      // a celebration after the swim splash; banking a new life buoy (every
+      // 4th swim day) gets a toast.
       const dates = mySessions.map((s) => s.date);
       const before = computeStreak(dates);
       const after = computeStreak([...dates, ts]);
@@ -321,7 +327,8 @@ export default function LogSessionPage() {
       if (
         after.current > before.current &&
         tier !== "plain" &&
-        tier !== streakTier(before.current)
+        (tier !== streakTier(before.current) ||
+          streakLevel(after.current) > streakLevel(before.current))
       ) {
         celebrate.streak(tier, after.current);
       } else if (

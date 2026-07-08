@@ -36,6 +36,33 @@
   --animate-ember-rise: ember-rise 1.8s ease-in infinite;
   --animate-disco-shift: disco-shift 6s linear infinite;
   --animate-laser-spin: laser-spin 4s linear infinite;
+  --animate-flame-lick: flame-lick 0.7s ease-in-out infinite;
+  --animate-fire-pulse: fire-pulse 1.4s ease-in-out infinite;
+}
+
+/* Overwatch-style "on fire": tongues of flame licking up from the card edge.
+   Blobs are blurred circles, so the flicker is scale/translate only (cheap). */
+@keyframes flame-lick {
+  0%,
+  100% {
+    transform: translateY(28%) scale(1, 0.7);
+  }
+  40% {
+    transform: translateY(-12%) scale(0.9, 1.25);
+  }
+  70% {
+    transform: translateY(6%) scale(1.05, 0.9);
+  }
+}
+
+@keyframes fire-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 18px 4px rgba(249, 115, 22, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 34px 12px rgba(251, 146, 60, 0.9);
+  }
 }
 
 @keyframes bubble-rise {
