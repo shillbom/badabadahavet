@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { computeStreak, longestStreakInYear } from "./streak";
+import {
+  computeStreak,
+  longestStreakInYear,
+  streakLevel,
+  streakTier,
+} from "./streak";
 import { dayStartMs } from "./date";
 
 const DAY = 86_400_000;
@@ -157,5 +162,40 @@ describe("computeStreak", () => {
       daysAgo(0),
     ]);
     expect(st.current).toBe(1);
+  });
+});
+
+describe("streakTier / streakLevel", () => {
+  it("escalates tiers at 3/7/30", () => {
+    expect(streakTier(0)).toBe("plain");
+    expect(streakTier(2)).toBe("plain");
+    expect(streakTier(3)).toBe("bubbly");
+    expect(streakTier(6)).toBe("bubbly");
+    expect(streakTier(7)).toBe("fire");
+    expect(streakTier(29)).toBe("fire");
+    expect(streakTier(30)).toBe("disco");
+  });
+
+  it("fire ramps at 10 and 20", () => {
+    expect(streakLevel(7)).toBe(1);
+    expect(streakLevel(9)).toBe(1);
+    expect(streakLevel(10)).toBe(2);
+    expect(streakLevel(19)).toBe(2);
+    expect(streakLevel(20)).toBe(3);
+    expect(streakLevel(29)).toBe(3);
+  });
+
+  it("disco ramps at 40 and 50, resetting to level 1 at the tier jump", () => {
+    expect(streakLevel(30)).toBe(1);
+    expect(streakLevel(39)).toBe(1);
+    expect(streakLevel(40)).toBe(2);
+    expect(streakLevel(49)).toBe(2);
+    expect(streakLevel(50)).toBe(3);
+    expect(streakLevel(365)).toBe(3);
+  });
+
+  it("plain and bubbly have a single level", () => {
+    expect(streakLevel(0)).toBe(1);
+    expect(streakLevel(5)).toBe(1);
   });
 });
