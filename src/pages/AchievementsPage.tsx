@@ -5,8 +5,9 @@ import { useAuth } from "@/auth/AuthContext";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import {
   ACHIEVEMENTS,
+  achievementProgress,
+  computeAchievementStats,
   type Achievement,
-  type AchievementContext,
 } from "@/lib/achievements";
 import { tierForCount, nextTier } from "@/lib/borders";
 import { cn, formatDate } from "@/lib/utils";
@@ -24,6 +25,13 @@ export default function AchievementsPage() {
 
   const tier = tierForCount(unlockedAchievements.size);
   const next = nextTier(unlockedAchievements.size);
+
+  // One aggregate pass feeds every row's progress bar — recomputing per row
+  // would rescan the session arrays once per achievement, every render.
+  const stats = useMemo(
+    () => computeAchievementStats(achievementCtx),
+    [achievementCtx],
+  );
 
   const items = useMemo(() => {
     return [...ACHIEVEMENTS].sort((a, b) => {
@@ -86,7 +94,9 @@ export default function AchievementsPage() {
             achievement={a}
             unlocked={unlockedAchievements.has(a.id)}
             unlockedAt={profile?.achievements?.[a.id]}
-            ctx={achievementCtx}
+            progress={
+              unlockedAchievements.has(a.id) ? 1 : achievementProgress(a, stats)
+            }
             index={i}
           />
         ))}
@@ -99,17 +109,16 @@ function Row({
   achievement,
   unlocked,
   unlockedAt,
-  ctx,
+  progress,
   index,
 }: {
   achievement: Achievement;
   unlocked: boolean;
   unlockedAt?: number;
-  ctx: AchievementContext;
+  progress: number;
   index: number;
 }) {
   const t = useT();
-  const progress = achievement.progress?.(ctx) ?? (unlocked ? 1 : 0);
   return (
     <motion.li
       initial={{ opacity: 0, y: 4 }}

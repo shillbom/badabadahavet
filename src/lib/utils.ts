@@ -6,23 +6,37 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// toLocale*String constructs a fresh Intl.DateTimeFormat on every call —
+// too expensive for the per-row calls in swim lists. Cache one formatter per
+// locale instead (two entries in practice: sv + en).
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+
+function cachedFormatter(kind: string, opts: Intl.DateTimeFormatOptions) {
+  const locale = localeBcp();
+  const key = `${kind}:${locale}`;
+  let fmt = formatterCache.get(key);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, opts);
+    formatterCache.set(key, fmt);
+  }
+  return fmt;
+}
+
 export function formatDate(d: Date | number) {
-  const date = typeof d === "number" ? new Date(d) : d;
-  return date.toLocaleDateString(localeBcp(), {
+  return cachedFormatter("date", {
     year: "numeric",
     month: "short",
     day: "numeric",
-  });
+  }).format(d);
 }
 
 export function formatDateTime(d: Date | number) {
-  const date = typeof d === "number" ? new Date(d) : d;
-  return date.toLocaleString(localeBcp(), {
+  return cachedFormatter("datetime", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }).format(d);
 }
 
 const EARTH_RADIUS_M = 6_371_000;
@@ -40,6 +54,13 @@ export function haversineMeters(
     Math.sin(dLat / 2) ** 2 +
     Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
   return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
+}
+
+export function haversineKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+) {
+  return haversineMeters(a, b) / 1000;
 }
 
 export function generateGroupCode(length = 5) {

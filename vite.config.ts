@@ -80,6 +80,14 @@ export default defineConfig({
               priority: 50,
             },
             {
+              // Analytics is dynamically imported (see src/firebase.ts) and
+              // must outrank the catch-all firebase group, or it gets folded
+              // into the eagerly-loaded firebase chunk anyway.
+              name: "firebase-analytics",
+              test: /[\\/]node_modules[\\/]@?firebase[\\/]analytics[\\/]/,
+              priority: 45,
+            },
+            {
               name: "firebase",
               test: /[\\/]node_modules[\\/]@?firebase[\\/]/,
               priority: 40,

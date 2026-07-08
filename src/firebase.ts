@@ -14,11 +14,6 @@ import {
   httpsCallableFromURL,
   type HttpsCallable,
 } from "firebase/functions";
-import {
-  getAnalytics,
-  isSupported as analyticsSupported,
-} from "firebase/analytics";
-
 const firebaseConfig: FirebaseOptions = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "demo-key",
   authDomain:
@@ -61,15 +56,16 @@ setPersistence(auth, browserLocalPersistence).catch(() => {
 
 // Firebase Analytics — only in real (non-emulator) builds, only when the
 // browser supports it (no SSR, not blocked by privacy add-ons, etc.) and
-// only when a measurementId was actually configured.
+// only when a measurementId was actually configured. Imported dynamically
+// so the analytics module stays out of the boot-critical firebase chunk.
 if (
   !useEmulators &&
   typeof window !== "undefined" &&
   firebaseConfig.measurementId
 ) {
-  analyticsSupported()
-    .then((ok) => {
-      if (ok) getAnalytics(app);
+  import("firebase/analytics")
+    .then(async ({ getAnalytics, isSupported }) => {
+      if (await isSupported()) getAnalytics(app);
     })
     .catch(() => {
       /* analytics is best-effort — ignore failures */

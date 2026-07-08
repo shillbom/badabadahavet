@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { evaluateAchievements, achievementCountForUid } from "./achievements";
+import {
+  ACHIEVEMENTS_BY_ID,
+  achievementProgress,
+  computeAchievementStats,
+  evaluateAchievements,
+} from "./achievements";
 import type { SessionDoc } from "./types";
 
 let seq = 0;
@@ -56,15 +61,49 @@ describe("evaluateAchievements", () => {
   });
 });
 
-describe("achievementCountForUid", () => {
-  it("counts only the given user's unlocks", () => {
+describe("computeAchievementStats", () => {
+  it("only counts other swimmers at shared spots", () => {
+    const mine = [s({ placeId: "p1", uid: "u1" })];
     const all = [
-      s({ placeId: "p1", uid: "u1" }),
-      s({ placeId: "p2", uid: "u2" }),
+      ...mine,
+      s({ placeId: "p1", uid: "u2" }),
+      s({ placeId: "p1", uid: "u3" }),
+      s({ placeId: "elsewhere", uid: "u4" }),
     ];
-    // u1 has one swim → at least ICE_BREAKER.
-    expect(achievementCountForUid("u1", all)).toBeGreaterThanOrEqual(1);
-    // Someone with no sessions has none.
-    expect(achievementCountForUid("ghost", all)).toBe(0);
+    const stats = computeAchievementStats({
+      uid: "u1",
+      mySessions: mine,
+      allSessions: all,
+    });
+    expect(stats.maxSharedSwimmers).toBe(2);
+  });
+
+  it("reports zeroed stats for no sessions", () => {
+    const stats = computeAchievementStats({
+      uid: "ghost",
+      mySessions: [],
+      allSessions: [s({ placeId: "p1", uid: "u1" })],
+    });
+    expect(stats.swims).toBe(0);
+    expect(stats.rangeKm).toBe(0);
+    expect(stats.bestDayStreak).toBe(0);
+    expect(stats.bestWeekStreak).toBe(0);
+  });
+});
+
+describe("achievementProgress", () => {
+  it("clamps to 0..1 against the goal", () => {
+    const mine = ["p1", "p2"].map((placeId) => s({ placeId }));
+    const stats = computeAchievementStats({
+      uid: "u1",
+      mySessions: mine,
+      allSessions: mine,
+    });
+    // 2 of 5 unique places toward COLLECTOR.
+    expect(
+      achievementProgress(ACHIEVEMENTS_BY_ID.COLLECTOR, stats),
+    ).toBeCloseTo(0.4);
+    // 2 swims ≥ 1 goal → clamped to 1.
+    expect(achievementProgress(ACHIEVEMENTS_BY_ID.ICE_BREAKER, stats)).toBe(1);
   });
 });
