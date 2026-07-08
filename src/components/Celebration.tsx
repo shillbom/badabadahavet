@@ -6,6 +6,8 @@ import type { StreakTier } from "@/lib/streak";
 import { Sparkles } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import PixiLayer from "@/components/fx/PixiLayer";
+import { burstFx } from "@/components/fx/celebrationFx";
 
 type Splash =
   | {
@@ -47,8 +49,6 @@ export const celebrate = {
     useCelebration.getState().show({ kind: "streak", tier, days }),
 };
 
-const PARTICLES = Array.from({ length: 16 }, (_, i) => i);
-
 export function CelebrationOverlay() {
   const queue = useCelebration((s) => s.queue);
   const pop = useCelebration((s) => s.pop);
@@ -78,7 +78,12 @@ export function CelebrationOverlay() {
           ) : (
             <AchievementSplash data={current} />
           )}
-          <Particles emoji={emojiFor(current)} />
+          {/* One burst per splash — keyed remount restarts the effect. */}
+          <PixiLayer
+            build={burstFx}
+            options={{ variant: burstVariant(current) }}
+            maxFPS={60}
+          />
         </motion.div>
       ) : null}
     </AnimatePresence>
@@ -91,12 +96,13 @@ const TIER_EMOJI: Record<Exclude<StreakTier, "plain">, string> = {
   disco: "🪩",
 };
 
-function emojiFor(s: Splash): string {
-  if (s.kind === "achievement") return s.achievement.emoji;
-  if (s.kind === "streak") return TIER_EMOJI[s.tier];
-  if (s.isWinter) return "❄️";
-  if (s.isNewSpot) return "✨";
-  return "💧";
+/** Which confetti mix the Pixi burst uses (see celebrationFx.ts). */
+function burstVariant(s: Splash): string {
+  if (s.kind === "achievement") return "achievement";
+  if (s.kind === "streak") return `streak-${s.tier}`;
+  if (s.isWinter) return "winter";
+  if (s.isNewSpot) return "newspot";
+  return "swim";
 }
 
 function SwimSplash({ data }: { data: Extract<Splash, { kind: "swim" }> }) {
@@ -256,29 +262,5 @@ function AchievementSplash({
         </div>
       </div>
     </motion.div>
-  );
-}
-
-function Particles({ emoji }: { emoji: string }) {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {PARTICLES.map((i) => {
-        const angle = (i / PARTICLES.length) * Math.PI * 2;
-        const distance = 120 + Math.random() * 90;
-        const x = Math.cos(angle) * distance;
-        const y = Math.sin(angle) * distance;
-        return (
-          <motion.span
-            key={i}
-            initial={{ x: 0, y: 0, opacity: 0, scale: 0.6 }}
-            animate={{ x, y, opacity: [0, 1, 0], scale: [0.6, 1.1, 0.6] }}
-            transition={{ duration: 1.4, delay: i * 0.02, ease: "easeOut" }}
-            className="absolute top-1/2 left-1/2 text-2xl select-none"
-          >
-            {emoji}
-          </motion.span>
-        );
-      })}
-    </div>
   );
 }

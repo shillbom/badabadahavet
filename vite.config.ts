@@ -98,6 +98,14 @@ export default defineConfig({
               priority: 30,
             },
             {
+              // Only ever loaded via the dynamic import in PixiLayer.tsx —
+              // keep it in one stable named chunk (incl. pixi-only deps) so
+              // it never bleeds into the entry.
+              name: "pixi",
+              test: /[\\/]node_modules[\\/](pixi\.js|@pixi|earcut|parse-svg-path|ismobilejs)[\\/]/,
+              priority: 25,
+            },
+            {
               name: "motion",
               test: /[\\/]node_modules[\\/]framer-motion[\\/]/,
               priority: 20,
