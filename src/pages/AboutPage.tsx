@@ -53,6 +53,16 @@ export default function AboutPage() {
         </ul>
       </Section>
 
+      <Section title={t("about.rules.title")}>
+        <ul className="list-disc space-y-1.5 pl-5">
+          <li>{t("about.rules.no_cheating")}</li>
+          <li>{t("about.rules.shoulders")}</li>
+          <li>{t("about.rules.scream")}</li>
+          <li>{t("about.rules.brag")}</li>
+          <li>{t("about.rules.have_fun")}</li>
+        </ul>
+      </Section>
+
       <Section title={t("about.data.title")}>
         <p>
           {t("about.data.body")}{" "}

@@ -3,8 +3,10 @@ import {
   doc,
   deleteDoc,
   deleteField,
+  documentId,
   getDoc,
   getDocs,
+  limit,
   setDoc,
   updateDoc,
   query,
@@ -172,27 +174,43 @@ function pickEmoji(seed: string): string {
   return pool[h % pool.length];
 }
 
+/** The leaderboard shows at most this many users — keeps the roster
+ *  subscription from streaming every user doc as the app grows. */
+export const LEADERBOARD_LIMIT = 100;
+
 /**
- * Live leaderboard roster: every user ordered by their server-maintained
- * score for `year`, highest first. Users with no score that year are
- * absent from the query result — which is exactly "not on the board".
+ * Live leaderboard roster: users ordered by their server-maintained
+ * score for `year`, highest first (top LEADERBOARD_LIMIT). Users with no
+ * score that year are absent from the query result — which is exactly
+ * "not on the board".
  */
 export function watchUsersByYearScore(
   year: number,
   cb: (users: UserDoc[]) => void,
 ): Unsubscribe {
   return onSnapshot(
-    query(usersCol, orderBy(`scores.${year}`, "desc")),
+    query(
+      usersCol,
+      orderBy(`scores.${year}`, "desc"),
+      limit(LEADERBOARD_LIMIT),
+    ),
     (snap) => cb(snap.docs.map((d) => d.data() as UserDoc)),
   );
 }
 
 export async function fetchUsers(uids: string[]): Promise<UserDoc[]> {
+  if (uids.length === 0) return [];
+  // Firestore `in` supports up to 30 values; chunk if needed. One query per
+  // chunk instead of one getDoc round-trip per uid.
+  const chunks: string[][] = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
   const out: UserDoc[] = [];
   await Promise.all(
-    uids.map(async (uid) => {
-      const s = await getDoc(doc(usersCol, uid));
-      if (s.exists()) out.push(s.data() as UserDoc);
+    chunks.map(async (chunk) => {
+      const snap = await getDocs(
+        query(usersCol, where(documentId(), "in", chunk)),
+      );
+      snap.forEach((d) => out.push(d.data() as UserDoc));
     }),
   );
   return out;
@@ -206,22 +224,23 @@ export async function findOrCreatePlace(opts: {
   lng: number;
   createdBy: string;
   date: number;
+  /** Current known places — the store's live `places` array. Matching runs
+   *  against this instead of re-downloading the whole collection per log. */
+  existingPlaces: PlaceDoc[];
 }): Promise<PlaceDoc> {
   // Match an existing place by exact name (case-insensitive) within radius.
-  const all = await getDocs(placesCol);
   const target = { lat: opts.lat, lng: opts.lng };
   const nameKey = opts.name.trim().toLowerCase();
   let best: PlaceDoc | null = null;
   let bestDist = Infinity;
-  all.forEach((d) => {
-    const p = d.data() as PlaceDoc;
+  for (const p of opts.existingPlaces) {
     const sameName = p.name.trim().toLowerCase() === nameKey;
     const dist = haversineMeters(target, { lat: p.lat, lng: p.lng });
     if (sameName && dist < PLACE_RADIUS_METERS && dist < bestDist) {
       best = p;
       bestDist = dist;
     }
-  });
+  }
   if (best) return best;
 
   const ref = doc(placesCol);

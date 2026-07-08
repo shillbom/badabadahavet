@@ -601,10 +601,30 @@ export function useAllSessionsFeed(active: boolean = true): void {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+/** Inputs and outputs of the previous derive() call, for input-identity
+ *  memoization. Firestore snapshots always deliver fresh array references,
+ *  so `memo.x === x` means that input genuinely didn't change — e.g. a
+ *  water-temp write to a place doc must not re-scan the community feed. */
+type DeriveMemo = {
+  uid: string;
+  mySessions: SessionDoc[];
+  allSessions: SessionDoc[];
+  places: PlaceDoc[];
+  myStats: MyStats;
+  sessionsByPlace: Map<string, SessionDoc[]>;
+  myPlaces: PlaceDoc[];
+  myPlaceIds: Set<string>;
+  achievementCtx: AchievementContext;
+  unlockedAchievements: Set<string>;
+};
+let deriveMemo: DeriveMemo | null = null;
+
 /**
  * Compute all derived state from raw data in one pass.
  * Called whenever sessions or places change so every component reads
- * pre-computed values instead of recomputing in useMemo.
+ * pre-computed values instead of recomputing in useMemo. Each derived value
+ * is reused (same reference) when the inputs it depends on are unchanged,
+ * so store subscribers don't re-render on unrelated snapshots.
  */
 function derive(
   uid: string,
@@ -613,28 +633,72 @@ function derive(
   places: PlaceDoc[],
   persistedAchievements?: Record<string, number>,
 ) {
-  const myStats = computeMyStats(mySessions);
+  const m = deriveMemo;
+  const sameMine = m !== null && m.mySessions === mySessions;
+  const sameAll = m !== null && m.allSessions === allSessions;
+  const samePlaces = m !== null && m.places === places;
+  const sameCtx = m !== null && m.uid === uid && sameMine && sameAll;
+
+  const myStats = sameMine ? m.myStats : computeMyStats(mySessions);
 
   // Everyone's swims this season grouped by place — drives the map pin popups
   // (count + photos), so a spot shows all of the season's activity, not just
   // the current user's. Built from allSessions (the year-scoped feed).
-  const sessionsByPlace = new Map<string, SessionDoc[]>();
-  for (const s of allSessions) {
-    const arr = sessionsByPlace.get(s.placeId) ?? [];
-    arr.push(s);
-    sessionsByPlace.set(s.placeId, arr);
+  let sessionsByPlace: Map<string, SessionDoc[]>;
+  if (sameAll) {
+    sessionsByPlace = m.sessionsByPlace;
+  } else {
+    sessionsByPlace = new Map();
+    for (const s of allSessions) {
+      const arr = sessionsByPlace.get(s.placeId) ?? [];
+      arr.push(s);
+      sessionsByPlace.set(s.placeId, arr);
+    }
   }
 
   // "My places" stays scoped to the current user's own swims.
-  const myPlaceIds = new Set(mySessions.map((s) => s.placeId));
-  const myPlaces = places.filter((p) => myPlaceIds.has(p.id));
-  const achievementCtx: AchievementContext = { uid, mySessions, allSessions };
-  const unlockedAchievements = evaluateAchievements(achievementCtx);
+  const myPlaceIds = sameMine
+    ? m.myPlaceIds
+    : new Set(mySessions.map((s) => s.placeId));
+  const myPlaces =
+    sameMine && samePlaces
+      ? m.myPlaces
+      : places.filter((p) => myPlaceIds.has(p.id));
+
+  const achievementCtx: AchievementContext = sameCtx
+    ? m.achievementCtx
+    : { uid, mySessions, allSessions };
+  const unlockedAchievements = sameCtx
+    ? new Set(m.unlockedAchievements)
+    : evaluateAchievements(achievementCtx);
   // Achievements already persisted on the profile stay unlocked even when
   // the community feed isn't loaded — community-dependent ones would
   // otherwise flicker off while `allSessions` is empty.
   for (const id of Object.keys(persistedAchievements ?? {}))
     unlockedAchievements.add(id);
+
+  // Keep the previous set's reference when the contents are identical, so a
+  // profile snapshot that only re-stamped lastSeenAt doesn't re-render every
+  // achievement consumer. (The set is small — ~20 ids — so this is cheap.)
+  const finalUnlocked =
+    m !== null &&
+    m.unlockedAchievements.size === unlockedAchievements.size &&
+    [...unlockedAchievements].every((id) => m.unlockedAchievements.has(id))
+      ? m.unlockedAchievements
+      : unlockedAchievements;
+
+  deriveMemo = {
+    uid,
+    mySessions,
+    allSessions,
+    places,
+    myStats,
+    sessionsByPlace,
+    myPlaces,
+    myPlaceIds,
+    achievementCtx,
+    unlockedAchievements: finalUnlocked,
+  };
 
   return {
     myStats,
@@ -642,20 +706,20 @@ function derive(
     myPlaces,
     myPlaceIds,
     achievementCtx,
-    unlockedAchievements,
+    unlockedAchievements: finalUnlocked,
   };
 }
 
 /** Persist any newly-unlocked achievements that aren't already in the profile. */
 function persistNewAchievements(get: () => State) {
-  const { user, profile, mySessions, allSessions } = get();
+  const { user, profile, unlockedAchievements } = get();
   if (!user || !profile) return;
-  const unlocked = evaluateAchievements({
-    uid: user.uid,
-    mySessions,
-    allSessions,
-  });
-  const persisted = new Set(Object.keys(profile.achievements ?? {}));
-  const toPersist = [...unlocked].filter((id) => !persisted.has(id));
+  // derive() already ran (callers set() its output first) and its result is
+  // evaluated ∪ persisted, so filtering out the persisted ids leaves exactly
+  // the newly-evaluated ones — no need to evaluate achievements again.
+  const persisted = profile.achievements ?? {};
+  const toPersist = [...unlockedAchievements].filter(
+    (id) => !(id in persisted),
+  );
   if (toPersist.length) void recordAchievements(user.uid, toPersist);
 }

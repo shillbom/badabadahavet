@@ -1,6 +1,35 @@
-import { WEEK_MS, weekStartMs } from "./date";
+import { longestConsecutiveWeeks, weekStartMs } from "./date";
 import { computeStreak } from "./streak";
+import { haversineKm } from "./utils";
 import type { SessionDoc } from "./types";
+
+export type AchievementContext = {
+  uid: string;
+  mySessions: SessionDoc[];
+  allSessions: SessionDoc[];
+};
+
+/** Every aggregate an achievement can be judged on, computed in one pass
+ *  over the context (see computeAchievementStats) instead of once per
+ *  achievement — evaluateAchievements runs on every sessions snapshot. */
+export type AchievementStats = {
+  swims: number;
+  uniquePlaces: number;
+  winterSwims: number;
+  /** Longest consecutive-week run ever. */
+  bestWeekStreak: number;
+  /** Longest day streak ever, buoy rules included — see lib/streak.ts. */
+  bestDayStreak: number;
+  /** Bounding-box diagonal of all swim spots, in km. */
+  rangeKm: number;
+  /** Swims before 7 am / after 8 pm. */
+  earlySwims: number;
+  lateSwims: number;
+  /** Distinct meteorological seasons swum in (max 4). */
+  seasons: number;
+  /** Most *other* swimmers sharing any one of the user's spots. */
+  maxSharedSwimmers: number;
+};
 
 export type Achievement = {
   id: string;
@@ -10,104 +39,83 @@ export type Achievement = {
   /** Bigger numbers feel more impressive. Purely cosmetic — achievements
    *  grant no points; they unlock badges and border frames only. */
   tier: 1 | 2 | 3;
-  /** Returns true if the achievement is unlocked for the given context. */
-  test: (ctx: AchievementContext) => boolean;
-  /** Returns 0..1 progress toward unlocking, used to show progress bars. */
-  progress?: (ctx: AchievementContext) => number;
+  /** Unlocks when this aggregate stat reaches `goal`; progress toward the
+   *  unlock is `stat / goal`, clamped to 1. */
+  metric: keyof AchievementStats;
+  goal: number;
 };
 
-export type AchievementContext = {
-  uid: string;
-  mySessions: SessionDoc[];
-  allSessions: SessionDoc[];
-};
+export function computeAchievementStats(
+  ctx: AchievementContext,
+): AchievementStats {
+  const placeIds = new Set<string>();
+  const weekStarts = new Set<number>();
+  const seasons = new Set<number>();
+  const dates: number[] = [];
+  let winterSwims = 0;
+  let earlySwims = 0;
+  let lateSwims = 0;
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  let minLng = Infinity;
+  let maxLng = -Infinity;
 
-function uniquePlaces(sessions: SessionDoc[]): number {
-  const set = new Set<string>();
-  for (const s of sessions) set.add(s.placeId);
-  return set.size;
-}
-
-function winterCount(sessions: SessionDoc[]): number {
-  return sessions.filter((s) => s.isWinter).length;
-}
-
-function bestWeekStreak(sessions: SessionDoc[]): number {
-  if (sessions.length === 0) return 0;
-  const weeks = [...new Set(sessions.map((s) => weekStartMs(s.date)))].sort(
-    (a, b) => a - b,
-  );
-  let best = 1;
-  let run = 1;
-  for (let i = 1; i < weeks.length; i++) {
-    if (weeks[i] - weeks[i - 1] === WEEK_MS) {
-      run++;
-      if (run > best) best = run;
-    } else run = 1;
-  }
-  return best;
-}
-
-/** Longest day streak ever, buoy rules included — see lib/streak.ts. */
-function bestDayStreak(sessions: SessionDoc[]): number {
-  return computeStreak(sessions.map((s) => s.date)).longest;
-}
-
-function rangeKm(sessions: SessionDoc[]): number {
-  if (sessions.length < 2) return 0;
-  const lats = sessions.map((s) => s.lat);
-  const lngs = sessions.map((s) => s.lng);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
-  const R = 6371;
-  const toRad = (x: number) => (x * Math.PI) / 180;
-  const dLat = toRad(maxLat - minLat);
-  const dLng = toRad(maxLng - minLng);
-  const lat1 = toRad(minLat);
-  const lat2 = toRad(maxLat);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
-
-function distinctSwimmersAtMyPlaces(ctx: AchievementContext): number {
-  const myPlaces = new Set(ctx.mySessions.map((s) => s.placeId));
-  const max = new Map<string, Set<string>>();
-  for (const s of ctx.allSessions) {
-    if (!myPlaces.has(s.placeId)) continue;
-    if (s.uid === ctx.uid) continue;
-    const set = max.get(s.placeId) ?? new Set<string>();
-    set.add(s.uid);
-    max.set(s.placeId, set);
-  }
-  let best = 0;
-  for (const v of max.values()) if (v.size > best) best = v.size;
-  return best;
-}
-
-function countByHour(sessions: SessionDoc[], pred: (h: number) => boolean) {
-  return sessions.filter((s) => pred(new Date(s.date).getHours())).length;
-}
-
-function distinctSeasons(sessions: SessionDoc[]): number {
-  const seen = new Set<number>();
-  for (const s of sessions) {
-    const m = new Date(s.date).getMonth();
+  for (const s of ctx.mySessions) {
+    placeIds.add(s.placeId);
+    weekStarts.add(weekStartMs(s.date));
+    dates.push(s.date);
+    if (s.isWinter) winterSwims++;
+    if (s.lat < minLat) minLat = s.lat;
+    if (s.lat > maxLat) maxLat = s.lat;
+    if (s.lng < minLng) minLng = s.lng;
+    if (s.lng > maxLng) maxLng = s.lng;
+    const d = new Date(s.date);
+    const h = d.getHours();
+    if (h < 7) earlySwims++;
+    if (h >= 20) lateSwims++;
+    const m = d.getMonth();
     // 0=winter (Dec-Feb), 1=spring (Mar-May), 2=summer (Jun-Aug), 3=autumn (Sep-Nov)
-    const season =
-      m === 11 || m === 0 || m === 1
-        ? 0
-        : m >= 2 && m <= 4
-          ? 1
-          : m >= 5 && m <= 7
-            ? 2
-            : 3;
-    seen.add(season);
+    seasons.add(m === 11 || m <= 1 ? 0 : m <= 4 ? 1 : m <= 7 ? 2 : 3);
   }
-  return seen.size;
+
+  const rangeKm =
+    ctx.mySessions.length < 2
+      ? 0
+      : haversineKm({ lat: minLat, lng: minLng }, { lat: maxLat, lng: maxLng });
+
+  // Most distinct other swimmers at any one of the user's spots — the only
+  // aggregate that scans the community feed.
+  const sharers = new Map<string, Set<string>>();
+  for (const s of ctx.allSessions) {
+    if (s.uid === ctx.uid || !placeIds.has(s.placeId)) continue;
+    const set = sharers.get(s.placeId) ?? new Set<string>();
+    set.add(s.uid);
+    sharers.set(s.placeId, set);
+  }
+  let maxSharedSwimmers = 0;
+  for (const v of sharers.values())
+    if (v.size > maxSharedSwimmers) maxSharedSwimmers = v.size;
+
+  return {
+    swims: ctx.mySessions.length,
+    uniquePlaces: placeIds.size,
+    winterSwims,
+    bestWeekStreak: longestConsecutiveWeeks(weekStarts),
+    bestDayStreak: computeStreak(dates).longest,
+    rangeKm,
+    earlySwims,
+    lateSwims,
+    seasons: seasons.size,
+    maxSharedSwimmers,
+  };
+}
+
+/** 0..1 progress toward unlocking, used to show progress bars. */
+export function achievementProgress(
+  a: Achievement,
+  stats: AchievementStats,
+): number {
+  return Math.min(1, stats[a.metric] / a.goal);
 }
 
 const ach = (a: Achievement): Achievement => a;
@@ -119,8 +127,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Log your first swim",
     emoji: "🌊",
     tier: 1,
-    test: (c) => c.mySessions.length >= 1,
-    progress: (c) => Math.min(1, c.mySessions.length / 1),
+    metric: "swims",
+    goal: 1,
   }),
   ach({
     id: "HABIT_FORMING",
@@ -128,8 +136,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Five swims in the books",
     emoji: "🐬",
     tier: 1,
-    test: (c) => c.mySessions.length >= 5,
-    progress: (c) => Math.min(1, c.mySessions.length / 5),
+    metric: "swims",
+    goal: 5,
   }),
   ach({
     id: "FIFTY_DIPS",
@@ -137,8 +145,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "50 swims logged",
     emoji: "🦭",
     tier: 3,
-    test: (c) => c.mySessions.length >= 50,
-    progress: (c) => Math.min(1, c.mySessions.length / 50),
+    metric: "swims",
+    goal: 50,
   }),
   ach({
     id: "COLLECTOR",
@@ -146,8 +154,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Five unique spots",
     emoji: "📍",
     tier: 1,
-    test: (c) => uniquePlaces(c.mySessions) >= 5,
-    progress: (c) => Math.min(1, uniquePlaces(c.mySessions) / 5),
+    metric: "uniquePlaces",
+    goal: 5,
   }),
   ach({
     id: "EXPLORER",
@@ -155,8 +163,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Fifteen unique spots",
     emoji: "🗺️",
     tier: 2,
-    test: (c) => uniquePlaces(c.mySessions) >= 15,
-    progress: (c) => Math.min(1, uniquePlaces(c.mySessions) / 15),
+    metric: "uniquePlaces",
+    goal: 15,
   }),
   ach({
     id: "POLAR_BEAR",
@@ -164,8 +172,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "First winter dip",
     emoji: "❄️",
     tier: 1,
-    test: (c) => winterCount(c.mySessions) >= 1,
-    progress: (c) => Math.min(1, winterCount(c.mySessions) / 1),
+    metric: "winterSwims",
+    goal: 1,
   }),
   ach({
     id: "COLD_PURIST",
@@ -173,8 +181,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Five winter dips",
     emoji: "🧊",
     tier: 2,
-    test: (c) => winterCount(c.mySessions) >= 5,
-    progress: (c) => Math.min(1, winterCount(c.mySessions) / 5),
+    metric: "winterSwims",
+    goal: 5,
   }),
   ach({
     id: "WINTER_WARRIOR",
@@ -182,8 +190,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Ten winter dips",
     emoji: "🥶",
     tier: 3,
-    test: (c) => winterCount(c.mySessions) >= 10,
-    progress: (c) => Math.min(1, winterCount(c.mySessions) / 10),
+    metric: "winterSwims",
+    goal: 10,
   }),
   ach({
     id: "STREAK_3",
@@ -191,8 +199,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Three weeks in a row",
     emoji: "🔥",
     tier: 1,
-    test: (c) => bestWeekStreak(c.mySessions) >= 3,
-    progress: (c) => Math.min(1, bestWeekStreak(c.mySessions) / 3),
+    metric: "bestWeekStreak",
+    goal: 3,
   }),
   ach({
     id: "STREAK_6",
@@ -200,8 +208,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Six weeks in a row",
     emoji: "🔥",
     tier: 3,
-    test: (c) => bestWeekStreak(c.mySessions) >= 6,
-    progress: (c) => Math.min(1, bestWeekStreak(c.mySessions) / 6),
+    metric: "bestWeekStreak",
+    goal: 6,
   }),
   ach({
     id: "DAY_STREAK_7",
@@ -209,8 +217,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Seven days in a row",
     emoji: "🌊",
     tier: 2,
-    test: (c) => bestDayStreak(c.mySessions) >= 7,
-    progress: (c) => Math.min(1, bestDayStreak(c.mySessions) / 7),
+    metric: "bestDayStreak",
+    goal: 7,
   }),
   ach({
     id: "DAY_STREAK_30",
@@ -218,8 +226,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Thirty days in a row",
     emoji: "🪩",
     tier: 3,
-    test: (c) => bestDayStreak(c.mySessions) >= 30,
-    progress: (c) => Math.min(1, bestDayStreak(c.mySessions) / 30),
+    metric: "bestDayStreak",
+    goal: 30,
   }),
   ach({
     id: "GLOBETROTTER",
@@ -227,8 +235,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Spots span 50 km",
     emoji: "🌍",
     tier: 2,
-    test: (c) => rangeKm(c.mySessions) >= 50,
-    progress: (c) => Math.min(1, rangeKm(c.mySessions) / 50),
+    metric: "rangeKm",
+    goal: 50,
   }),
   ach({
     id: "WANDERLUST",
@@ -236,8 +244,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Spots span 250 km",
     emoji: "✈️",
     tier: 3,
-    test: (c) => rangeKm(c.mySessions) >= 250,
-    progress: (c) => Math.min(1, rangeKm(c.mySessions) / 250),
+    metric: "rangeKm",
+    goal: 250,
   }),
   ach({
     id: "BUDDY_UP",
@@ -245,8 +253,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Share a spot with another swimmer",
     emoji: "🤝",
     tier: 1,
-    test: (c) => distinctSwimmersAtMyPlaces(c) >= 1,
-    progress: (c) => Math.min(1, distinctSwimmersAtMyPlaces(c) / 1),
+    metric: "maxSharedSwimmers",
+    goal: 1,
   }),
   ach({
     id: "SOCIAL_BUTTERFLY",
@@ -254,8 +262,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Share a spot with 3+ others",
     emoji: "🦋",
     tier: 2,
-    test: (c) => distinctSwimmersAtMyPlaces(c) >= 3,
-    progress: (c) => Math.min(1, distinctSwimmersAtMyPlaces(c) / 3),
+    metric: "maxSharedSwimmers",
+    goal: 3,
   }),
   ach({
     id: "DAWN_PATROL",
@@ -263,8 +271,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Three swims before 7 am",
     emoji: "🌅",
     tier: 2,
-    test: (c) => countByHour(c.mySessions, (h) => h < 7) >= 3,
-    progress: (c) => Math.min(1, countByHour(c.mySessions, (h) => h < 7) / 3),
+    metric: "earlySwims",
+    goal: 3,
   }),
   ach({
     id: "NIGHT_OWL",
@@ -272,8 +280,8 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "Three swims after 8 pm",
     emoji: "🌙",
     tier: 2,
-    test: (c) => countByHour(c.mySessions, (h) => h >= 20) >= 3,
-    progress: (c) => Math.min(1, countByHour(c.mySessions, (h) => h >= 20) / 3),
+    metric: "lateSwims",
+    goal: 3,
   }),
   ach({
     id: "ALL_SEASONS",
@@ -281,32 +289,16 @@ export const ACHIEVEMENTS: Achievement[] = [
     description: "A dip in winter, spring, summer, autumn",
     emoji: "🍂",
     tier: 2,
-    test: (c) => distinctSeasons(c.mySessions) === 4,
-    progress: (c) => distinctSeasons(c.mySessions) / 4,
+    metric: "seasons",
+    goal: 4,
   }),
 ];
 
 export function evaluateAchievements(ctx: AchievementContext): Set<string> {
+  const stats = computeAchievementStats(ctx);
   const out = new Set<string>();
-  for (const a of ACHIEVEMENTS) if (a.test(ctx)) out.add(a.id);
+  for (const a of ACHIEVEMENTS) if (stats[a.metric] >= a.goal) out.add(a.id);
   return out;
-}
-
-/** The set of achievement ids a given user has unlocked. */
-export function unlockedAchievementsForUid(
-  uid: string,
-  allSessions: SessionDoc[],
-): Set<string> {
-  const mine = allSessions.filter((s) => s.uid === uid);
-  return evaluateAchievements({ uid, mySessions: mine, allSessions });
-}
-
-/** How many achievements a given user has unlocked (drives their rank). */
-export function achievementCountForUid(
-  uid: string,
-  allSessions: SessionDoc[],
-): number {
-  return unlockedAchievementsForUid(uid, allSessions).size;
 }
 
 export const ACHIEVEMENTS_BY_ID: Record<string, Achievement> =

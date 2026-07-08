@@ -993,7 +993,11 @@ function KeepCentered({ target }: { target: { lat: number; lng: number } }) {
     const recenter = () => {
       map.setView([target.lat, target.lng], map.getZoom(), { animate: false });
     };
-    // Snap back after every zoom so a locked map can't drift away.
+    // Recenter immediately — the map may sit at a stale position (restored
+    // saved view, or the pre-geolocation fallback) when the target arrives,
+    // and with lockPan the user can't correct it themselves.
+    recenter();
+    // And snap back after every zoom so a locked map can't drift away.
     map.on("zoomend", recenter);
     return () => {
       map.off("zoomend", recenter);

@@ -16,3 +16,19 @@ export function weekStartMs(ts: number): number {
   const day = (d.getDay() + 6) % 7;
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() - day).getTime();
 }
+
+/** Longest run of back-to-back weeks in a set of week-start timestamps
+ *  (as produced by weekStartMs). Duplicates are fine; 0 when empty. */
+export function longestConsecutiveWeeks(weekStarts: Iterable<number>): number {
+  const weeks = [...new Set(weekStarts)].sort((a, b) => a - b);
+  if (weeks.length === 0) return 0;
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < weeks.length; i++) {
+    if (weeks[i] - weeks[i - 1] === WEEK_MS) {
+      run++;
+      if (run > best) best = run;
+    } else run = 1;
+  }
+  return best;
+}

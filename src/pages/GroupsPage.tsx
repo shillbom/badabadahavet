@@ -427,10 +427,17 @@ function GroupDetailSheet({
     "points",
   );
 
+  // Every groups snapshot delivers a fresh `members` array reference even
+  // when nobody joined or left, and the parent re-syncs `group` to the live
+  // store object on each one. Key the member-scoped effects on the
+  // membership *content* so unrelated group updates don't tear down the
+  // sessions listener or re-fetch every member's profile.
+  const membersKey = group?.members.join("\n");
+
   useEffect(() => {
     if (!group) return;
     return watchMemberSessions(group.members, setAllSessions);
-  }, [group?.members]);
+  }, [membersKey]);
 
   function shareInviteLink() {
     if (!shown) return;
@@ -502,7 +509,7 @@ function GroupDetailSheet({
       setProfiles(users);
       setLoadingProfiles(false);
     });
-  }, [group?.members]);
+  }, [membersKey]);
 
   const memberStats = useMemo(() => {
     const members = shown?.members ?? [];
