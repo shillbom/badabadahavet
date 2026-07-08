@@ -37,7 +37,6 @@ import {
   streakTier,
   SWIM_DAYS_PER_SKIP,
 } from "@/lib/streak";
-import type { SessionDoc } from "@/lib/types";
 import { useLocale, useT } from "@/lib/i18n";
 import BackButton from "@/components/ui/BackButton";
 import SegmentedControl from "@/components/ui/SegmentedControl";
