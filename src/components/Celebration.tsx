@@ -49,6 +49,13 @@ export const celebrate = {
     useCelebration.getState().show({ kind: "streak", tier, days }),
 };
 
+// Dev-only: trigger splashes from the browser console to eyeball the
+// burst effects, e.g. `celebrate.streak("disco", 55)`. Compiled out of
+// production builds.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  (window as unknown as { celebrate: typeof celebrate }).celebrate = celebrate;
+}
+
 export function CelebrationOverlay() {
   const queue = useCelebration((s) => s.queue);
   const pop = useCelebration((s) => s.pop);

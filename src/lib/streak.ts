@@ -78,7 +78,25 @@ export function longestStreakInYear(dates: number[], year: number): number {
  * Compute streak state from raw session timestamps (epoch ms, any order).
  * `now` is injectable for tests.
  */
+/**
+ * Dev-only escape hatch for eyeballing the streak tier effects without
+ * grinding a real 50-day streak: open the app with `?fakeStreak=N` while
+ * running `npm run dev`. Dead code in production builds (import.meta.env.DEV
+ * is compile-time false) and inert under vitest (no window).
+ */
+function devFakeStreak(): number | null {
+  if (!import.meta.env.DEV || typeof window === "undefined") return null;
+  const raw = new URLSearchParams(window.location.search).get("fakeStreak");
+  return raw ? Number(raw) : null;
+}
+
 export function computeStreak(dates: number[], now = Date.now()): StreakInfo {
+  const info = computeStreakReal(dates, now);
+  const fake = devFakeStreak();
+  return fake === null ? info : { ...info, current: fake };
+}
+
+function computeStreakReal(dates: number[], now = Date.now()): StreakInfo {
   const dayTypes = new Map<number, StreakDayType>();
   const days = [...new Set(dates.map(dayStartMs))].sort((a, b) => a - b);
   const today = dayStartMs(now);
