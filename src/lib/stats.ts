@@ -28,6 +28,8 @@ export type MyStats = {
   /** Swims in the trailing 7 / 30 days — recent-activity momentum. */
   swimsLastWeek: number;
   swimsLastMonth: number;
+  /** Unique places visited in the trailing 30 days — never exceeds `uniquePlaces`. */
+  placesLastMonth: number;
 };
 
 export function computeMyStats(sessions: SessionDoc[]): MyStats {
@@ -49,6 +51,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
       countriesAbroad: 0,
       swimsLastWeek: 0,
       swimsLastMonth: 0,
+      placesLastMonth: 0,
     };
   }
 
@@ -67,12 +70,16 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
   const monthAgo = now - 30 * DAY_MS;
   let swimsLastWeek = 0;
   let swimsLastMonth = 0;
+  const placesThisMonth = new Set<string>();
 
   for (const s of sessions) {
     totalPoints += s.points;
     if (s.isWinter) winterSwims++;
     if (s.date >= weekAgo) swimsLastWeek++;
-    if (s.date >= monthAgo) swimsLastMonth++;
+    if (s.date >= monthAgo) {
+      swimsLastMonth++;
+      placesThisMonth.add(s.placeId);
+    }
     const cur = placeCounts.get(s.placeId) ?? { name: s.placeName, count: 0 };
     cur.count += 1;
     cur.name = s.placeName;
@@ -165,5 +172,6 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
     countriesAbroad: abroadCountries.size,
     swimsLastWeek,
     swimsLastMonth,
+    placesLastMonth: placesThisMonth.size,
   };
 }

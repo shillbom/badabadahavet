@@ -115,13 +115,17 @@ export default function MapPage() {
             sub={t("map.stat.points.sub", { n: myStats.swimsLastWeek })}
           />
           <Stat
-            onClick={() => setFitToken((n) => n + 1)}
+            onClick={() =>
+              // Switch to "my places" mode (the showAll effect re-fits the
+              // bounds). If already there, just re-fit.
+              showAll ? setShowAll(false) : setFitToken((n) => n + 1)
+            }
             size="lg"
             animate
             label={t("map.stat.spots")}
             value={myStats.uniquePlaces}
             icon={<MapPin className="h-4 w-4" />}
-            sub={t("map.stat.spots.sub", { n: myStats.swimsLastMonth })}
+            sub={t("map.stat.spots.sub", { n: myStats.placesLastMonth })}
           />
           <StreakCard streak={myStats.streak} />
         </div>
