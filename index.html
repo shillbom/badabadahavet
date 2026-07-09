@@ -165,7 +165,7 @@
       .app-splash__panel {
         /* One tilt angle shared by the water line and the wordmark, so the
            word slides in along the same diagonal the waves sit on. */
-        --tilt: -13deg;
+        --tilt: -45deg;
         position: relative;
         width: 100%;
         max-width: 28rem;
@@ -185,48 +185,67 @@
           border-right: 1px solid rgba(255, 255, 255, 0.6);
         }
       }
-      /* Undulating water: three big off-round discs stacked at the bottom.
-         Rotating a disc whose border-radius isn't a perfect circle makes its
-         top edge rise and fall — a wave crest travelling across the panel.
-         The whole layer is tilted by --tilt so the water line runs on the
-         same diagonal as the wordmark. It's oversized and pivots on the
-         panel's bottom-centre, and the discs are far larger than the panel,
-         so tilting never uncovers a corner (the panel clips the overflow). */
+      /* Undulating water: six big off-round discs. Rotating a disc whose
+         border-radius isn't a perfect circle makes its top edge rise and
+         fall — a wave crest travelling across the panel. The whole layer is
+         tilted by --tilt so the water line runs on the same steep diagonal
+         as the wordmark, splitting the panel corner-to-corner: sky in the
+         upper-left, water in the lower-right. The layer is centred on the
+         panel and hugely oversized (2×+ each way), so rotating it about the
+         centre never uncovers a corner — the panel clips the overflow.
+         Colours run light→dark top-to-bottom so the crests read as depth. */
       .app-splash__waves {
         position: absolute;
         left: 50%;
-        bottom: 0;
-        width: 170%;
-        height: 70%;
-        translate: -50% 0;
+        top: 50%;
+        width: 220%;
+        height: 220%;
+        translate: -50% -50%;
         rotate: var(--tilt);
-        transform-origin: 50% 100%;
+        transform-origin: 50% 50%;
       }
       .app-splash__wave {
         position: absolute;
         left: 50%;
-        width: 240%;
+        width: 200%;
         aspect-ratio: 1 / 1;
         translate: -50% 0;
         border-radius: 43% 45% 42% 46%;
         transform-origin: 50% 50%;
       }
-      .app-splash__wave--back {
-        top: 20%;
-        background: #76d0ff; /* wave-300 */
+      .app-splash__wave:nth-child(1) {
+        top: 50%;
+        background: #b6e4ff; /* wave-200 */
+        opacity: 0.6;
+        animation: app-splash-roll 16s linear infinite;
+      }
+      .app-splash__wave:nth-child(2) {
+        top: 52.5%;
+        background: #8ed8ff;
         opacity: 0.7;
+        animation: app-splash-roll 13s linear infinite reverse;
+      }
+      .app-splash__wave:nth-child(3) {
+        top: 55%;
+        background: #76d0ff; /* wave-300 */
+        opacity: 0.8;
         animation: app-splash-roll 14s linear infinite;
       }
-      .app-splash__wave--mid {
-        top: 30%;
+      .app-splash__wave:nth-child(4) {
+        top: 57.5%;
         background: #2bb8ff; /* wave-400 */
-        opacity: 0.75;
+        opacity: 0.85;
         animation: app-splash-roll 10s linear infinite reverse;
       }
-      .app-splash__wave--front {
-        top: 40%;
+      .app-splash__wave:nth-child(5) {
+        top: 60%;
         background: #019eea; /* wave-500 */
-        animation: app-splash-roll 7.5s linear infinite;
+        animation: app-splash-roll 11s linear infinite;
+      }
+      .app-splash__wave:nth-child(6) {
+        top: 62.5%;
+        background: #007ec6; /* wave-600 */
+        animation: app-splash-roll 7.5s linear infinite reverse;
       }
       /* Wordmark, resting just above the water line and tilted to match it,
          so it slides in *along its own baseline* — the entry offset points
@@ -257,13 +276,13 @@
           rotate: 360deg;
         }
       }
-      /* Offset resolved for --tilt: -13° — back down the baseline
-         (cos13°·120 ≈ 117 left, sin13°·120 ≈ 27 down). rotate stays at
+      /* Offset resolved for --tilt: -45° — back down the baseline
+         (cos45°·120 ≈ 85 left, sin45°·120 ≈ 85 down). rotate stays at
          --tilt throughout since the keyframes don't touch it. */
       @keyframes app-splash-slide {
         from {
           opacity: 0;
-          translate: calc(-50% - 117px) 27px;
+          translate: calc(-50% - 85px) 85px;
         }
         to {
           opacity: 1;
@@ -288,9 +307,12 @@
       <div class="app-splash">
         <div class="app-splash__panel">
           <div class="app-splash__waves" aria-hidden="true">
-            <span class="app-splash__wave app-splash__wave--back"></span>
-            <span class="app-splash__wave app-splash__wave--mid"></span>
-            <span class="app-splash__wave app-splash__wave--front"></span>
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
           </div>
           <div class="app-splash__word">Badligan</div>
         </div>

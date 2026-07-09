@@ -15,9 +15,12 @@ export function FullSplash() {
     <div className="app-splash">
       <div className="app-splash__panel">
         <div className="app-splash__waves" aria-hidden="true">
-          <span className="app-splash__wave app-splash__wave--back" />
-          <span className="app-splash__wave app-splash__wave--mid" />
-          <span className="app-splash__wave app-splash__wave--front" />
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
         </div>
         <div className="app-splash__word">Badligan</div>
       </div>
