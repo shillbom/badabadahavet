@@ -14,6 +14,7 @@ import UpdatePrompt from "@/components/UpdatePrompt";
 import SinceLastVisit from "@/components/SinceLastVisit";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
 import { FullSplash } from "@/components/Splash";
+import { setBootReady } from "@/lib/bootSignal";
 import { rememberReturnPath } from "@/lib/utils";
 
 // A new version found this soon after the app opens is treated as "first
@@ -142,16 +143,12 @@ export default function App() {
   // overlay on top — it lifts away on its own once `booting` clears.
   const booting = Boolean((loading || (user && !profile)) && !googleOnboarding);
 
-  // Dismiss the boot splash overlay (the sibling of #root baked into
-  // index.html) once boot finishes AND the Map chunk is loaded, so it lifts
-  // away onto real content rather than the identical route Suspense fallback.
-  // It then plays its exit animation and removes itself.
+  // Tell the boot splash it can leave, once boot finishes AND the Map chunk is
+  // loaded — so it lifts away onto real content rather than the identical route
+  // Suspense fallback (whose still-resting wordmark would double against the
+  // exiting one). BootSplash then plays its exit and unmounts itself.
   useEffect(() => {
-    if (!booting && contentReady) {
-      (
-        window as typeof window & { __dismissSplash?: () => void }
-      ).__dismissSplash?.();
-    }
+    if (!booting && contentReady) setBootReady();
   }, [booting, contentReady]);
 
   // Routes that require login render a redirect to /login for guests.

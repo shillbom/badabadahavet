@@ -176,3 +176,192 @@
     display: none !important;
   }
 }
+
+/* --- Boot / loading splash (rendered by components/Splash.tsx) --------------
+   Pure CSS so the eagerly-mounted <BootSplash> stays off the first-paint
+   critical path. A tilted, layered "sea" with the wordmark riding the water
+   line; the --intro modifier plays the entrance, --leaving the exit. */
+.app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 3000; /* above Layout's nav/FAB (z-1000/1010) */
+  display: flex;
+  justify-content: center;
+  background: #eff9ff; /* wave-50 canvas behind the column at wider widths */
+}
+.app-splash__panel {
+  --tilt: -45deg; /* shared by the water line and the wordmark */
+  position: relative;
+  width: 100%;
+  max-width: 28rem; /* mirrors the app's mobile column (max-w-md) */
+  height: 100%;
+  overflow: hidden;
+  background: linear-gradient(180deg, #eff9ff 0%, #def1ff 46%, #b6e4ff 100%);
+}
+@media (min-width: 768px) {
+  .app-splash__panel {
+    border-left: 1px solid rgba(255, 255, 255, 0.6);
+    border-right: 1px solid rgba(255, 255, 255, 0.6);
+  }
+}
+/* Wrapper the intro/exit slide moves as one; the inner water carries the tilt
+   + oversize so the entrance can translate in plain panel-relative units. */
+.app-splash__waves {
+  position: absolute;
+  inset: 0;
+}
+.app-splash__water {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220%;
+  height: 220%;
+  translate: -50% -50%;
+  rotate: var(--tilt);
+  transform-origin: 50% 50%;
+}
+/* Rotating an off-round disc makes its top edge rise/fall — a travelling wave
+   crest. Upper (crest-defining) discs are small for tight, wavy arcs; the
+   bottom two stay huge to keep the lower-right corner covered under the tilt.
+   Colours run light→dark top-to-bottom so the crests read as depth. */
+.app-splash__wave {
+  position: absolute;
+  left: 50%;
+  aspect-ratio: 1 / 1;
+  translate: -50% 0;
+  transform-origin: 50% 50%;
+}
+.app-splash__wave:nth-child(1) {
+  top: 47%;
+  width: 120%;
+  border-radius: 42% 52% 38% 48% / 50% 40% 52% 42%;
+  background: #b6e4ff; /* wave-200 */
+  opacity: 0.6;
+  animation: app-splash-roll 9s linear infinite;
+}
+.app-splash__wave:nth-child(2) {
+  top: 50.5%;
+  width: 132%;
+  border-radius: 50% 40% 52% 38% / 40% 52% 42% 50%;
+  background: #8ed8ff;
+  opacity: 0.7;
+  animation: app-splash-roll 7s linear infinite reverse;
+}
+.app-splash__wave:nth-child(3) {
+  top: 54%;
+  width: 148%;
+  border-radius: 38% 50% 42% 52% / 52% 42% 50% 40%;
+  background: #76d0ff; /* wave-300 */
+  opacity: 0.8;
+  animation: app-splash-roll 8.5s linear infinite;
+}
+.app-splash__wave:nth-child(4) {
+  top: 57%;
+  width: 168%;
+  border-radius: 48% 40% 52% 42% / 42% 50% 40% 52%;
+  background: #2bb8ff; /* wave-400 */
+  opacity: 0.85;
+  animation: app-splash-roll 6.5s linear infinite reverse;
+}
+.app-splash__wave:nth-child(5) {
+  top: 60%;
+  width: 200%;
+  border-radius: 44% 48% 42% 46%;
+  background: #019eea; /* wave-500 */
+  animation: app-splash-roll 9.5s linear infinite;
+}
+.app-splash__wave:nth-child(6) {
+  top: 63%;
+  width: 240%;
+  border-radius: 46% 44% 47% 43%;
+  background: #007ec6; /* wave-600 */
+  animation: app-splash-roll 7s linear infinite reverse;
+}
+/* Wordmark, tilted to match the water line and resting just above it. */
+.app-splash__word {
+  position: absolute;
+  left: 50%;
+  bottom: 50%;
+  translate: -50% 0;
+  rotate: var(--tilt);
+  white-space: nowrap;
+  font-family: "Caveat Brush", "Bricolage Grotesque", system-ui, sans-serif;
+  font-size: clamp(3.5rem, 20vw, 5.25rem);
+  line-height: 1;
+  color: #0264a0; /* wave-700 */
+  text-shadow:
+    0 2px 0 rgba(255, 255, 255, 0.65),
+    0 12px 26px rgba(11, 72, 109, 0.22);
+}
+@keyframes app-splash-roll {
+  from {
+    rotate: 0deg;
+  }
+  to {
+    rotate: 360deg;
+  }
+}
+
+/* Entrance: the water sweeps in from the lower-right and the wordmark slides
+   up along its own baseline (offset resolved for --tilt −45°: cos45·120 ≈ 85
+   left, sin45·120 ≈ 85 down; rotate is untouched so it stays tilted). */
+.app-splash--intro .app-splash__waves {
+  animation: app-splash-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.app-splash--intro .app-splash__word {
+  animation: app-splash-slide 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+@keyframes app-splash-rise {
+  from {
+    opacity: 0;
+    translate: 14% 24%;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes app-splash-slide {
+  from {
+    opacity: 0;
+    translate: calc(-50% - 85px) 85px;
+  }
+  to {
+    opacity: 1;
+    translate: -50% 0;
+  }
+}
+
+/* Exit: the whole splash fades while the water drains back down the diagonal
+   and the wordmark flies on up its baseline. */
+.app-splash--leaving {
+  animation: app-splash-out 0.6s ease both;
+  pointer-events: none;
+}
+.app-splash--leaving .app-splash__waves {
+  animation: app-splash-rise 0.6s cubic-bezier(0.55, 0, 0.67, 0.2) reverse both;
+}
+.app-splash--leaving .app-splash__word {
+  animation: app-splash-fly 0.55s cubic-bezier(0.55, 0, 0.67, 0.2) both;
+}
+@keyframes app-splash-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes app-splash-fly {
+  to {
+    opacity: 0;
+    translate: calc(-50% + 110px) -110px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-splash__wave,
+  .app-splash--intro .app-splash__waves,
+  .app-splash--intro .app-splash__word,
+  .app-splash--leaving .app-splash__waves,
+  .app-splash--leaving .app-splash__word {
+    animation: none;
+  }
+}

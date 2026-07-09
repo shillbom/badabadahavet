@@ -1,18 +1,16 @@
 /**
- * Full-screen boot/loading splash (resting scene).
+ * Boot / loading splash.
  *
- * Pure CSS (no image, no framer-motion) so this component stays out of the
- * first-paint critical path — it's the Suspense fallback shown while a lazy
- * route chunk loads, and pulling in framer-motion here would force that
- * ~126 KB chunk to download before anything could render.
- *
- * The initial boot splash is NOT this component: it's a sibling overlay baked
- * into index.html that plays the entrance and animates itself out once the app
- * is ready (see the splash controller there). This React copy mirrors that
- * overlay's markup/classes for the resting scene so in-app route loads look
- * identical — keep the two in sync. The styles live in index.html's inline
- * <style>.
+ * Pure CSS (no image, no framer-motion, no Pixi) on purpose: <BootSplash> is
+ * mounted eagerly in main.tsx so it can paint before the lazy <App> (and its
+ * ~618 KB Firebase chunk) loads. Pulling an animation lib in here would drag
+ * that chunk onto the first-paint critical path — the very thing the app's
+ * lazy boundaries exist to avoid. CSS animates it for free. Styles live in
+ * src/index.css (`.app-splash*`).
  */
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { getBootReady, subscribeBootReady } from "@/lib/bootSignal";
+
 function SplashArt() {
   return (
     <div className="app-splash__panel">
@@ -31,9 +29,53 @@ function SplashArt() {
   );
 }
 
+/** Static resting splash — the Suspense fallback for in-app lazy route loads. */
 export function FullSplash() {
   return (
     <div className="app-splash">
+      <SplashArt />
+    </div>
+  );
+}
+
+// Guarantee the entrance is actually seen even when boot is instant (warm
+// cache / already signed in) before letting the exit start.
+const MIN_VISIBLE_MS = 1100;
+
+/**
+ * The boot splash. Mounts at first paint (main.tsx, outside the lazy <App>),
+ * plays the entrance, and once App signals ready (bootSignal) it plays the
+ * exit and unmounts — revealing the app underneath.
+ */
+export function BootSplash() {
+  const ready = useSyncExternalStore(subscribeBootReady, getBootReady);
+  const [phase, setPhase] = useState<"intro" | "leaving" | "gone">("intro");
+  const startedAt = useRef(Date.now());
+
+  useEffect(() => {
+    if (!ready) return;
+    const wait = Math.max(0, MIN_VISIBLE_MS - (Date.now() - startedAt.current));
+    const timer = window.setTimeout(
+      () => setPhase((p) => (p === "intro" ? "leaving" : p)),
+      wait,
+    );
+    return () => window.clearTimeout(timer);
+  }, [ready]);
+
+  if (phase === "gone") return null;
+
+  return (
+    <div
+      className={`app-splash app-splash--${phase}`}
+      // Only the root's own fade-out (app-splash-out) unmounts us; the child
+      // water/word animations bubble their animationend here too, so ignore
+      // anything that isn't the root element.
+      onAnimationEnd={(e) => {
+        if (phase === "leaving" && e.target === e.currentTarget) {
+          setPhase("gone");
+        }
+      }}
+    >
       <SplashArt />
     </div>
   );
