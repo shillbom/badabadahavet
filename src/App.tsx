@@ -14,6 +14,7 @@ import UpdatePrompt from "@/components/UpdatePrompt";
 import SinceLastVisit from "@/components/SinceLastVisit";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
 import { FullSplash } from "@/components/Splash";
+import { setBootReady } from "@/lib/bootSignal";
 import { rememberReturnPath } from "@/lib/utils";
 
 // A new version found this soon after the app opens is treated as "first
@@ -43,6 +44,21 @@ export default function App() {
 
   // Boot auth listener + data subscriptions once for the lifetime of the app.
   useEffect(() => useStore.getState()._startListening(), []);
+
+  // Warm the initial route chunk during boot and flag when it's ready. The
+  // splash exit waits on this (see below) so it lifts away onto the rendered
+  // Map — never onto the route-level Suspense fallback, which is an identical
+  // splash whose still-resting wordmark would "double" against the exiting
+  // one and read as a jump. Small chunk, loads in parallel with auth.
+  const [contentReady, setContentReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const ready = () => alive && setContentReady(true);
+    import("@/pages/MapPage").then(ready, ready);
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // A failed sign-in (e.g. the profile doc wouldn't load) signs the user back
   // out and sets authError. Surface it as a toast and send them to /login
@@ -119,12 +135,21 @@ export default function App() {
     seenAchievements.current = persisted;
   }, [profile]);
 
-  // While the user doc is still hydrating after login we'd otherwise
-  // render Layout with an empty profile. Wait until both Firebase Auth
-  // and the Firestore user doc are ready before showing the authed UI.
-  if ((loading || (user && !profile)) && !googleOnboarding) {
-    return <FullSplash />;
-  }
+  // While the user doc is still hydrating after login we'd otherwise render
+  // Layout with an empty profile. Wait until both Firebase Auth and the
+  // Firestore user doc are ready before mounting the authed UI. Rather than
+  // early-returning the splash (which would unmount instantly, with no way to
+  // animate out), keep the app content gated on `booting` and lay the boot
+  // overlay on top — it lifts away on its own once `booting` clears.
+  const booting = Boolean((loading || (user && !profile)) && !googleOnboarding);
+
+  // Tell the boot splash it can leave, once boot finishes AND the Map chunk is
+  // loaded — so it lifts away onto real content rather than the identical route
+  // Suspense fallback (whose still-resting wordmark would double against the
+  // exiting one). BootSplash then plays its exit and unmounts itself.
+  useEffect(() => {
+    if (!booting && contentReady) setBootReady();
+  }, [booting, contentReady]);
 
   // Routes that require login render a redirect to /login for guests.
   const protectedRoute = (el: React.ReactNode) =>
@@ -139,8 +164,8 @@ export default function App() {
         onDismiss={() => setUpdateReady(false)}
       />
       <CelebrationOverlay />
-      {!googleOnboarding ? <SinceLastVisit /> : null}
-      {googleOnboarding ? (
+      {!booting && !googleOnboarding ? <SinceLastVisit /> : null}
+      {booting ? null : googleOnboarding ? (
         <Suspense fallback={<FullSplash />}>
           <Routes>
             <Route path="auth/google" element={<GoogleAuthPage />} />
