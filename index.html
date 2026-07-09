@@ -69,76 +69,97 @@
          React renders an identical <FullSplash> (same class names) on mount, so
          the handoff is seamless. Keep this in sync with components/Splash.tsx. -->
     <style>
+      /* Tailwind's preflight hasn't loaded yet while this splash shows, so
+         zero the UA body margin ourselves — it would show as a white border
+         around the full-bleed artwork. */
+      body {
+        margin: 0;
+      }
       .app-splash {
+        position: relative;
         display: flex;
         min-height: 100dvh;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        gap: 0.75rem;
+        /* The wordmark sits in the calm water between the trophy (ends
+           ~26% down the artwork) and the swim ring (starts ~43%). */
+        justify-content: flex-start;
+        overflow: hidden;
+        padding-top: 30dvh;
+        /* Tiny blurred inline preview (~1 KB) paints with the very first
+           frame; the real splash.webp fades in over it when it arrives.
+           Same artwork, so the crossfade is seamless. */
+        background: #b6e4ff
+          url("data:image/webp;base64,UklGRtgCAABXRUJQVlA4WAoAAAAgAAAAEwAAGAAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDgg6gAAABAGAJ0BKhQAGQA+tVCkS6cko6GoCqjgFolsAJ0y4iOYl/PVAFUdi+kxLiLHjPsVgLdPffwLQm/EAAD+4m/B9B3o7qVtBjd2ukaavn/2UX6RANHhj0mKjgmJGsCo43lmsKyGNnALPLK/+b0bycm7hm8TTvoucf0id5UmtC5rp+yuJezo4Gsiwov3yKyjDoN7RtbDA5b03gX6DqWTTOrzhxLeMOQFd1akRHH08Trp7ShCJUw4BLdmfCxrsPnhuIQW9h+1sAMP6uHqUV+TrRW1vTWR8SH7BBtTsi/p/ZD2/7DbUk4696+/EJAAAA==")
+          center / cover no-repeat;
       }
-      .app-splash__logo {
-        position: relative;
-        height: 5rem;
-        width: 5rem;
-      }
-      .app-splash__ripple {
-        position: absolute;
-        inset: 0;
-        border-radius: 9999px;
-        border: 2px solid #2bb8ff; /* wave-400 */
-        animation: app-splash-ripple 1.6s ease-out infinite;
-      }
-      .app-splash__ripple:nth-child(2) {
-        animation-delay: 0.4s;
-      }
-      .app-splash__ripple:nth-child(3) {
-        animation-delay: 0.8s;
-      }
-      .app-splash__img {
+      .app-splash__bg {
         position: absolute;
         inset: 0;
         height: 100%;
         width: 100%;
-        border-radius: 9999px;
         object-fit: cover;
-        animation: app-splash-bob 2s ease-in-out infinite;
+        opacity: 0;
+        transition: opacity 0.5s ease-out;
+      }
+      .app-splash__bg--loaded {
+        opacity: 1;
+      }
+      /* Ripple rings centered on the splash in the artwork (the swim ring
+         sits at ~56% height; object-fit keeps it near the viewport center
+         on portrait screens). */
+      .app-splash__ripples {
+        position: absolute;
+        left: 50%;
+        top: 56%;
+      }
+      .app-splash__ripple {
+        position: absolute;
+        top: -5rem;
+        left: -5rem;
+        height: 10rem;
+        width: 10rem;
+        border-radius: 9999px;
+        border: 3px solid rgba(255, 255, 255, 0.85);
+        animation: app-splash-ripple 1.8s ease-out infinite;
+      }
+      .app-splash__ripple:nth-child(2) {
+        animation-delay: 0.6s;
+      }
+      .app-splash__ripple:nth-child(3) {
+        animation-delay: 1.2s;
       }
       .app-splash__word {
+        position: relative;
         font-family:
           "Caveat Brush", "Bricolage Grotesque", system-ui, sans-serif;
-        font-size: 0.875rem;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: #0264a0; /* wave-700 */
+        font-size: clamp(3.75rem, 15vw, 6rem);
+        line-height: 1;
+        color: #ffffff;
+        transform: rotate(-3deg);
+        text-shadow:
+          0 2px 0 rgba(2, 100, 160, 0.4),
+          0 8px 28px rgba(11, 72, 109, 0.55);
         animation: app-splash-fade 0.6s ease-out 0.2s both;
       }
       @keyframes app-splash-ripple {
         0% {
-          transform: scale(0.5);
-          opacity: 0.5;
+          transform: scale(0.3);
+          opacity: 0.9;
         }
         100% {
-          transform: scale(1.6);
+          transform: scale(1.7);
           opacity: 0;
-        }
-      }
-      @keyframes app-splash-bob {
-        0%,
-        100% {
-          transform: translateY(0);
-        }
-        50% {
-          transform: translateY(-6px);
         }
       }
       @keyframes app-splash-fade {
         from {
           opacity: 0;
+          transform: rotate(-3deg) translateY(8px);
         }
         to {
           opacity: 1;
+          transform: rotate(-3deg);
         }
       }
     </style>
@@ -148,15 +169,16 @@
   <body class="bg-sky-50">
     <div id="root">
       <div class="app-splash">
-        <div class="app-splash__logo">
+        <img
+          class="app-splash__bg"
+          src="/splash.webp"
+          alt=""
+          onload="this.classList.add('app-splash__bg--loaded')"
+        />
+        <div class="app-splash__ripples" aria-hidden="true">
           <span class="app-splash__ripple"></span>
           <span class="app-splash__ripple"></span>
           <span class="app-splash__ripple"></span>
-          <img
-            class="app-splash__img"
-            src="/web-app-manifest-192x192.png"
-            alt="Badligan"
-          />
         </div>
         <div class="app-splash__word">Badligan</div>
       </div>
