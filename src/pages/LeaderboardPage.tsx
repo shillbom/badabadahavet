@@ -121,9 +121,14 @@ function BoardRow({
 
   // Rows reveal — and their score rolls up from 0 — when they scroll into
   // view rather than all at once on mount, so the odometer effect is
-  // actually seen as the user scrolls down the board.
+  // actually seen as the user scrolls down the board. The 400px bottom
+  // margin starts the reveal well before the row enters the viewport:
+  // triggering at 50% visibility made rows visibly pop in mid-scroll.
   const ref = useRef<HTMLLIElement | null>(null);
-  const inView = useInView(ref, { once: true, amount: 0.5 });
+  const inView = useInView(ref, {
+    once: true,
+    margin: "0px 0px 400px 0px",
+  });
 
   return (
     // No `layout`/AnimatePresence here on purpose: they force framer-motion
@@ -168,33 +173,50 @@ function BoardRow({
             </span>
           ) : null}
         </div>
+        {/* Fixed two-line stat block so every card is the same height:
+            swims + spots always on the first line, winters/countries on a
+            tighter, dimmer second line that keeps its space (empty) when
+            there's nothing to show — no flex-wrap, no per-row card growth. */}
         {stats ? (
-          <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-            <span className="inline-flex items-center gap-0.5">
-              <MapPin className="h-3 w-3" />{" "}
-              {stats.uniquePlaces === 1
-                ? t("leaderboard.spot")
-                : t("leaderboard.spots", { n: stats.uniquePlaces })}
-            </span>
-            <span className="inline-flex items-center gap-0.5">
-              <Snowflake className="h-3 w-3" />{" "}
-              {stats.winters === 1
-                ? t("leaderboard.winter")
-                : t("leaderboard.winters", { n: stats.winters })}
-            </span>
-            <span>
-              {stats.swims === 1
-                ? t("leaderboard.swim")
-                : t("leaderboard.swims", { n: stats.swims })}
-            </span>
-            {stats.countriesAbroad > 0 ? (
-              <span className="text-teal-700">
-                {t("leaderboard.countries", { n: stats.countriesAbroad + 1 })}
+          <div className="text-[11px] leading-4 text-slate-500">
+            <div className="flex items-center gap-2 overflow-hidden whitespace-nowrap">
+              <span>
+                {stats.swims === 1
+                  ? t("leaderboard.swim")
+                  : t("leaderboard.swims", { n: stats.swims })}
               </span>
-            ) : null}
+              <span className="inline-flex items-center gap-0.5">
+                <MapPin className="h-3 w-3" />
+                {stats.uniquePlaces === 1
+                  ? t("leaderboard.spot")
+                  : t("leaderboard.spots", { n: stats.uniquePlaces })}
+              </span>
+            </div>
+            <div className="flex h-3.5 items-center gap-2 overflow-hidden text-[10px] leading-none whitespace-nowrap text-slate-400">
+              {stats.winters > 0 ? (
+                <span className="inline-flex items-center gap-0.5">
+                  <Snowflake className="h-2.5 w-2.5" />
+                  {stats.winters === 1
+                    ? t("leaderboard.winter")
+                    : t("leaderboard.winters", { n: stats.winters })}
+                </span>
+              ) : null}
+              {stats.countriesAbroad > 0 ? (
+                <span className="text-teal-700">
+                  {t("leaderboard.countries", { n: stats.countriesAbroad + 1 })}
+                </span>
+              ) : null}
+            </div>
           </div>
         ) : (
-          <div className="mt-1 h-3 w-36 rounded bg-slate-200/70" />
+          <div className="text-[11px] leading-4">
+            <div className="flex h-4 items-center">
+              <div className="h-2.5 w-32 animate-pulse rounded bg-slate-200/70" />
+            </div>
+            <div className="flex h-3.5 items-center">
+              <div className="h-2 w-20 animate-pulse rounded bg-slate-200/70" />
+            </div>
+          </div>
         )}
       </div>
       <AnimatedNumber
