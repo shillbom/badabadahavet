@@ -22,6 +22,7 @@ export default defineConfig({
         "apple-touch-icon.png",
         "web-app-manifest-192x192.png",
         "web-app-manifest-512x512.png",
+        "splash.webp",
       ],
       workbox: {
         // Precache every built asset so the app works offline and chunk
