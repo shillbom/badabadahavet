@@ -6,6 +6,8 @@ React + Firebase **installable PWA**, mobile-browser-first. The UI is in Swedish
 by default with English as a second language — toggle it in the header (or on the
 login screen).
 
+Try it out at https://badligan.club
+
 ## Features
 
 - **Log a swim** — "here & now" (auto-attaches to the nearest known spot via GPS)
