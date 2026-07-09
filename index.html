@@ -138,103 +138,132 @@
     </noscript>
 
     <!-- Boot splash. Lives in the HTML so it paints during parse — before any
-         JS downloads or React boots. The styles are inline (not Tailwind) so
-         the splash never depends on the app's JS chunks. The <img> being in the
-         initial markup also lets the preload scanner fetch it immediately.
-         React renders an identical <FullSplash> (same class names) on mount, so
-         the handoff is seamless. Keep this in sync with components/Splash.tsx. -->
+         JS downloads or React boots. Pure CSS (no image, no Tailwind) so it
+         never depends on the app's JS/CSS chunks. React renders an identical
+         <FullSplash> (same class names) on mount, so the handoff is seamless.
+         Keep this in sync with components/Splash.tsx. -->
     <style>
       /* Tailwind's preflight hasn't loaded yet while this splash shows, so
-         zero the UA body margin ourselves — it would show as a white border
-         around the full-bleed artwork. */
+         zero the UA body margin ourselves — otherwise it shows as a white
+         gap above the full-height splash. */
       body {
         margin: 0;
       }
       .app-splash {
-        position: relative;
-        display: flex;
-        min-height: 100dvh;
-        flex-direction: column;
-        align-items: center;
-        /* The wordmark sits in the calm water between the trophy (ends
-           ~26% down the artwork) and the swim ring (starts ~43%). */
-        justify-content: flex-start;
-        overflow: hidden;
-        padding-top: 30dvh;
-        /* Tiny blurred inline preview (~1 KB) paints with the very first
-           frame; the real splash.webp fades in over it when it arrives.
-           Same artwork, so the crossfade is seamless. */
-        background: #b6e4ff
-          url("data:image/webp;base64,UklGRtgCAABXRUJQVlA4WAoAAAAgAAAAEwAAGAAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADZWUDgg6gAAABAGAJ0BKhQAGQA+tVCkS6cko6GoCqjgFolsAJ0y4iOYl/PVAFUdi+kxLiLHjPsVgLdPffwLQm/EAAD+4m/B9B3o7qVtBjd2ukaavn/2UX6RANHhj0mKjgmJGsCo43lmsKyGNnALPLK/+b0bycm7hm8TTvoucf0id5UmtC5rp+yuJezo4Gsiwov3yKyjDoN7RtbDA5b03gX6DqWTTOrzhxLeMOQFd1akRHH08Trp7ShCJUw4BLdmfCxrsPnhuIQW9h+1sAMP6uHqUV+TrRW1vTWR8SH7BBtTsi/p/ZD2/7DbUk4696+/EJAAAA==")
-          center / cover no-repeat;
-      }
-      .app-splash__bg {
-        position: absolute;
+        /* Fixed to the viewport so it always covers it exactly (it's also
+           the route Suspense fallback, so it can mount under a scroll
+           offset, and mobile URL-bar animation makes dvh lag a frame). */
+        position: fixed;
         inset: 0;
-        height: 100%;
+        display: flex;
+        justify-content: center;
+        /* wave-50 — the page canvas the app column sits on at wider widths. */
+        background: #eff9ff;
+      }
+      /* Mirror the app's mobile column (Layout uses max-w-md, centered) so
+         the very first paint matches the framed column the app renders in. */
+      .app-splash__panel {
+        position: relative;
         width: 100%;
-        object-fit: cover;
-        opacity: 0;
-        transition: opacity 0.5s ease-out;
+        max-width: 28rem;
+        height: 100%;
+        overflow: hidden;
+        /* Sky fading down into water. */
+        background: linear-gradient(
+          180deg,
+          #eff9ff 0%,
+          #def1ff 46%,
+          #b6e4ff 100%
+        );
       }
-      .app-splash__bg--loaded {
-        opacity: 1;
+      @media (min-width: 768px) {
+        .app-splash__panel {
+          border-left: 1px solid rgba(255, 255, 255, 0.6);
+          border-right: 1px solid rgba(255, 255, 255, 0.6);
+        }
       }
-      /* Ripple rings centered on the splash in the artwork (the swim ring
-         sits at ~56% height; object-fit keeps it near the viewport center
-         on portrait screens). */
-      .app-splash__ripples {
+      /* Undulating water: three big off-round discs stacked at the bottom.
+         Rotating a disc whose border-radius isn't a perfect circle makes its
+         top edge rise and fall — a wave crest travelling across the panel.
+         `rotate`/`translate` are independent transform properties, so the
+         disc keeps its horizontal centering while it spins. */
+      .app-splash__waves {
+        position: absolute;
+        inset-inline: 0;
+        bottom: 0;
+        height: 42%;
+      }
+      .app-splash__wave {
         position: absolute;
         left: 50%;
-        top: 56%;
+        top: 0;
+        width: 280%;
+        aspect-ratio: 1 / 1;
+        translate: -50% 0;
+        border-radius: 43% 45% 42% 46%;
+        transform-origin: 50% 50%;
       }
-      .app-splash__ripple {
-        position: absolute;
-        top: -5rem;
-        left: -5rem;
-        height: 10rem;
-        width: 10rem;
-        border-radius: 9999px;
-        border: 3px solid rgba(255, 255, 255, 0.85);
-        animation: app-splash-ripple 1.8s ease-out infinite;
+      .app-splash__wave--back {
+        background: #76d0ff; /* wave-300 */
+        opacity: 0.7;
+        animation: app-splash-roll 14s linear infinite;
       }
-      .app-splash__ripple:nth-child(2) {
-        animation-delay: 0.6s;
+      .app-splash__wave--mid {
+        top: 9%;
+        background: #2bb8ff; /* wave-400 */
+        opacity: 0.75;
+        animation: app-splash-roll 10s linear infinite reverse;
       }
-      .app-splash__ripple:nth-child(3) {
-        animation-delay: 1.2s;
+      .app-splash__wave--front {
+        top: 20%;
+        background: #019eea; /* wave-500 */
+        animation: app-splash-roll 7.5s linear infinite;
       }
+      /* Wordmark, resting just above the water line. Slides up along a 45°
+         diagonal from the lower-left on entry (equal x/y offset). */
       .app-splash__word {
-        position: relative;
+        position: absolute;
+        left: 50%;
+        bottom: 46%;
+        translate: -50% 0;
+        white-space: nowrap;
         font-family:
           "Caveat Brush", "Bricolage Grotesque", system-ui, sans-serif;
-        font-size: clamp(3.75rem, 15vw, 6rem);
+        font-size: clamp(3.5rem, 20vw, 5.25rem);
         line-height: 1;
-        color: #ffffff;
-        transform: rotate(-3deg);
+        color: #0264a0; /* wave-700 */
         text-shadow:
-          0 2px 0 rgba(2, 100, 160, 0.4),
-          0 8px 28px rgba(11, 72, 109, 0.55);
-        animation: app-splash-fade 0.6s ease-out 0.2s both;
+          0 2px 0 rgba(255, 255, 255, 0.65),
+          0 12px 26px rgba(11, 72, 109, 0.22);
+        animation: app-splash-slide 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.1s
+          both;
       }
-      @keyframes app-splash-ripple {
-        0% {
-          transform: scale(0.3);
-          opacity: 0.9;
+      @keyframes app-splash-roll {
+        from {
+          rotate: 0deg;
         }
-        100% {
-          transform: scale(1.7);
-          opacity: 0;
+        to {
+          rotate: 360deg;
         }
       }
-      @keyframes app-splash-fade {
+      @keyframes app-splash-slide {
         from {
           opacity: 0;
-          transform: rotate(-3deg) translateY(8px);
+          /* start down-left; delta to the resting spot is +64px x / -64px y = 45° */
+          translate: calc(-50% - 64px) 64px;
         }
         to {
           opacity: 1;
-          transform: rotate(-3deg);
+          translate: -50% 0;
+        }
+      }
+      /* Respect reduced-motion: keep the word in place, still the waves. */
+      @media (prefers-reduced-motion: reduce) {
+        .app-splash__word {
+          animation: none;
+        }
+        .app-splash__wave {
+          animation: none;
         }
       }
     </style>
@@ -244,18 +273,14 @@
   <body class="bg-sky-50">
     <div id="root">
       <div class="app-splash">
-        <img
-          class="app-splash__bg"
-          src="/splash.webp"
-          alt=""
-          onload="this.classList.add('app-splash__bg--loaded')"
-        />
-        <div class="app-splash__ripples" aria-hidden="true">
-          <span class="app-splash__ripple"></span>
-          <span class="app-splash__ripple"></span>
-          <span class="app-splash__ripple"></span>
+        <div class="app-splash__panel">
+          <div class="app-splash__waves" aria-hidden="true">
+            <span class="app-splash__wave app-splash__wave--back"></span>
+            <span class="app-splash__wave app-splash__wave--mid"></span>
+            <span class="app-splash__wave app-splash__wave--front"></span>
+          </div>
+          <div class="app-splash__word">Badligan</div>
         </div>
-        <div class="app-splash__word">Badligan</div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
