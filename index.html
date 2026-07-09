@@ -137,11 +137,14 @@
       />
     </noscript>
 
-    <!-- Boot splash. Lives in the HTML so it paints during parse — before any
-         JS downloads or React boots. Pure CSS (no image, no Tailwind) so it
-         never depends on the app's JS/CSS chunks. React renders an identical
-         <FullSplash> (same class names) on mount, so the handoff is seamless.
-         Keep this in sync with components/Splash.tsx. -->
+    <!-- Boot splash. Pure CSS (no image, no Tailwind) so it paints during
+         parse — before any JS downloads or React boots — and never depends on
+         the app's chunks. It lives OUTSIDE #root (a sibling overlay) so React
+         never clobbers it: the entrance plays uninterrupted, and the app boots
+         in #root underneath. A tiny controller (below) removes it with the
+         exit animation once the app signals ready (window.__dismissSplash).
+         The React <FullSplash> mirrors the resting scene for in-app route
+         loads — keep its markup/classes in sync with components/Splash.tsx. -->
     <style>
       /* Tailwind's preflight hasn't loaded yet while this splash shows, so
          zero the UA body margin ourselves — otherwise it shows as a white
@@ -216,48 +219,63 @@
         rotate: var(--tilt);
         transform-origin: 50% 50%;
       }
+      /* Each disc's crest curvature is the inverse of its size, so the upper,
+         crest-defining layers are kept small (tight, wavy arcs) while the
+         bottom two stay huge to guarantee the lower-right corner is always
+         covered. Strongly non-circular border-radii + differing spin speeds
+         and directions make the crests bob and cross for a busy, wavy sea. */
       .app-splash__wave {
         position: absolute;
         left: 50%;
-        width: 200%;
         aspect-ratio: 1 / 1;
         translate: -50% 0;
-        border-radius: 43% 45% 42% 46%;
         transform-origin: 50% 50%;
       }
       .app-splash__wave:nth-child(1) {
-        top: 50%;
+        top: 47%;
+        width: 120%;
+        border-radius: 42% 52% 38% 48% / 50% 40% 52% 42%;
         background: #b6e4ff; /* wave-200 */
         opacity: 0.6;
-        animation: app-splash-roll 16s linear infinite;
+        animation: app-splash-roll 9s linear infinite;
       }
       .app-splash__wave:nth-child(2) {
-        top: 52.5%;
+        top: 50.5%;
+        width: 132%;
+        border-radius: 50% 40% 52% 38% / 40% 52% 42% 50%;
         background: #8ed8ff;
         opacity: 0.7;
-        animation: app-splash-roll 13s linear infinite reverse;
+        animation: app-splash-roll 7s linear infinite reverse;
       }
       .app-splash__wave:nth-child(3) {
-        top: 55%;
+        top: 54%;
+        width: 148%;
+        border-radius: 38% 50% 42% 52% / 52% 42% 50% 40%;
         background: #76d0ff; /* wave-300 */
         opacity: 0.8;
-        animation: app-splash-roll 14s linear infinite;
+        animation: app-splash-roll 8.5s linear infinite;
       }
       .app-splash__wave:nth-child(4) {
-        top: 57.5%;
+        top: 57%;
+        width: 168%;
+        border-radius: 48% 40% 52% 42% / 42% 50% 40% 52%;
         background: #2bb8ff; /* wave-400 */
         opacity: 0.85;
-        animation: app-splash-roll 10s linear infinite reverse;
+        animation: app-splash-roll 6.5s linear infinite reverse;
       }
       .app-splash__wave:nth-child(5) {
         top: 60%;
+        width: 200%;
+        border-radius: 44% 48% 42% 46%;
         background: #019eea; /* wave-500 */
-        animation: app-splash-roll 11s linear infinite;
+        animation: app-splash-roll 9.5s linear infinite;
       }
       .app-splash__wave:nth-child(6) {
-        top: 62.5%;
+        top: 63%;
+        width: 240%;
+        border-radius: 46% 44% 47% 43%;
         background: #007ec6; /* wave-600 */
-        animation: app-splash-roll 7.5s linear infinite reverse;
+        animation: app-splash-roll 7s linear infinite reverse;
       }
       /* Wordmark, resting just above the water line and tilted to match it.
          Static by default (the React fallback renders this resting scene);
@@ -368,23 +386,52 @@
     <title>Badligan – logga bad, samla badplatser och tävla med vänner</title>
   </head>
   <body class="bg-sky-50">
-    <div id="root">
-      <div class="app-splash app-splash--intro">
-        <div class="app-splash__panel">
-          <div class="app-splash__waves" aria-hidden="true">
-            <div class="app-splash__water">
-              <span class="app-splash__wave"></span>
-              <span class="app-splash__wave"></span>
-              <span class="app-splash__wave"></span>
-              <span class="app-splash__wave"></span>
-              <span class="app-splash__wave"></span>
-              <span class="app-splash__wave"></span>
-            </div>
+    <div id="root"></div>
+    <!-- Boot splash overlay — sibling of #root so React leaves it alone. -->
+    <div id="app-splash" class="app-splash app-splash--intro">
+      <div class="app-splash__panel">
+        <div class="app-splash__waves" aria-hidden="true">
+          <div class="app-splash__water">
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
+            <span class="app-splash__wave"></span>
           </div>
-          <div class="app-splash__word">Badligan</div>
         </div>
+        <div class="app-splash__word">Badligan</div>
       </div>
     </div>
+    <script>
+      // Splash controller. The app (App.tsx) calls window.__dismissSplash()
+      // once it's booted; we then play the exit animation and remove the
+      // overlay, revealing the app in #root beneath. A minimum on-screen time
+      // guarantees the entrance is actually seen even when boot is instant
+      // (warm cache / already signed in).
+      (function () {
+        var MIN_VISIBLE_MS = 1100; // ~ the entrance duration + a beat
+        var start = Date.now();
+        window.__dismissSplash = function () {
+          var el = document.getElementById("app-splash");
+          if (!el || el.dataset.leaving) return;
+          var run = function () {
+            el.dataset.leaving = "1";
+            el.classList.remove("app-splash--intro");
+            el.classList.add("app-splash--leaving");
+            var remove = function () {
+              if (el.parentNode) el.remove();
+            };
+            el.addEventListener("animationend", function (e) {
+              if (e.target === el) remove();
+            });
+            setTimeout(remove, 1200); // safety net if animationend is missed
+          };
+          var wait = MIN_VISIBLE_MS - (Date.now() - start);
+          wait > 0 ? setTimeout(run, wait) : run();
+        };
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -13,7 +13,7 @@ import { Toaster } from "@/components/ui/Toast";
 import UpdatePrompt from "@/components/UpdatePrompt";
 import SinceLastVisit from "@/components/SinceLastVisit";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
-import { FullSplash, SplashScreen } from "@/components/Splash";
+import { FullSplash } from "@/components/Splash";
 import { rememberReturnPath } from "@/lib/utils";
 
 // A new version found this soon after the app opens is treated as "first
@@ -135,6 +135,17 @@ export default function App() {
   // overlay on top — it lifts away on its own once `booting` clears.
   const booting = Boolean((loading || (user && !profile)) && !googleOnboarding);
 
+  // Dismiss the boot splash overlay (the sibling of #root baked into
+  // index.html) once boot finishes; it plays its exit animation and removes
+  // itself, revealing the app underneath.
+  useEffect(() => {
+    if (!booting) {
+      (
+        window as typeof window & { __dismissSplash?: () => void }
+      ).__dismissSplash?.();
+    }
+  }, [booting]);
+
   // Routes that require login render a redirect to /login for guests.
   const protectedRoute = (el: React.ReactNode) =>
     user ? el : <LoginRedirect />;
@@ -191,7 +202,6 @@ export default function App() {
           </Routes>
         </Suspense>
       )}
-      <SplashScreen booting={booting} />
     </>
   );
 }
