@@ -163,6 +163,9 @@
       /* Mirror the app's mobile column (Layout uses max-w-md, centered) so
          the very first paint matches the framed column the app renders in. */
       .app-splash__panel {
+        /* One tilt angle shared by the water line and the wordmark, so the
+           word slides in along the same diagonal the waves sit on. */
+        --tilt: -13deg;
         position: relative;
         width: 100%;
         max-width: 28rem;
@@ -185,47 +188,55 @@
       /* Undulating water: three big off-round discs stacked at the bottom.
          Rotating a disc whose border-radius isn't a perfect circle makes its
          top edge rise and fall — a wave crest travelling across the panel.
-         `rotate`/`translate` are independent transform properties, so the
-         disc keeps its horizontal centering while it spins. */
+         The whole layer is tilted by --tilt so the water line runs on the
+         same diagonal as the wordmark. It's oversized and pivots on the
+         panel's bottom-centre, and the discs are far larger than the panel,
+         so tilting never uncovers a corner (the panel clips the overflow). */
       .app-splash__waves {
         position: absolute;
-        inset-inline: 0;
+        left: 50%;
         bottom: 0;
-        height: 42%;
+        width: 170%;
+        height: 70%;
+        translate: -50% 0;
+        rotate: var(--tilt);
+        transform-origin: 50% 100%;
       }
       .app-splash__wave {
         position: absolute;
         left: 50%;
-        top: 0;
-        width: 280%;
+        width: 240%;
         aspect-ratio: 1 / 1;
         translate: -50% 0;
         border-radius: 43% 45% 42% 46%;
         transform-origin: 50% 50%;
       }
       .app-splash__wave--back {
+        top: 20%;
         background: #76d0ff; /* wave-300 */
         opacity: 0.7;
         animation: app-splash-roll 14s linear infinite;
       }
       .app-splash__wave--mid {
-        top: 9%;
+        top: 30%;
         background: #2bb8ff; /* wave-400 */
         opacity: 0.75;
         animation: app-splash-roll 10s linear infinite reverse;
       }
       .app-splash__wave--front {
-        top: 20%;
+        top: 40%;
         background: #019eea; /* wave-500 */
         animation: app-splash-roll 7.5s linear infinite;
       }
-      /* Wordmark, resting just above the water line. Slides up along a 45°
-         diagonal from the lower-left on entry (equal x/y offset). */
+      /* Wordmark, resting just above the water line and tilted to match it,
+         so it slides in *along its own baseline* — the entry offset points
+         back down that same --tilt diagonal rather than straight sideways. */
       .app-splash__word {
         position: absolute;
         left: 50%;
-        bottom: 46%;
+        bottom: 50%;
         translate: -50% 0;
+        rotate: var(--tilt);
         white-space: nowrap;
         font-family:
           "Caveat Brush", "Bricolage Grotesque", system-ui, sans-serif;
@@ -235,7 +246,7 @@
         text-shadow:
           0 2px 0 rgba(255, 255, 255, 0.65),
           0 12px 26px rgba(11, 72, 109, 0.22);
-        animation: app-splash-slide 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.1s
+        animation: app-splash-slide 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.1s
           both;
       }
       @keyframes app-splash-roll {
@@ -246,11 +257,13 @@
           rotate: 360deg;
         }
       }
+      /* Offset resolved for --tilt: -13° — back down the baseline
+         (cos13°·120 ≈ 117 left, sin13°·120 ≈ 27 down). rotate stays at
+         --tilt throughout since the keyframes don't touch it. */
       @keyframes app-splash-slide {
         from {
           opacity: 0;
-          /* start down-left; delta to the resting spot is +64px x / -64px y = 45° */
-          translate: calc(-50% - 64px) 64px;
+          translate: calc(-50% - 117px) 27px;
         }
         to {
           opacity: 1;
