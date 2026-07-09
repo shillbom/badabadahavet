@@ -58,6 +58,8 @@ describe("computeMyStats", () => {
     // Trailing windows.
     expect(st.swimsLastWeek).toBe(2); // today + 2 days ago
     expect(st.swimsLastMonth).toBe(3); // + 10 days ago (40 days ago excluded)
+    // Unique places this month: p1 (twice) + p2 = 2; p3 (40 days ago) excluded.
+    expect(st.placesLastMonth).toBe(2);
   });
 
   it("counts a current day streak (today only = 1)", () => {
