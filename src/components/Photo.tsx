@@ -27,10 +27,13 @@ type PhotoProps = {
  * one place. Swims logged before thumbnails existed simply have no `thumb`.
  *
  * Cover-mode photos don't fetch the full image until the element is actually
- * near the viewport (IntersectionObserver, 250px margin — works for both
+ * near the viewport (IntersectionObserver, 800px margin — works for both
  * vertical lists and horizontal strips). Native loading="lazy" alone isn't
  * enough: its prefetch distance is thousands of pixels, so a photo-heavy spot
- * page would still download nearly everything up front.
+ * page would still download nearly everything up front. 800px keeps roughly
+ * a screenful of lookahead so normal scrolling doesn't catch images popping
+ * in; until the pixels arrive a pulsing ghost covers the box (thumb-less
+ * swims would otherwise sit as a flat block and then flash to the photo).
  */
 export default function Photo({
   src,
@@ -58,7 +61,7 @@ export default function Photo({
           io.disconnect();
         }
       },
-      { rootMargin: "250px" },
+      { rootMargin: "800px" },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -108,6 +111,8 @@ export default function Photo({
             loaded ? "opacity-0" : "opacity-100",
           )}
         />
+      ) : !loaded ? (
+        <div className="absolute inset-0 animate-pulse bg-wave-200/70" />
       ) : null}
       {nearView ? (
         <img
