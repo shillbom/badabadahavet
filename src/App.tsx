@@ -44,12 +44,19 @@ export default function App() {
   // Boot auth listener + data subscriptions once for the lifetime of the app.
   useEffect(() => useStore.getState()._startListening(), []);
 
-  // Warm the initial route chunk during boot so that when the splash lifts
-  // away, the Map is already rendered underneath — not the route-level
-  // Suspense fallback (another splash). Races Firebase auth; the small Map
-  // chunk usually wins, so the reveal lands straight on content.
+  // Warm the initial route chunk during boot and flag when it's ready. The
+  // splash exit waits on this (see below) so it lifts away onto the rendered
+  // Map — never onto the route-level Suspense fallback, which is an identical
+  // splash whose still-resting wordmark would "double" against the exiting
+  // one and read as a jump. Small chunk, loads in parallel with auth.
+  const [contentReady, setContentReady] = useState(false);
   useEffect(() => {
-    void import("@/pages/MapPage").catch(() => {});
+    let alive = true;
+    const ready = () => alive && setContentReady(true);
+    import("@/pages/MapPage").then(ready, ready);
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // A failed sign-in (e.g. the profile doc wouldn't load) signs the user back
@@ -136,15 +143,16 @@ export default function App() {
   const booting = Boolean((loading || (user && !profile)) && !googleOnboarding);
 
   // Dismiss the boot splash overlay (the sibling of #root baked into
-  // index.html) once boot finishes; it plays its exit animation and removes
-  // itself, revealing the app underneath.
+  // index.html) once boot finishes AND the Map chunk is loaded, so it lifts
+  // away onto real content rather than the identical route Suspense fallback.
+  // It then plays its exit animation and removes itself.
   useEffect(() => {
-    if (!booting) {
+    if (!booting && contentReady) {
       (
         window as typeof window & { __dismissSplash?: () => void }
       ).__dismissSplash?.();
     }
-  }, [booting]);
+  }, [booting, contentReady]);
 
   // Routes that require login render a redirect to /login for guests.
   const protectedRoute = (el: React.ReactNode) =>

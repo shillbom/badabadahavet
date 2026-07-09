@@ -136,6 +136,17 @@
         href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap"
       />
     </noscript>
+    <!-- Preload the splash wordmark's font (Caveat Brush, latin subset — the
+         range that covers "Badligan") so it's ready at first paint. Otherwise
+         the big centred word first renders in the fallback and visibly
+         reshapes/shifts when the async webfont swaps in. -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="https://fonts.gstatic.com/s/caveatbrush/v12/EYq0maZfwr9S9-ETZc3fKXt8XLOS.woff2"
+    />
 
     <!-- Boot splash. Pure CSS (no image, no Tailwind) so it paints during
          parse — before any JS downloads or React boots — and never depends on
