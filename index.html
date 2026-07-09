@@ -81,9 +81,11 @@
         min-height: 100dvh;
         flex-direction: column;
         align-items: center;
-        justify-content: flex-end;
+        /* The wordmark sits in the calm water between the trophy (ends
+           ~26% down the artwork) and the swim ring (starts ~43%). */
+        justify-content: flex-start;
         overflow: hidden;
-        padding-bottom: calc(10dvh + env(safe-area-inset-bottom, 0px));
+        padding-top: 30dvh;
         /* Tiny blurred inline preview (~1 KB) paints with the very first
            frame; the real splash.webp fades in over it when it arrives.
            Same artwork, so the crossfade is seamless. */
