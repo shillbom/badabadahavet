@@ -13,7 +13,7 @@ import { Toaster } from "@/components/ui/Toast";
 import UpdatePrompt from "@/components/UpdatePrompt";
 import SinceLastVisit from "@/components/SinceLastVisit";
 import { CelebrationOverlay, celebrate } from "@/components/Celebration";
-import { FullSplash } from "@/components/Splash";
+import { FullSplash, SplashScreen } from "@/components/Splash";
 import { rememberReturnPath } from "@/lib/utils";
 
 // A new version found this soon after the app opens is treated as "first
@@ -43,6 +43,14 @@ export default function App() {
 
   // Boot auth listener + data subscriptions once for the lifetime of the app.
   useEffect(() => useStore.getState()._startListening(), []);
+
+  // Warm the initial route chunk during boot so that when the splash lifts
+  // away, the Map is already rendered underneath — not the route-level
+  // Suspense fallback (another splash). Races Firebase auth; the small Map
+  // chunk usually wins, so the reveal lands straight on content.
+  useEffect(() => {
+    void import("@/pages/MapPage").catch(() => {});
+  }, []);
 
   // A failed sign-in (e.g. the profile doc wouldn't load) signs the user back
   // out and sets authError. Surface it as a toast and send them to /login
@@ -119,12 +127,13 @@ export default function App() {
     seenAchievements.current = persisted;
   }, [profile]);
 
-  // While the user doc is still hydrating after login we'd otherwise
-  // render Layout with an empty profile. Wait until both Firebase Auth
-  // and the Firestore user doc are ready before showing the authed UI.
-  if ((loading || (user && !profile)) && !googleOnboarding) {
-    return <FullSplash />;
-  }
+  // While the user doc is still hydrating after login we'd otherwise render
+  // Layout with an empty profile. Wait until both Firebase Auth and the
+  // Firestore user doc are ready before mounting the authed UI. Rather than
+  // early-returning the splash (which would unmount instantly, with no way to
+  // animate out), keep the app content gated on `booting` and lay the boot
+  // overlay on top — it lifts away on its own once `booting` clears.
+  const booting = Boolean((loading || (user && !profile)) && !googleOnboarding);
 
   // Routes that require login render a redirect to /login for guests.
   const protectedRoute = (el: React.ReactNode) =>
@@ -139,8 +148,8 @@ export default function App() {
         onDismiss={() => setUpdateReady(false)}
       />
       <CelebrationOverlay />
-      {!googleOnboarding ? <SinceLastVisit /> : null}
-      {googleOnboarding ? (
+      {!booting && !googleOnboarding ? <SinceLastVisit /> : null}
+      {booting ? null : googleOnboarding ? (
         <Suspense fallback={<FullSplash />}>
           <Routes>
             <Route path="auth/google" element={<GoogleAuthPage />} />
@@ -182,6 +191,7 @@ export default function App() {
           </Routes>
         </Suspense>
       )}
+      <SplashScreen booting={booting} />
     </>
   );
 }
