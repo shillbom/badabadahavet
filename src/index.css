@@ -136,7 +136,11 @@
      shrinking html. */
   @supports (height: 100dvh) {
     html {
+      /* Prefer the JS-measured height (src/lib/appHeight.ts) — iOS
+         standalone can launch with lying viewport units — with 100dvh as
+         the pre-JS fallback. */
       height: 100dvh;
+      height: var(--app-height, 100dvh);
     }
   }
   body {

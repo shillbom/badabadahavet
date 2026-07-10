@@ -78,7 +78,7 @@ export default function Layout() {
   return (
     <div
       className={cn(
-        "relative mx-auto flex h-[100dvh] w-full flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm",
+        "relative mx-auto flex h-[var(--app-height,100dvh)] w-full flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm",
         shellWidth,
       )}
     >

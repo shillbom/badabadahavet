@@ -2,7 +2,12 @@ import { StrictMode, lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import "./index.css";
+import { installAppHeight } from "./lib/appHeight";
 import { BootSplash } from "./components/Splash";
+
+// Before first paint: publish the real viewport height as --app-height so
+// the shell isn't sized by iOS's lying launch viewport (see appHeight.ts).
+installAppHeight();
 
 // App is lazy so the Firebase/Leaflet/page chunks load *after* first paint.
 // Auth state lives in the Zustand store (no provider needed), so importing the

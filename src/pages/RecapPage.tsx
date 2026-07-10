@@ -267,7 +267,7 @@ export default function RecapPage() {
   };
 
   return (
-    <div className="relative min-h-[calc(100dvh-4rem)] overflow-hidden px-4 pt-2 pb-12">
+    <div className="relative min-h-[calc(var(--app-height,100dvh)-4rem)] overflow-hidden px-4 pt-2 pb-12">
       <ConfettiBackdrop />
       <div className="relative z-10 mb-3 flex items-center gap-2">
         <button
