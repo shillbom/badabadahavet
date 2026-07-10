@@ -610,6 +610,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Fuska inte. Badligan ser allt, och den skvallrar.",
     "about.rules.shoulders":
       "Ett bad räknas när axlarna varit under vattnet. Tådoppning är sightseeing, inte badning.",
+    "about.rules.pool":
+      "Bad räknas bara i riktigt vatten. Hav, sjöar och sådant. Badkaret, poolen och baljan är uppfriskande, men nej.",
     "about.rules.scream":
       "Att skrika vid vinterdopp är tillåtet, uppmuntrat och ibland ofrivilligt.",
     "about.rules.brag":
@@ -1249,6 +1251,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "No cheating. Badligan sees everything, and it's a snitch.",
     "about.rules.shoulders":
       "A swim counts once your shoulders have been under the water. Toe-dipping is sightseeing, not swimming.",
+    "about.rules.pool":
+      "Swims only count in real water. Oceans, seas, lakes and the like. The bathtub, the pool and the bidet are all very refreshing, but no.",
     "about.rules.scream":
       "Screaming during winter dips is allowed, encouraged, and occasionally involuntary.",
     "about.rules.brag":
