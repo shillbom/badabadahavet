@@ -198,7 +198,7 @@ export default function LoginPage() {
 
   if (googleOnboarding) {
     return (
-      <div className="relative flex min-h-[100dvh] flex-col items-center justify-center px-5 py-10">
+      <div className="relative flex min-h-[var(--app-height,100dvh)] flex-col items-center justify-center px-5 py-10">
         <Ripples />
         <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 z-10 flex items-center gap-2">
           <button
@@ -332,7 +332,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-[100dvh] flex-col items-center justify-center px-5 py-10">
+    <div className="relative flex min-h-[var(--app-height,100dvh)] flex-col items-center justify-center px-5 py-10">
       <Ripples />
       <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 z-10 flex items-center gap-2">
         <button
