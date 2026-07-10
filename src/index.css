@@ -128,15 +128,20 @@
   .font-display {
     font-size-adjust: 0.5;
   }
-  /* iOS PWA: 100dvh includes areas that aren't truly available (home indicator
-     gap, etc.). -webkit-fill-available gives the exact usable height instead.
-     Scoped to iOS via -webkit-touch-callout so it doesn't affect other browsers. */
-  @supports (-webkit-touch-callout: none) {
+  /* The app shell sizes itself with 100dvh, so html must use the SAME unit:
+     the old -webkit-fill-available hack here reported a smaller (and stale)
+     height on iOS, leaving the document scrollable by the difference — the
+     "page doesn't fill the screen until you scroll" PWA bug. Home-indicator /
+     notch space is handled by viewport-fit=cover + safe-area paddings, not by
+     shrinking html. */
+  @supports (height: 100dvh) {
     html {
-      height: -webkit-fill-available;
+      height: 100dvh;
     }
   }
   body {
+    /* No rubber-band document scroll — inner panes scroll, the page doesn't. */
+    overscroll-behavior-y: none;
     @apply font-sans text-slate-900 antialiased;
     background:
       radial-gradient(1200px 600px at 20% -10%, #b6e4ff 0%, transparent 60%),
