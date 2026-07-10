@@ -34,6 +34,7 @@ import {
   updateUserLocale,
 } from "@/lib/data";
 import { useLocale } from "@/lib/i18n";
+import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { COUNTRIES, flagEmoji } from "@/lib/countries";
 import { ACHIEVEMENTS } from "@/lib/achievements";
 import {
@@ -149,14 +150,21 @@ export default function ProfilePage() {
 
     startBusy(async () => {
       try {
+        await assertTextAllowed(trimmed);
         // Keep Firebase Auth and Firestore in sync so ensureUserDoc
         // doesn't revert the name on the next app load.
         await updateProfile(auth.currentUser!, { displayName: trimmed });
         await updateUserDisplayName(user.uid, trimmed);
         toast.success(t("profile.name_saved"));
         setEditingName(false);
-      } catch {
-        toast.error(t("profile.save_error"));
+      } catch (err) {
+        toast.error(
+          t(
+            err instanceof ModerationError
+              ? "moderation.name_rejected"
+              : "profile.save_error",
+          ),
+        );
       }
     });
   }

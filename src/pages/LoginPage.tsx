@@ -25,6 +25,7 @@ import {
   pickerCodeFor,
 } from "@/lib/countries";
 import { reverseGeocodeCountry } from "@/lib/geocode";
+import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { consumeReturnPath } from "@/lib/utils";
 
 export default function LoginPage() {
@@ -114,6 +115,9 @@ export default function LoginPage() {
     setBusy(true);
     try {
       if (mode === "signup") {
+        // Check the name before creating the auth account, so a rejected
+        // name doesn't leave a half-onboarded user behind.
+        await assertTextAllowed(displayName);
         await signup(trimmedEmail, password, displayName, homeCountry);
         toast.success(t("auth.welcome", { name: displayName.trim() }));
       } else {
@@ -123,8 +127,12 @@ export default function LoginPage() {
       // Return the user to wherever they came from (e.g. /spot/abc).
       navigate(consumeReturnPath(), { replace: true });
     } catch (err) {
-      const msg = (err as Error).message ?? "";
-      toast.error(prettyAuthError(msg, t));
+      if (err instanceof ModerationError) {
+        toast.error(t("moderation.name_rejected"));
+      } else {
+        const msg = (err as Error).message ?? "";
+        toast.error(prettyAuthError(msg, t));
+      }
     } finally {
       setBusy(false);
     }
@@ -150,6 +158,9 @@ export default function LoginPage() {
     }
     setBusy(true);
     try {
+      // Only a name the user typed themselves needs checking — the
+      // fallback is the Google account name.
+      if (displayName.trim()) await assertTextAllowed(displayName);
       await completeGoogleOnboarding(displayName, homeCountry);
       toast.success(
         t("auth.welcome", {
@@ -158,6 +169,10 @@ export default function LoginPage() {
       );
       navigate(consumeReturnPath(), { replace: true });
     } catch (err) {
+      if (err instanceof ModerationError) {
+        toast.error(t("moderation.name_rejected"));
+        return;
+      }
       console.error("completeGoogleOnboarding error:", err);
       const msg = (err as Error).message ?? "";
       toast.error(prettyAuthError(msg, t));

@@ -105,6 +105,7 @@ Both deploy/preview workflows need these **GitHub repository secrets**:
 | `VITE_FIREBASE_MESSAGING_SENDER_ID` |                                                                                                                                                              |
 | `VITE_FIREBASE_APP_ID`              |                                                                                                                                                              |
 | `VITE_FIREBASE_MEASUREMENT_ID`      | Optional — `G-…` ID for Firebase Analytics                                                                                                                   |
+| `VITE_PERSPECTIVE_API_KEY`          | Optional — Perspective API key for client-side text moderation (see below)                                                                                   |
 
 ## Scripts
 
@@ -136,6 +137,31 @@ curl -X PATCH \
 
 In production: Firebase Console → Firestore → `users/{uid}` → add `isAdmin: true`.
 Security rules forbid clients from toggling this themselves.
+
+### Text moderation (Perspective API)
+
+User-supplied text (display names, group names, place names, swim notes) is
+screened with Google's free [Perspective API](https://developers.perspectiveapi.com/),
+which supports Swedish and English. Setup (optional — without keys all checks
+are skipped and everything behaves as before):
+
+1. Enable the **Comment Analyzer API** in Google Cloud and request Perspective
+   access (instant for the default 1 QPS quota).
+2. **Server (authoritative, used by `logSession` for notes + place names):**
+   create an API key restricted to the Comment Analyzer API, then
+   `firebase functions:secrets:set PERSPECTIVE_API_KEY`. ⚠️ Once
+   `functions/index.js` references this secret, functions deploys **fail until
+   the secret exists**, so set it before the next deploy.
+3. **Client (UX pre-check for names, so users get feedback before writing):**
+   create a second key restricted to the Comment Analyzer API **and** your
+   domains (same referrer allowlist as the Firebase key), and set it as
+   `VITE_PERSPECTIVE_API_KEY` in `.env.local` and the GitHub secret.
+
+All checks fail open: if Perspective is down, rate-limited, or unconfigured,
+writes go through — moderation must never block a legitimate swim. Thresholds
+live in `functions/moderation.js` / `src/lib/moderation.ts` (blocked at
+`SEVERE_TOXICITY ≥ 0.5` or any other attribute `≥ 0.8`; tune against real
+Swedish samples if it over- or under-triggers).
 
 ## Data model
 

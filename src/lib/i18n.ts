@@ -525,6 +525,11 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "admin.rename.prompt": 'Nytt namn för "{name}"',
     "admin.rename.success": "Plats omdöpt till {name}",
     "admin.rename.error": "Kunde inte döpa om",
+
+    // Content moderation (Perspective API)
+    "moderation.name_rejected": "Namnet verkar olämpligt — välj ett annat.",
+    "moderation.text_rejected":
+      "Texten verkar innehålla olämpligt språk — ändra och försök igen.",
     "admin.delete_spot": "Radera plats",
     "admin.delete_spot.confirm":
       'Radera "{name}" och alla {n} bad här? Det går inte att ångra.',
@@ -1159,6 +1164,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "admin.rename.prompt": 'New name for "{name}"',
     "admin.rename.success": "Renamed to {name}",
     "admin.rename.error": "Couldn't rename",
+
+    // Content moderation (Perspective API)
+    "moderation.name_rejected":
+      "That name seems inappropriate — please pick another.",
+    "moderation.text_rejected":
+      "That text seems to contain inappropriate language — please edit it and try again.",
     "admin.delete_spot": "Delete spot",
     "admin.delete_spot.confirm":
       'Delete "{name}" and all {n} swims here? This can\'t be undone.',
