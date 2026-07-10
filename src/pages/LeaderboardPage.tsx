@@ -3,11 +3,13 @@ import { motion, useInView } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
-import type { UserDoc, YearStats } from "@/lib/types";
-import { watchUsersByYearScore } from "@/lib/data";
+import type { SessionDoc, UserDoc, YearStats } from "@/lib/types";
+import { watchMemberSessions, watchUsersByYearScore } from "@/lib/data";
+import { splitTopList } from "@/lib/leaderboard";
 import { resolveBorder, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
+import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import { cn } from "@/lib/utils";
 
 type Row = {
@@ -63,6 +65,33 @@ export default function LeaderboardPage() {
       });
   }, [roster, groups, scope, year]);
 
+  // The global board only shows the podium (top 5) plus your own row with
+  // its true rank when you're further down. Group boards are small and
+  // personal, so they stay complete.
+  const TOP_N = 5;
+  const { top, me } = useMemo(
+    () =>
+      scope === "global"
+        ? splitTopList(rows, user?.uid, TOP_N)
+        : { top: rows, me: null },
+    [rows, scope, user],
+  );
+
+  // Group rows open the same member-swims sheet as the group view. The
+  // global board stays non-interactive (strangers' swims aren't a tap
+  // target). Sessions are subscribed per clicked member — one year-bounded
+  // single-uid query — instead of preloading the whole scope.
+  const isGroupScope = scope !== "global";
+  const places = useStore((s) => s.places);
+  const [selectedMember, setSelectedMember] = useState<UserDoc | null>(null);
+  const [memberSessions, setMemberSessions] = useState<SessionDoc[]>([]);
+  const selectedUid = selectedMember?.uid;
+  useEffect(() => {
+    if (!selectedUid) return;
+    setMemberSessions([]);
+    return watchMemberSessions([selectedUid], setMemberSessions);
+  }, [selectedUid]);
+
   return (
     <div className="px-4 pt-2">
       <div className="mb-3 flex items-end justify-between">
@@ -89,9 +118,33 @@ export default function LeaderboardPage() {
       </div>
 
       <ol className="space-y-2">
-        {rows.map((r, i) => (
-          <BoardRow key={r.uid} row={r} rank={i} isMe={user?.uid === r.uid} />
+        {top.map((r, i) => (
+          <BoardRow
+            key={r.uid}
+            row={r}
+            rank={i}
+            isMe={user?.uid === r.uid}
+            onSelect={
+              isGroupScope
+                ? () =>
+                    setSelectedMember(
+                      roster.find((u) => u.uid === r.uid) ?? null,
+                    )
+                : undefined
+            }
+          />
         ))}
+        {me ? (
+          <>
+            <li
+              aria-hidden
+              className="py-0.5 text-center text-sm leading-none tracking-[0.4em] text-slate-400 select-none"
+            >
+              •••
+            </li>
+            <BoardRow row={me.row} rank={me.rank} isMe />
+          </>
+        ) : null}
         {rows.length === 0 ? (
           <motion.li
             initial={{ opacity: 0, y: 6 }}
@@ -102,6 +155,13 @@ export default function LeaderboardPage() {
           </motion.li>
         ) : null}
       </ol>
+
+      <MemberSwimsSheet
+        member={selectedMember}
+        sessions={memberSessions}
+        places={places}
+        onClose={() => setSelectedMember(null)}
+      />
     </div>
   );
 }
@@ -110,10 +170,13 @@ function BoardRow({
   row: r,
   rank,
   isMe,
+  onSelect,
 }: {
   row: Row;
   rank: number;
   isMe: boolean;
+  /** When set, the card is tappable (group scopes); global rows pass nothing. */
+  onSelect?: () => void;
 }) {
   const t = useT();
   const podium = podiumStyle(rank);
@@ -139,10 +202,12 @@ function BoardRow({
       initial={{ opacity: 0, y: 8 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
       transition={{ type: "tween", duration: 0.2 }}
+      onClick={onSelect}
       className={cn(
         "glass relative flex items-center gap-3 p-3 transition",
         podium.cardClass,
         isMe && "ring-2 ring-wave-400",
+        onSelect && "cursor-pointer hover:bg-white/90 active:scale-[0.99]",
       )}
     >
       <div className="relative flex-none">
