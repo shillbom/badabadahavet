@@ -80,7 +80,7 @@ export default function MapPage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="glass flex items-center justify-between gap-3 p-3"
+          className="glass flex items-center justify-between gap-3 p-3 lg:mx-auto lg:w-full lg:max-w-2xl"
         >
           <div className="min-w-0">
             <div className="font-display text-base font-bold text-wave-900">
@@ -95,6 +95,7 @@ export default function MapPage() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
+          className="lg:mx-auto lg:w-full lg:max-w-2xl"
         >
           <h2 className="font-display text-2xl font-black text-wave-900">
             {greeting}
@@ -104,7 +105,7 @@ export default function MapPage() {
       )}
 
       {!isGuest ? (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2 lg:mx-auto lg:w-full lg:max-w-2xl">
           <Stat
             to="/history"
             size="lg"
