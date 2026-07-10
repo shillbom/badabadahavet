@@ -5,6 +5,7 @@ import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { UserDoc, YearStats } from "@/lib/types";
 import { watchUsersByYearScore } from "@/lib/data";
+import { splitTopList } from "@/lib/leaderboard";
 import { resolveBorder, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
@@ -63,6 +64,18 @@ export default function LeaderboardPage() {
       });
   }, [roster, groups, scope, year]);
 
+  // The global board only shows the podium (top 5) plus your own row with
+  // its true rank when you're further down. Group boards are small and
+  // personal, so they stay complete.
+  const TOP_N = 5;
+  const { top, me } = useMemo(
+    () =>
+      scope === "global"
+        ? splitTopList(rows, user?.uid, TOP_N)
+        : { top: rows, me: null },
+    [rows, scope, user],
+  );
+
   return (
     <div className="px-4 pt-2">
       <div className="mb-3 flex items-end justify-between">
@@ -89,9 +102,20 @@ export default function LeaderboardPage() {
       </div>
 
       <ol className="space-y-2">
-        {rows.map((r, i) => (
+        {top.map((r, i) => (
           <BoardRow key={r.uid} row={r} rank={i} isMe={user?.uid === r.uid} />
         ))}
+        {me ? (
+          <>
+            <li
+              aria-hidden
+              className="py-0.5 text-center text-sm leading-none tracking-[0.4em] text-slate-400 select-none"
+            >
+              •••
+            </li>
+            <BoardRow row={me.row} rank={me.rank} isMe />
+          </>
+        ) : null}
         {rows.length === 0 ? (
           <motion.li
             initial={{ opacity: 0, y: 6 }}
