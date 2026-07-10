@@ -20,6 +20,7 @@ import {
   Star,
   Trash2,
   Trophy,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import { updateProfile } from "firebase/auth";
@@ -462,6 +463,15 @@ export default function ProfilePage() {
 
       {/* About + sign out */}
       <div className="mt-8 space-y-2">
+        {profile?.isAdmin ? (
+          <Link
+            to="/admin/users"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            {t("admin.users.cta")}
+          </Link>
+        ) : null}
         <Link
           to="/about"
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white"

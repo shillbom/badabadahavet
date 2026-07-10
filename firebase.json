@@ -47,6 +47,10 @@
         "source": "/api/deleteAccount",
         "function": { "functionId": "deleteAccount", "region": "europe-west1" }
       },
+      {
+        "source": "/api/banUser",
+        "function": { "functionId": "banUser", "region": "europe-west1" }
+      },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [

@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
+import { getAuth } from "firebase-admin/auth";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
@@ -904,6 +905,67 @@ export const removeSession = onCall(
 );
 
 /**
+ * Wipe every trace of a user's data: their sessions (and photos), their
+ * group memberships (transferring ownership or deleting the group as
+ * needed), and their user doc. Shared by the "delete my account" flow and
+ * the admin `banUser` function. Does not touch Firebase Auth — callers
+ * decide whether to delete or disable the auth account afterwards.
+ */
+async function purgeUserData(uid) {
+  const db = getFirestore();
+
+  // Sessions (+ collect photo paths for cleanup).
+  const sessions = await db
+    .collection("sessions")
+    .where("uid", "==", uid)
+    .get();
+  const photoPaths = [];
+  let batch = db.batch();
+  let ops = 0;
+  for (const doc of sessions.docs) {
+    const path = doc.data().photoPath;
+    if (typeof path === "string") photoPaths.push(path);
+    batch.delete(doc.ref);
+    if (++ops >= 450) {
+      await batch.commit();
+      batch = db.batch();
+      ops = 0;
+    }
+  }
+  if (ops > 0) await batch.commit();
+
+  // Group memberships — mirror leaveGroup's 3-case handling per group.
+  const groups = await db
+    .collection("groups")
+    .where("members", "array-contains", uid)
+    .get();
+  for (const g of groups.docs) {
+    const data = g.data();
+    const remaining = (data.members ?? []).filter((m) => m !== uid);
+    if (remaining.length === 0) {
+      await g.ref.delete();
+    } else if (data.createdBy === uid) {
+      await g.ref.update({ members: remaining, createdBy: remaining[0] });
+    } else {
+      await g.ref.update({ members: FieldValue.arrayRemove(uid) });
+    }
+  }
+
+  await db.collection("users").doc(uid).delete();
+
+  // Best-effort photo cleanup.
+  await Promise.all(
+    photoPaths.map((p) =>
+      getStorage()
+        .bucket()
+        .file(p)
+        .delete()
+        .catch(() => {}),
+    ),
+  );
+}
+
+/**
  * Callable: delete the caller's account data. Removes all their sessions
  * (and photos), drops them from every group (transferring ownership or
  * deleting the group when needed), and deletes the user doc. The client
@@ -923,58 +985,89 @@ export const deleteAccount = onCall(
     if (!req.auth) {
       throw new HttpsError("unauthenticated", "Sign in required.");
     }
-    const uid = req.auth.uid;
+    await purgeUserData(req.auth.uid);
+    return { ok: true };
+  },
+);
+
+/**
+ * Callable (admin only): ban a user. Wipes their app data (sessions,
+ * photos, group memberships, user doc) and bans them from Firebase Auth by
+ * *disabling* the account — Firebase's mechanism for blocking sign-in.
+ * (Deleting the auth account would let them immediately re-register.) An
+ * audit record is written to `bannedUsers/{uid}` before the data is purged.
+ *
+ * Admins can't ban themselves or other admins.
+ */
+export const banUser = onCall(
+  {
+    region: PROJECT_REGION,
+    cors: true,
+    invoker: "public",
+    maxInstances: 5,
+    memory: "256MiB",
+    timeoutSeconds: 120,
+  },
+  async (req) => {
+    if (!req.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const callerUid = req.auth.uid;
+    const targetUid = req.data?.uid;
+    if (typeof targetUid !== "string" || !targetUid) {
+      throw new HttpsError("invalid-argument", "uid is required.");
+    }
+    if (targetUid === callerUid) {
+      throw new HttpsError("failed-precondition", "You can't ban yourself.");
+    }
+
     const db = getFirestore();
 
-    // Sessions (+ collect photo paths for cleanup).
-    const sessions = await db
-      .collection("sessions")
-      .where("uid", "==", uid)
-      .get();
-    const photoPaths = [];
-    let batch = db.batch();
-    let ops = 0;
-    for (const doc of sessions.docs) {
-      const path = doc.data().photoPath;
-      if (typeof path === "string") photoPaths.push(path);
-      batch.delete(doc.ref);
-      if (++ops >= 450) {
-        await batch.commit();
-        batch = db.batch();
-        ops = 0;
-      }
-    }
-    if (ops > 0) await batch.commit();
-
-    // Group memberships — mirror leaveGroup's 3-case handling per group.
-    const groups = await db
-      .collection("groups")
-      .where("members", "array-contains", uid)
-      .get();
-    for (const g of groups.docs) {
-      const data = g.data();
-      const remaining = (data.members ?? []).filter((m) => m !== uid);
-      if (remaining.length === 0) {
-        await g.ref.delete();
-      } else if (data.createdBy === uid) {
-        await g.ref.update({ members: remaining, createdBy: remaining[0] });
-      } else {
-        await g.ref.update({ members: FieldValue.arrayRemove(uid) });
-      }
+    // Caller must be an admin (Admin SDK bypasses rules, so check here).
+    const callerSnap = await db.collection("users").doc(callerUid).get();
+    if (!callerSnap.exists || callerSnap.data().isAdmin !== true) {
+      throw new HttpsError("permission-denied", "Admins only.");
     }
 
-    await db.collection("users").doc(uid).delete();
+    // Don't let admins ban each other.
+    const targetSnap = await db.collection("users").doc(targetUid).get();
+    if (targetSnap.exists && targetSnap.data().isAdmin === true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "You can't ban another admin.",
+      );
+    }
 
-    // Best-effort photo cleanup.
-    await Promise.all(
-      photoPaths.map((p) =>
-        getStorage()
-          .bucket()
-          .file(p)
-          .delete()
-          .catch(() => {}),
-      ),
-    );
+    // Best-effort email lookup for the audit record before we disable.
+    let email = null;
+    try {
+      email = (await getAuth().getUser(targetUid)).email ?? null;
+    } catch (e) {
+      logger.warn("auth lookup failed", { targetUid, error: String(e) });
+    }
+
+    // Audit trail — written before the user doc is deleted.
+    await db
+      .collection("bannedUsers")
+      .doc(targetUid)
+      .set({
+        uid: targetUid,
+        displayName: targetSnap.exists
+          ? (targetSnap.data().displayName ?? null)
+          : null,
+        email,
+        bannedAt: Date.now(),
+        bannedBy: callerUid,
+      });
+
+    await purgeUserData(targetUid);
+
+    // Ban at the Auth level: disable so they can't sign back in.
+    try {
+      await getAuth().updateUser(targetUid, { disabled: true });
+    } catch (e) {
+      logger.warn("auth disable failed", { targetUid, error: String(e) });
+    }
 
     return { ok: true };
   },

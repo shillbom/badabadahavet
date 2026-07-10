@@ -108,6 +108,17 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // bannedUsers/{uid}
+    //   Audit trail written only by the banUser Cloud Function (Admin
+    //   SDK bypasses these rules). Admins may read it; no one writes
+    //   from the client.
+    // ============================================================
+    match /bannedUsers/{uid} {
+      allow read: if isAdminUser();
+      allow write: if false;
+    }
+
+    // ============================================================
     // places/{id}
     //   World-readable so logged-out visitors can browse. Admins may
     //   rename/delete for moderation.

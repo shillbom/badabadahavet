@@ -48,6 +48,15 @@ export type ToswimEntry = {
   addedAt: number;
 };
 
+/** Audit record for a banned user, written by the banUser Cloud Function. */
+export type BannedUser = {
+  uid: string;
+  displayName: string | null;
+  email: string | null;
+  bannedAt: number;
+  bannedBy: string;
+};
+
 export type PlaceDoc = {
   id: string;
   name: string;
