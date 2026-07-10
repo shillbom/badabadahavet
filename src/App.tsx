@@ -202,6 +202,10 @@ export default function App() {
                 element={protectedRoute(<Pages.Profile />)}
               />
               <Route path="toswim" element={protectedRoute(<Pages.Toswim />)} />
+              <Route
+                path="admin/users"
+                element={protectedRoute(<Pages.AdminUsers />)}
+              />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

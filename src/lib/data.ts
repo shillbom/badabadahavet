@@ -24,7 +24,7 @@ import {
   deleteObject,
 } from "firebase/storage";
 import { cloudFn, db, storage } from "@/firebase";
-import { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
+import { GroupDoc, PlaceDoc, SessionDoc, UserDoc, BannedUser } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS } from "./scoring";
 import { compressImage, makeThumbDataUrl } from "./image";
@@ -699,4 +699,33 @@ export async function adminDeletePlace(placeId: string) {
   // hammering the function with a burst.
   for (const s of sessions.docs) await removeSession(s.id);
   await deleteDoc(doc(placesCol, placeId));
+}
+
+/** Every user (admin view). Readable by any signed-in user per the rules. */
+export async function fetchAllUsers(): Promise<UserDoc[]> {
+  const snap = await getDocs(usersCol);
+  return snap.docs
+    .map((d) => d.data() as UserDoc)
+    .sort((a, b) =>
+      (a.displayName ?? "").localeCompare(b.displayName ?? "", undefined, {
+        sensitivity: "base",
+      }),
+    );
+}
+
+/** The ban audit list, most-recent first (admin view). */
+export async function fetchBannedUsers(): Promise<BannedUser[]> {
+  const snap = await getDocs(collection(db, "bannedUsers"));
+  return snap.docs
+    .map((d) => d.data() as BannedUser)
+    .sort((a, b) => b.bannedAt - a.bannedAt);
+}
+
+/**
+ * Ban a user via the admin-only `banUser` Cloud Function: wipes their app
+ * data and disables their Firebase Auth account so they can't sign back in.
+ */
+export async function banUser(uid: string): Promise<void> {
+  const callable = cloudFn<{ uid: string }, { ok: true }>("banUser");
+  await callable({ uid });
 }
