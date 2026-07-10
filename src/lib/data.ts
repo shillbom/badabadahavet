@@ -311,6 +311,10 @@ export async function createSession(opts: {
     const r = storageRef(storage, photoPath);
     await uploadBytes(r, compressed, {
       contentType: compressed.type || "image/jpeg",
+      // The path is unique per upload and the object is never rewritten, so
+      // browsers/CDNs may cache the download URL forever — saves re-fetching
+      // photos that the service-worker cache has evicted.
+      cacheControl: "public, max-age=31536000, immutable",
     });
     photoUrl = await getDownloadURL(r);
   }
@@ -369,28 +373,46 @@ export function watchUserSessions(
   );
 }
 
-/** Subscribe to all sessions for a fixed set of users (e.g. a group). */
+/**
+ * Subscribe to this year's sessions for a fixed set of users (e.g. a group).
+ * Year-bounded like `watchAllSessions` — the group board compares the
+ * current season, and an unbounded query would re-download every member's
+ * full history and keep growing each year.
+ */
 export function watchMemberSessions(
   uids: string[],
   cb: (sessions: SessionDoc[]) => void,
+  year: number = new Date().getFullYear(),
 ): Unsubscribe {
   if (uids.length === 0) {
     cb([]);
     return () => {};
   }
+  const start = new Date(year, 0, 1).getTime();
+  const end = new Date(year + 1, 0, 1).getTime();
   // Firestore `in` supports up to 30 values; chunk if needed.
   const chunks: string[][] = [];
   for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
 
   const results = new Map<string, SessionDoc[]>();
   const unsubs = chunks.map((chunk, idx) =>
-    onSnapshot(query(sessionsCol, where("uid", "in", chunk)), (snap) => {
-      results.set(
-        String(idx),
-        snap.docs.map((d) => d.data() as SessionDoc),
-      );
-      cb([...results.values()].flat());
-    }),
+    onSnapshot(
+      query(
+        sessionsCol,
+        where("uid", "in", chunk),
+        where("date", ">=", start),
+        where("date", "<", end),
+        // Matches the existing (uid, date DESC) composite index.
+        orderBy("date", "desc"),
+      ),
+      (snap) => {
+        results.set(
+          String(idx),
+          snap.docs.map((d) => d.data() as SessionDoc),
+        );
+        cb([...results.values()].flat());
+      },
+    ),
   );
   return () => unsubs.forEach((u) => u());
 }

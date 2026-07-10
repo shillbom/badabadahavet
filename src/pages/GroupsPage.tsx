@@ -436,6 +436,8 @@ function GroupDetailSheet({
 
   useEffect(() => {
     if (!group) return;
+    // Current year only — the board compares this season, and the query
+    // stays bounded as members' histories grow.
     return watchMemberSessions(group.members, setAllSessions);
   }, [membersKey]);
 
