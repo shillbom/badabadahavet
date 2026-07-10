@@ -65,8 +65,23 @@ export default function Layout() {
   // the bottom padding so it doesn't create dead scroll space below the map.
   const isMapPage = location.pathname === "/";
 
+  // Desktop: the phone-column shell relaxes per route. The map gets the
+  // whole viewport (maps want space), story-style recap stays phone-shaped,
+  // and everything else widens to a comfortable reading column.
+  const isRecap = location.pathname.startsWith("/recap");
+  const shellWidth = isMapPage
+    ? "max-w-md lg:max-w-none"
+    : isRecap
+      ? "max-w-md"
+      : "max-w-md lg:max-w-2xl";
+
   return (
-    <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm">
+    <div
+      className={cn(
+        "relative mx-auto flex h-[100dvh] w-full flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm",
+        shellWidth,
+      )}
+    >
       <header className="sticky top-0 z-[1000] px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3">
         {/* Backdrop fade — a blurred white gradient that extends past the
             header and is masked to dissolve into the content, so there's no
@@ -207,7 +222,7 @@ export default function Layout() {
         {!hideChrome && !isGuest ? (
           <div
             key="fab-shell"
-            className="pointer-events-none fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center"
+            className="pointer-events-none fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center md:bottom-10"
           >
             <motion.button
               initial={{ y: 80, opacity: 0 }}
@@ -238,7 +253,7 @@ export default function Layout() {
             animate={{ y: 0 }}
             exit={{ y: 80 }}
             transition={{ type: "spring", stiffness: 280, damping: 28 }}
-            className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] backdrop-blur"
+            className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] backdrop-blur md:bottom-4 md:rounded-3xl md:border md:pb-2 md:shadow-xl md:shadow-wave-900/10"
           >
             <NavTab
               to="/"
