@@ -3,12 +3,13 @@ import { motion, useInView } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
-import type { UserDoc, YearStats } from "@/lib/types";
-import { watchUsersByYearScore } from "@/lib/data";
+import type { SessionDoc, UserDoc, YearStats } from "@/lib/types";
+import { watchMemberSessions, watchUsersByYearScore } from "@/lib/data";
 import { splitTopList } from "@/lib/leaderboard";
 import { resolveBorder, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
+import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import { cn } from "@/lib/utils";
 
 type Row = {
@@ -76,6 +77,21 @@ export default function LeaderboardPage() {
     [rows, scope, user],
   );
 
+  // Group rows open the same member-swims sheet as the group view. The
+  // global board stays non-interactive (strangers' swims aren't a tap
+  // target). Sessions are subscribed per clicked member — one year-bounded
+  // single-uid query — instead of preloading the whole scope.
+  const isGroupScope = scope !== "global";
+  const places = useStore((s) => s.places);
+  const [selectedMember, setSelectedMember] = useState<UserDoc | null>(null);
+  const [memberSessions, setMemberSessions] = useState<SessionDoc[]>([]);
+  const selectedUid = selectedMember?.uid;
+  useEffect(() => {
+    if (!selectedUid) return;
+    setMemberSessions([]);
+    return watchMemberSessions([selectedUid], setMemberSessions);
+  }, [selectedUid]);
+
   return (
     <div className="px-4 pt-2">
       <div className="mb-3 flex items-end justify-between">
@@ -103,7 +119,20 @@ export default function LeaderboardPage() {
 
       <ol className="space-y-2">
         {top.map((r, i) => (
-          <BoardRow key={r.uid} row={r} rank={i} isMe={user?.uid === r.uid} />
+          <BoardRow
+            key={r.uid}
+            row={r}
+            rank={i}
+            isMe={user?.uid === r.uid}
+            onSelect={
+              isGroupScope
+                ? () =>
+                    setSelectedMember(
+                      roster.find((u) => u.uid === r.uid) ?? null,
+                    )
+                : undefined
+            }
+          />
         ))}
         {me ? (
           <>
@@ -126,6 +155,13 @@ export default function LeaderboardPage() {
           </motion.li>
         ) : null}
       </ol>
+
+      <MemberSwimsSheet
+        member={selectedMember}
+        sessions={memberSessions}
+        places={places}
+        onClose={() => setSelectedMember(null)}
+      />
     </div>
   );
 }
@@ -134,10 +170,13 @@ function BoardRow({
   row: r,
   rank,
   isMe,
+  onSelect,
 }: {
   row: Row;
   rank: number;
   isMe: boolean;
+  /** When set, the card is tappable (group scopes); global rows pass nothing. */
+  onSelect?: () => void;
 }) {
   const t = useT();
   const podium = podiumStyle(rank);
@@ -163,10 +202,12 @@ function BoardRow({
       initial={{ opacity: 0, y: 8 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
       transition={{ type: "tween", duration: 0.2 }}
+      onClick={onSelect}
       className={cn(
         "glass relative flex items-center gap-3 p-3 transition",
         podium.cardClass,
         isMe && "ring-2 ring-wave-400",
+        onSelect && "cursor-pointer hover:bg-white/90 active:scale-[0.99]",
       )}
     >
       <div className="relative flex-none">
