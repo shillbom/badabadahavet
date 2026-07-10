@@ -23,6 +23,7 @@ import {
   updateUserLastLocation,
 } from "@/lib/data";
 import { checkImageFile, ImageProcessingError } from "@/lib/image";
+import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { reverseGeocodeCountry } from "@/lib/geocode";
 import { haversineMeters } from "@/lib/utils";
 import {
@@ -279,6 +280,9 @@ export default function LogSessionPage() {
     }
     setBusy(true);
     try {
+      // Pre-check the note before the (potentially slow) photo upload —
+      // the logSession function re-checks it authoritatively anyway.
+      if (note.trim()) await assertTextAllowed(note);
       const place = await findOrCreatePlace({
         name: finalName,
         lat: coords.lat,
@@ -340,8 +344,9 @@ export default function LogSessionPage() {
       }
       navigate("/history");
     } catch (err) {
-      // A too-large / unreadable photo gets a specific message; everything
-      // else falls back to the generic "couldn't save".
+      // A too-large / unreadable photo gets a specific message, a name or
+      // note rejected by moderation gets another; everything else falls
+      // back to the generic "couldn't save".
       if (err instanceof ImageProcessingError) {
         toast.error(
           t(
@@ -350,6 +355,8 @@ export default function LogSessionPage() {
               : "log.error.image_failed",
           ),
         );
+      } else if (err instanceof ModerationError) {
+        toast.error(t("moderation.text_rejected"));
       } else {
         toast.error(t("log.error.generic"));
       }

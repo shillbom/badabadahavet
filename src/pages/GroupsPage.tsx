@@ -32,6 +32,7 @@ import {
 } from "@/lib/data";
 import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
+import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { longestStreakInYear } from "@/lib/streak";
 import { DAY_MS, dayStartMs as dayStart } from "@/lib/date";
 import { cn } from "@/lib/utils";
@@ -162,11 +163,18 @@ export default function GroupsPage() {
     }
     setBusy(true);
     try {
+      await assertTextAllowed(groupName);
       const g = await createGroup({ name: groupName, uid: user.uid });
       toast.success(t("groups.create.success", { name: g.name, code: g.code }));
       setGroupName("");
-    } catch {
-      toast.error(t("groups.create.error.generic"));
+    } catch (err) {
+      toast.error(
+        t(
+          err instanceof ModerationError
+            ? "moderation.name_rejected"
+            : "groups.create.error.generic",
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -622,11 +630,18 @@ function GroupDetailSheet({
     }
     setSavingMeta(true);
     try {
+      await assertTextAllowed(trimmed);
       await updateGroupMeta(shown.id, { name: trimmed, emoji: shown.emoji });
       toast.success(t("groups.detail.rename.success"));
       setEditingName(false);
-    } catch {
-      toast.error(t("groups.detail.rename.error"));
+    } catch (err) {
+      toast.error(
+        t(
+          err instanceof ModerationError
+            ? "moderation.name_rejected"
+            : "groups.detail.rename.error",
+        ),
+      );
     } finally {
       setSavingMeta(false);
     }

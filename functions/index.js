@@ -3,6 +3,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
+import { defineSecret } from "firebase-functions/params";
 import {
   swimYear,
   isWinterMonth,
@@ -11,10 +12,16 @@ import {
   sumYearPoints,
   yearStats,
 } from "./scoring.js";
+import { checkTextAllowed } from "./moderation.js";
 
 initializeApp();
 
 const PROJECT_REGION = "europe-west1";
+
+// Perspective API key for text moderation in logSession. Set it once with
+//   firebase functions:secrets:set PERSPECTIVE_API_KEY
+// before deploying; when unset (e.g. emulators) moderation is skipped.
+const perspectiveApiKey = defineSecret("PERSPECTIVE_API_KEY");
 
 // Throttle: how recent a stored reading has to be to be considered
 // "fresh enough" — we won't re-fetch from the upstream API during this
@@ -583,6 +590,7 @@ export const logSession = onCall(
     maxInstances: 10,
     memory: "256MiB",
     timeoutSeconds: 30,
+    secrets: [perspectiveApiKey],
   },
   async (req) => {
     if (!req.auth) {
@@ -645,6 +653,27 @@ export const logSession = onCall(
     // loading any sessions. "none" means no frame.
     const border =
       typeof d.border === "string" && d.border.length <= 20 ? d.border : "none";
+
+    // Authoritative moderation of user-supplied text (the client-side
+    // check in src/lib/moderation.ts is just UX and can be bypassed).
+    // checkTextAllowed fails open on API errors/timeouts, so an outage
+    // never blocks legitimate swims. Kept outside the transaction —
+    // network calls don't belong in one.
+    const modKey = perspectiveApiKey.value();
+    if (modKey) {
+      const [nameOk, noteOk] = await Promise.all([
+        checkTextAllowed(placeName, modKey),
+        note ? checkTextAllowed(note, modKey) : true,
+      ]);
+      if (!nameOk || !noteOk) {
+        logger.info("logSession rejected by moderation", { uid });
+        throw new HttpsError(
+          "invalid-argument",
+          "Text rejected by moderation.",
+          { reason: "moderation" },
+        );
+      }
+    }
 
     const db = getFirestore();
     const userRef = db.collection("users").doc(uid);

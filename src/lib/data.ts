@@ -28,6 +28,7 @@ import { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS } from "./scoring";
 import { compressImage, makeThumbDataUrl } from "./image";
+import { assertTextAllowed, ModerationError } from "./moderation";
 
 const usersCol = collection(db, "users");
 const placesCol = collection(db, "places");
@@ -243,6 +244,11 @@ export async function findOrCreatePlace(opts: {
   }
   if (best) return best;
 
+  // Only brand-new names get the moderation pre-check — matching an
+  // existing place must never be blocked by a false positive on a name
+  // that's already on the map.
+  await assertTextAllowed(opts.name);
+
   const ref = doc(placesCol);
   const data: PlaceDoc = {
     id: ref.id,
@@ -335,20 +341,29 @@ export async function createSession(opts: {
     },
     LoggedSession
   >("logSession");
-  const res = await callable({
-    placeId: opts.place.id,
-    placeName: opts.place.name,
-    lat: opts.lat,
-    lng: opts.lng,
-    date: opts.date,
-    note: opts.note?.trim() || undefined,
-    country: opts.country ?? undefined,
-    photoUrl,
-    photoPath,
-    photoThumb,
-    border: opts.border,
-  });
-  return res.data;
+  try {
+    const res = await callable({
+      placeId: opts.place.id,
+      placeName: opts.place.name,
+      lat: opts.lat,
+      lng: opts.lng,
+      date: opts.date,
+      note: opts.note?.trim() || undefined,
+      country: opts.country ?? undefined,
+      photoUrl,
+      photoPath,
+      photoThumb,
+      border: opts.border,
+    });
+    return res.data;
+  } catch (err) {
+    // The function's authoritative moderation check flags its rejection
+    // via details — surface it as the same error the client-side
+    // pre-checks throw so callers show one specific message.
+    const details = (err as { details?: { reason?: string } })?.details;
+    if (details?.reason === "moderation") throw new ModerationError();
+    throw err;
+  }
 }
 
 /**
