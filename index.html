@@ -6,7 +6,22 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no"
     />
-    <meta name="theme-color" content="#0ea5e9" />
+    <!-- Status-bar / browser-UI tint. Badligan has no dark theme — the UI is
+         always light blue — so we pin theme-color to the app's top colour in
+         BOTH colour schemes. Without the dark-scheme entry iOS/Safari darkens
+         the single value in dark mode, which is what turned the status bar
+         grey. Keep light and dark identical so it always matches the app. -->
+    <meta name="theme-color" content="#eff9ff" />
+    <meta
+      name="theme-color"
+      content="#eff9ff"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#eff9ff"
+      media="(prefers-color-scheme: dark)"
+    />
     <meta
       name="format-detection"
       content="telephone=no, date=no, email=no, address=no"
@@ -92,10 +107,13 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Badligan" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
+    <!-- `default` (not black-translucent): Badligan is a light app, so we want
+         DARK status-bar text over our light background. black-translucent forces
+         WHITE text (unreadable here) and floats the document up under the status
+         bar, which also produced the pale bar at the bottom. `default` keeps the
+         content below the status bar and lets the light theme-color above tint
+         it. viewport-fit=cover + the safe-area paddings still fill the screen. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
     <!-- Favicons. Source files live in public/ and Vite copies them as-is.
          The 5 MB SVG export isn't linked — raster PNGs are cheaper at every
