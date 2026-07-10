@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Refresh water temperatures for every seeded place.
+ * Refresh water temperatures for every seeded place whose stored reading
+ * has gone stale (pass --all to force every place).
  *
  *   - Places preferring Hav och Vatten (SE) are read from the `badplatsen`
  *     API first. Most baths have no real-time sensor, so when that returns
@@ -26,6 +27,8 @@
  *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
  *     node scripts/update-temperatures.mjs --write   # commit updates
  *
+ *   node scripts/update-temperatures.mjs --write --all  # ignore freshness
+ *
  * The GitHub Action at .github/workflows/temperatures.yml runs this
  * on a schedule.
  */
@@ -35,7 +38,16 @@ import { getFirestore } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
 
 const WRITE = process.argv.includes("--write");
+const ALL = process.argv.includes("--all");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "badligan";
+
+// Only refresh places whose stored reading is at least this old. The
+// scheduled run is daily, so yesterday's readings always qualify, while
+// places refreshed on demand earlier the same day (the refreshPlaceTemp
+// callable) are skipped — every skip saves a Firestore write that would
+// otherwise fan out to every client subscribed to `places`. Override
+// with --all.
+const REFRESH_IF_OLDER_THAN_MS = 12 * 60 * 60 * 1000;
 
 // Per-bath detail document. The latest temperature reading is at the
 // root level as `sampleTemperature` (string °C) + `sampleDate` (ms).
@@ -330,11 +342,25 @@ async function main() {
   // Every place with coordinates is refreshable now — official feed where
   // available, Open-Meteo satellite data otherwise.
   const snap = await db.collection("places").get();
-  const seeded = snap.docs.filter((d) => {
+  const withCoords = snap.docs.filter((d) => {
     const data = d.data();
     return typeof data.lat === "number" && typeof data.lng === "number";
   });
-  console.log(`→ ${seeded.length} places with coordinates`);
+  // Skip places that already have a recent reading (see
+  // REFRESH_IF_OLDER_THAN_MS) — no upstream fetch, no Firestore write.
+  const cutoff = Date.now() - REFRESH_IF_OLDER_THAN_MS;
+  const seeded = ALL
+    ? withCoords
+    : withCoords.filter((d) => {
+        const at = d.data().waterTempAt;
+        return typeof at !== "number" || at < cutoff;
+      });
+  console.log(
+    `→ ${withCoords.length} places with coordinates, ${seeded.length} due for refresh` +
+      (ALL
+        ? " (--all)"
+        : ` (${withCoords.length - seeded.length} still fresh)`),
+  );
 
   let updated = 0;
   let skipped = 0;

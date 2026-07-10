@@ -90,7 +90,8 @@ emulator only).
   account needs the extra Functions/Build/Artifact-Registry roles first).
 - **`preview.yml`** — on every PR: builds and deploys a per-PR Hosting **preview
   channel** (`pr-<n>`, auto-expires in 7 days) and comments the URL on the PR.
-- **`temperatures.yml`** — every 6 hours: refreshes water temperatures.
+- **`temperatures.yml`** — daily around lunchtime (Swedish time): refreshes
+  water temperatures, skipping places whose stored reading is still fresh.
 
 Both deploy/preview workflows need these **GitHub repository secrets**:
 

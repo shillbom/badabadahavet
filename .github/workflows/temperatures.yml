@@ -1,10 +1,12 @@
 name: Update water temperatures
 
 on:
-  # Every 6 hours. Most baths only update once a day; this just keeps
-  # the lag bounded without spamming the API.
+  # Once a day around lunchtime in Sweden (10:00 UTC = 12:00 CEST /
+  # 11:00 CET — GitHub cron has no timezone support). Most baths only
+  # update once a day, and the script skips places whose reading is
+  # still fresh, so this keeps Firestore reads/writes to a minimum.
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 10 * * *"
   workflow_dispatch:
 
 concurrency:

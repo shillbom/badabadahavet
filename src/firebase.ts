@@ -5,7 +5,12 @@ import {
   setPersistence,
   browserLocalPersistence,
 } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  connectFirestoreEmulator,
+} from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import {
   getFunctions,
@@ -33,7 +38,17 @@ const firebaseConfig: FirebaseOptions = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Persistent (IndexedDB) cache so a returning visit resumes every listener
+// from local data and only downloads the delta — without it each boot
+// re-reads the full `places` collection (~4k docs) and the whole year's
+// community feed from the server. Multi-tab manager so a second open tab
+// shares the cache instead of failing to acquire it; browsers without
+// IndexedDB fall back to the in-memory cache with a console warning.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
 export const storage = getStorage(app);
 export const functions = getFunctions(app, "europe-west1");
 

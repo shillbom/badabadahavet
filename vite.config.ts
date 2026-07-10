@@ -33,7 +33,9 @@ export default defineConfig({
         // Never intercept Firebase auth handler or any /__/* URLs —
         // the service worker must let those reach the network.
         navigateFallbackDenylist: [/^\/__\//],
-        // Cache OpenStreetMap tiles so the map works offline.
+        // Cache map tiles and swim photos so revisits (and offline use)
+        // don't re-download them. Tiles/photos load via plain <img>, so the
+        // responses are opaque — status 0 must be cacheable alongside 200.
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/[a-z]\.tile\.openstreetmap\.org\/.*/i,
@@ -43,6 +45,50 @@ export default defineConfig({
               expiration: {
                 maxEntries: 500,
                 maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // CARTO basemaps — the default (voyager), light and dark themes.
+            urlPattern: /^https:\/\/[a-z]\.basemaps\.cartocdn\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "carto-tiles",
+              expiration: {
+                maxEntries: 500,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Esri/ArcGIS — satellite imagery, ocean base and place labels.
+            urlPattern: /^https:\/\/(server|services)\.arcgisonline\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "esri-tiles",
+              expiration: {
+                maxEntries: 300,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Session photos from Firebase Storage. Every upload gets a
+            // unique path (timestamp + random suffix) and is never rewritten,
+            // so CacheFirst with a long TTL is safe — a photo only leaves the
+            // cache via the entry cap or deletion of the session itself.
+            // Workbox only routes GETs, so uploads are unaffected.
+            urlPattern: /^https:\/\/firebasestorage\.googleapis\.com\/.*/i,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "swim-photos",
+              expiration: {
+                maxEntries: 300,
+                maxAgeSeconds: 60 * 60 * 24 * 180, // 180 days
+                purgeOnQuotaError: true,
               },
               cacheableResponse: { statuses: [0, 200] },
             },
