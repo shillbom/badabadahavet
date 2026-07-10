@@ -102,8 +102,8 @@ const POPUP_AUTO_PAN_BOTTOM_RIGHT: [number, number] = [24, 56];
 // stop clustering below CLUSTER_OFF. The gap is hysteresis — panning across a
 // single threshold would otherwise thrash the cluster group, which has to
 // remount to change its radius.
-const CLUSTER_ON = 10;
-const CLUSTER_OFF = 8;
+const CLUSTER_ON = 15;
+const CLUSTER_OFF = 12;
 
 // ── Recency tint ──────────────────────────────────────────────────────────
 // A place's pin fades from full blue (swum within the last week) toward grey
