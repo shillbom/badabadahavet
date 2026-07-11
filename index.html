@@ -1,12 +1,119 @@
 <!doctype html>
-<html lang="en">
+<html lang="sv">
   <head>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no"
     />
-    <meta name="theme-color" content="#0ea5e9" />
+    <!-- Status-bar / browser-UI tint. Badligan has no dark theme — the UI is
+         always light blue — so we pin theme-color to the app's top colour in
+         BOTH colour schemes. Without the dark-scheme entry iOS/Safari darkens
+         the single value in dark mode, which is what turned the status bar
+         grey. Keep light and dark identical so it always matches the app. -->
+    <meta name="theme-color" content="#eff9ff" />
+    <meta
+      name="theme-color"
+      content="#eff9ff"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#eff9ff"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="format-detection"
+      content="telephone=no, date=no, email=no, address=no"
+    />
+
+    <!-- SEO + social sharing. These live in the STATIC HTML (not injected by
+         React on mount) on purpose: link-preview scrapers — Messenger,
+         WhatsApp, Slack, LinkedIn, X — do not run our JS, so anything set
+         client-side would be invisible to them. The app is Swedish-first and
+         the canonical host is https://badligan.club. -->
+    <meta
+      name="description"
+      content="Badligan är en liten, vänlig badtävling. Logga dina bad, samla badplatser på kartan, lås upp utmärkelser och tävla med vänner om poäng."
+    />
+    <link rel="canonical" href="https://badligan.club/" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph (Facebook, Messenger, WhatsApp, LinkedIn, Slack…) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Badligan" />
+    <meta
+      property="og:title"
+      content="Badligan – en liten, vänlig badtävling"
+    />
+    <meta
+      property="og:description"
+      content="Logga dina bad, samla badplatser på kartan, lås upp utmärkelser och tävla med vänner om poäng."
+    />
+    <meta property="og:url" content="https://badligan.club/" />
+    <meta property="og:locale" content="sv_SE" />
+    <meta property="og:locale:alternate" content="en_GB" />
+    <meta
+      property="og:image"
+      content="https://badligan.club/web-app-manifest-512x512.png"
+    />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="Badligans logotyp" />
+
+    <!-- Twitter / X. `summary` (not summary_large_image) because the share
+         image is a square logo, not a 1200×630 banner. Swap to a wide banner
+         + summary_large_image if a dedicated OG image is added later. -->
+    <meta name="twitter:card" content="summary" />
+    <meta
+      name="twitter:title"
+      content="Badligan – en liten, vänlig badtävling"
+    />
+    <meta
+      name="twitter:description"
+      content="Logga dina bad, samla badplatser på kartan, lås upp utmärkelser och tävla med vänner om poäng."
+    />
+    <meta
+      name="twitter:image"
+      content="https://badligan.club/web-app-manifest-512x512.png"
+    />
+
+    <!-- Structured data: lets Google render a richer result for the app. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Badligan",
+        "url": "https://badligan.club/",
+        "description": "En liten, vänlig badtävling: logga dina bad, samla badplatser på kartan, lås upp utmärkelser och tävla med vänner om poäng.",
+        "applicationCategory": "SportsApplication",
+        "operatingSystem": "Web, iOS, Android",
+        "inLanguage": ["sv", "en"],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "SEK"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Simon Hillbom"
+        }
+      }
+    </script>
+
+    <!-- PWA / home screen -->
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Badligan" />
+    <!-- `default` (not black-translucent): Badligan is a light app, so we want
+         DARK status-bar text over our light background. black-translucent forces
+         WHITE text (unreadable here) and floats the document up under the status
+         bar, which also produced the pale bar at the bottom. `default` keeps the
+         content below the status bar and lets the light theme-color above tint
+         it. viewport-fit=cover + the safe-area paddings still fill the screen. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
     <!-- Favicons. Source files live in public/ and Vite copies them as-is.
          The 5 MB SVG export isn't linked — raster PNGs are cheaper at every
@@ -14,11 +121,70 @@
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/site.webmanifest" />
-    <meta name="apple-mobile-web-app-title" content="Badligan" />
-    <meta name="mobile-web-app-capable" content="yes" />
 
-    <title>Badligan</title>
+    <!-- Warm up the connections the app needs the instant it boots: the auth +
+         data backends, and Google Fonts. preconnect opens DNS/TLS early so the
+         first auth/Firestore request and the font fetch don't pay handshake
+         latency on the critical path. -->
+    <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
+    <link rel="preconnect" href="https://securetoken.googleapis.com" />
+    <link rel="preconnect" href="https://firestore.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Map tiles load only after sign-in, so a lighter DNS hint is enough. -->
+    <link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
+
+    <!-- Fonts loaded here (not via @import inside the bundled CSS) so the
+         browser discovers them during HTML parse and fetches them in parallel.
+         Loaded async (preload → swap to stylesheet onload) so this third-party
+         request never blocks first paint — the splash and body fall back to
+         system-ui and swap in the webfont when it arrives (display=swap). -->
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap"
+      onload="
+        this.onload = null;
+        this.rel = 'stylesheet';
+      "
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap"
+      />
+    </noscript>
+    <!-- Preload the splash wordmark's font (Caveat Brush, latin subset — the
+         range that covers "Badligan") so it's ready at first paint. Otherwise
+         the big centred word first renders in the fallback and visibly
+         reshapes/shifts when the async webfont swaps in. -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="https://fonts.gstatic.com/s/caveatbrush/v12/EYq0maZfwr9S9-ETZc3fKXt8XLOS.woff2"
+    />
+
+    <!-- First-paint background matching the splash. The animated splash
+         itself is rendered by React (components/Splash.tsx) — this just avoids
+         a bare flash before the bundle mounts. Kept unlayered so it isn't
+         overridden by the bundled stylesheet before React paints over it. -->
+    <style>
+      body {
+        margin: 0;
+      }
+      html {
+        background: linear-gradient(
+          180deg,
+          #eff9ff 0%,
+          #def1ff 46%,
+          #b6e4ff 100%
+        );
+      }
+    </style>
+
+    <title>Badligan – logga bad, samla badplatser och tävla med vänner</title>
   </head>
   <body class="bg-sky-50">
     <div id="root"></div>

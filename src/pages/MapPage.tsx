@@ -1,21 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { lazy, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Flame, MapPin, Trophy } from "lucide-react";
-import { useStore } from "@/store/sessions";
-import SwimMap from "@/components/SwimMap";
+import { MapPin, Trophy } from "lucide-react";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
+import { sumScores } from "@/lib/scoring";
 import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
-import { AnimatedNumber } from "@/components/AnimatedNumber";
+import StreakCard from "@/components/StreakCard";
+import Stat from "@/components/ui/Stat";
+const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const t = useT();
   const places = useStore((s) => s.places);
   const myPlaces = useStore((s) => s.myPlaces);
   const sessionsByPlace = useStore((s) => s.sessionsByPlace);
   const myStats = useStore((s) => s.myStats);
-  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
+
+  const isGuest = !user;
+
+  // The map's pin popups show the season's swims per place, which come from
+  // the community feed — keep it subscribed while this page is on screen.
+  // Guests can't read sessions (rules), so don't even try for them.
+  useAllSessionsFeed(!isGuest);
 
   // Seed from Firestore so the map opens at the right place without waiting for GPS
   const currentLocation = useStore((s) => s.currentLocation);
@@ -41,7 +48,11 @@ export default function MapPage() {
     locationPermission !== "checking" &&
     (locationPermission !== "granted" || myLocation !== null);
 
-  const totalPoints = myStats.totalPoints + achievementBonusPoints;
+  // The server-maintained score is authoritative; fall back to the session
+  // sum only for users not yet backfilled.
+  const totalPoints = profile?.scores
+    ? sumScores(profile.scores)
+    : myStats.totalPoints;
 
   // Stable random seed picked once per mount — prevents re-roll on every render.
   const greetingSeed = useRef(Math.floor(Math.random() * 1000));
@@ -65,129 +76,89 @@ export default function MapPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+6rem)]">
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-        <h2 className="font-display text-2xl font-black text-wave-900">
-          {greeting}
-        </h2>
-        <p className="text-sm text-slate-500">{subtitle}</p>
-      </motion.div>
+      {isGuest ? (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass flex items-center justify-between gap-3 p-3 lg:mx-auto lg:w-full lg:max-w-2xl"
+        >
+          <div className="min-w-0">
+            <div className="font-display text-base font-bold text-wave-900">
+              {t("map.guest.title")}
+            </div>
+            <div className="text-[11px] text-slate-500">
+              {t("map.guest.subtitle")}
+            </div>
+          </div>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="lg:mx-auto lg:w-full lg:max-w-2xl"
+        >
+          <h2 className="font-display text-2xl font-black text-wave-900">
+            {greeting}
+          </h2>
+          <p className="text-sm text-slate-500">{subtitle}</p>
+        </motion.div>
+      )}
 
-      <div className="grid grid-cols-3 gap-2">
-        <Stat
-          to="/history"
-          label={t("map.stat.points")}
-          value={totalPoints}
-          icon={<Trophy className="h-4 w-4" />}
-          sub={
-            achievementBonusPoints > 0
-              ? t("map.bonus.subtitle", { n: achievementBonusPoints })
-              : undefined
-          }
-        />
-        <Stat
-          onClick={() => setFitToken((n) => n + 1)}
-          label={t("map.stat.spots")}
-          value={myStats.uniquePlaces}
-          icon={<MapPin className="h-4 w-4" />}
-        />
-        <Stat
-          to="/history?view=streak"
-          label={t("map.stat.streak")}
-          value={myStats.currentDayStreak}
-          icon={<Flame className="h-4 w-4" />}
-          sub={
-            myStats.currentDayStreak > 0 && myStats.daysSinceLast === 1
-              ? t("map.streak.at_risk")
-              : undefined
-          }
-        />
-      </div>
+      {!isGuest ? (
+        <div className="grid grid-cols-3 gap-2 lg:mx-auto lg:w-full lg:max-w-2xl">
+          <Stat
+            to="/history"
+            size="lg"
+            animate
+            label={t("map.stat.points")}
+            value={totalPoints}
+            icon={<Trophy className="h-4 w-4" />}
+            sub={t("map.stat.points.sub", { n: myStats.swimsLastWeek })}
+          />
+          <Stat
+            onClick={() =>
+              // Switch to "my places" mode (the showAll effect re-fits the
+              // bounds). If already there, just re-fit.
+              showAll ? setShowAll(false) : setFitToken((n) => n + 1)
+            }
+            size="lg"
+            animate
+            label={t("map.stat.spots")}
+            value={myStats.uniquePlaces}
+            icon={<MapPin className="h-4 w-4" />}
+            sub={t("map.stat.spots.sub", { n: myStats.placesLastMonth })}
+          />
+          <StreakCard streak={myStats.streak} />
+        </div>
+      ) : null}
 
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
         <div className="absolute inset-0">
           {mapReady ? (
             <SwimMap
-              places={showAll ? places : myPlaces}
+              places={isGuest || showAll ? places : myPlaces}
               sessionsByPlace={sessionsByPlace}
               userLocation={myLocation}
               fitToken={fitToken}
-              fitBoundsToPlaces={!showAll}
+              fitBoundsToPlaces={!isGuest && !showAll}
               viewKey="main"
+              fullscreenControl
+              topRightActions={
+                isGuest
+                  ? undefined
+                  : [
+                      {
+                        label: showAll ? t("map.show.mine") : t("map.show.all"),
+                        onClick: () => setShowAll((v) => !v),
+                      },
+                    ]
+              }
             />
           ) : (
             <div className="h-full w-full bg-slate-100" />
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setShowAll((v) => !v)}
-          className="absolute top-3 right-3 z-[600] flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-semibold text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
-        >
-          {showAll ? t("map.show.mine") : t("map.show.all")}
-        </button>
       </div>
-
-      {myStats.totalSwims === 0 ? (
-        <p className="text-center text-xs text-slate-500">
-          {t("map.empty.helper")}
-        </p>
-      ) : null}
     </div>
-  );
-}
-
-function Stat({
-  to,
-  onClick,
-  label,
-  value,
-  icon,
-  sub,
-}: {
-  to?: string;
-  onClick?: () => void;
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  sub?: string;
-}) {
-  const inner = (
-    <>
-      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-wave-700 uppercase">
-        {icon}
-        {label}
-      </div>
-      <AnimatedNumber
-        value={value}
-        className="font-display text-2xl font-black text-wave-900"
-      />
-      {sub ? <div className="text-[10px] text-amber-700">{sub}</div> : null}
-    </>
-  );
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 280, damping: 24 }}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.98 }}
-    >
-      {to ? (
-        <Link
-          to={to}
-          className="glass flex flex-col items-start gap-1 px-3 py-2.5"
-        >
-          {inner}
-        </Link>
-      ) : (
-        <button
-          type="button"
-          onClick={onClick}
-          className="glass flex w-full flex-col items-start gap-1 px-3 py-2.5 text-left"
-        >
-          {inner}
-        </button>
-      )}
-    </motion.div>
   );
 }

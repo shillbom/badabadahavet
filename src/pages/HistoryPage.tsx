@@ -1,29 +1,19 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router";
 import { ChevronRight, MapPin, Snowflake, Sparkles } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { formatDateTime } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
+import { computeStreak } from "@/lib/streak";
+import { dayStartMs } from "@/lib/date";
+import Photo from "@/components/Photo";
 import type { SessionDoc } from "@/lib/types";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function dayStartMs(ts: number): number {
-  const d = new Date(ts);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-}
-
 function streakSessions(sessions: SessionDoc[]): SessionDoc[] {
-  const days = new Set(sessions.map((s) => dayStartMs(s.date)));
-  let cursor = dayStartMs(Date.now());
-  if (!days.has(cursor)) cursor -= DAY_MS;
-  const streakDays = new Set<number>();
-  while (days.has(cursor)) {
-    streakDays.add(cursor);
-    cursor -= DAY_MS;
-  }
-  return sessions.filter((s) => streakDays.has(dayStartMs(s.date)));
+  const start = computeStreak(sessions.map((s) => s.date)).currentStart;
+  if (start === null) return [];
+  return sessions.filter((s) => dayStartMs(s.date) >= start);
 }
 
 export default function HistoryPage() {
@@ -47,6 +37,7 @@ export default function HistoryPage() {
         count: number;
         lastDate: number;
         photoUrl?: string;
+        photoThumb?: string;
       }
     >();
     for (const s of sessions) {
@@ -55,7 +46,10 @@ export default function HistoryPage() {
         cur.count += 1;
         if (s.date > cur.lastDate) {
           cur.lastDate = s.date;
-          if (s.photoUrl) cur.photoUrl = s.photoUrl;
+          if (s.photoUrl) {
+            cur.photoUrl = s.photoUrl;
+            cur.photoThumb = s.photoThumb;
+          }
         }
       } else {
         m.set(s.placeId, {
@@ -64,6 +58,7 @@ export default function HistoryPage() {
           count: 1,
           lastDate: s.date,
           photoUrl: s.photoUrl,
+          photoThumb: s.photoThumb,
         });
       }
     }
@@ -149,42 +144,20 @@ export default function HistoryPage() {
       {view === "spots" ? (
         <ul className="space-y-2">
           {spots.map((p, i) => (
-            <motion.li
+            <HistoryRow
               key={p.placeId}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(i, 8) * 0.03 }}
-              className="glass overflow-hidden p-0"
-            >
-              <Link to={`/spot/${p.placeId}`} className="flex">
-                {p.photoUrl ? (
-                  <img
-                    src={p.photoUrl}
-                    alt=""
-                    className="h-20 w-20 flex-none object-cover"
-                  />
-                ) : (
-                  <div className="flex h-20 w-20 flex-none items-center justify-center bg-wave-100 text-3xl">
-                    📍
-                  </div>
-                )}
-                <div className="min-w-0 flex-1 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1 truncate font-display text-base font-bold text-wave-900">
-                        {p.placeName}
-                        <ChevronRight className="h-3.5 w-3.5 flex-none text-slate-400" />
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {p.count === 1
-                          ? t("history.spots.count_one")
-                          : t("history.spots.count_many", { n: p.count })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            </motion.li>
+              index={i}
+              to={`/spot/${p.placeId}`}
+              photoUrl={p.photoUrl}
+              photoThumb={p.photoThumb}
+              emoji="📍"
+              title={p.placeName}
+              meta={
+                p.count === 1
+                  ? t("history.spots.count_one")
+                  : t("history.spots.count_many", { n: p.count })
+              }
+            />
           ))}
         </ul>
       ) : filtered.length === 0 ? (
@@ -194,71 +167,122 @@ export default function HistoryPage() {
       ) : (
         <ul className="space-y-2">
           {filtered.map((s, i) => (
-            <motion.li
+            <HistoryRow
               key={s.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(i, 8) * 0.03 }}
-              className="glass overflow-hidden p-0"
-            >
-              <Link to={`/spot/${s.placeId}`} className="flex">
-                {s.photoUrl ? (
-                  <img
-                    src={s.photoUrl}
-                    alt=""
-                    className="m-2 h-20 w-20 flex-none rounded-lg object-cover"
-                  />
-                ) : (
-                  <div className="flex h-20 w-20 flex-none items-center justify-center bg-wave-100 text-3xl">
-                    🌊
-                  </div>
-                )}
-                <div className="min-w-0 flex-1 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1 truncate font-display text-base font-bold text-wave-900">
-                        {s.placeName}
-                        <ChevronRight className="h-3.5 w-3.5 flex-none text-slate-400" />
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {formatDateTime(s.date)}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <div className="font-display text-lg font-black text-wave-700">
-                        +{s.points}
-                      </div>
-                    </div>
-                  </div>
-                  {s.note ? (
-                    <p className="mt-1 line-clamp-2 text-xs text-slate-600">
-                      {s.note}
-                    </p>
-                  ) : null}
-                  <div className="mt-1.5 flex flex-wrap gap-1.5">
-                    {s.isUniqueForUser ? (
-                      <span className="chip">
-                        <Sparkles className="h-3 w-3" />{" "}
-                        {t("history.chip.new_spot")}
-                      </span>
-                    ) : null}
-                    {s.isWinter ? (
-                      <span className="chip bg-sky-100 text-sky-800 ring-sky-200">
-                        <Snowflake className="h-3 w-3" />{" "}
-                        {t("history.chip.winter")}
-                      </span>
-                    ) : null}
+              index={i}
+              to={`/spot/${s.placeId}`}
+              photoUrl={s.photoUrl}
+              photoThumb={s.photoThumb}
+              photoRounded
+              emoji="🌊"
+              title={s.placeName}
+              meta={formatDateTime(s.date)}
+              points={s.points}
+              note={s.note}
+              chips={
+                <>
+                  {s.isUniqueForUser ? (
                     <span className="chip">
-                      <MapPin className="h-3 w-3" />
-                      {s.lat.toFixed(3)}, {s.lng.toFixed(3)}
+                      <Sparkles className="h-3 w-3" />{" "}
+                      {t("history.chip.new_spot")}
                     </span>
-                  </div>
-                </div>
-              </Link>
-            </motion.li>
+                  ) : null}
+                  {s.isWinter ? (
+                    <span className="chip bg-sky-100 text-sky-800 ring-sky-200">
+                      <Snowflake className="h-3 w-3" />{" "}
+                      {t("history.chip.winter")}
+                    </span>
+                  ) : null}
+                  <span className="chip">
+                    <MapPin className="h-3 w-3" />
+                    {s.lat.toFixed(3)}, {s.lng.toFixed(3)}
+                  </span>
+                </>
+              }
+            />
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+/** One tappable history row: photo/emoji square, name + meta, and for swim
+ *  rows a points badge, note, and chips. Shared by the spots and swims views. */
+function HistoryRow({
+  index,
+  to,
+  photoUrl,
+  photoThumb,
+  photoRounded,
+  emoji,
+  title,
+  meta,
+  points,
+  note,
+  chips,
+}: {
+  index: number;
+  to: string;
+  photoUrl?: string;
+  photoThumb?: string;
+  /** Swim photos float with a margin + rounded corners; spot photos sit flush. */
+  photoRounded?: boolean;
+  emoji: string;
+  title: string;
+  meta: string;
+  points?: number;
+  note?: string | null;
+  chips?: React.ReactNode;
+}) {
+  return (
+    <motion.li
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: Math.min(index, 8) * 0.03 }}
+      className="glass overflow-hidden p-0"
+    >
+      <Link to={to} className="flex">
+        {photoUrl ? (
+          <Photo
+            src={photoUrl}
+            thumb={photoThumb}
+            className={
+              photoRounded
+                ? "m-2 h-20 w-20 flex-none rounded-lg"
+                : "h-20 w-20 flex-none"
+            }
+          />
+        ) : (
+          <div className="flex h-20 w-20 flex-none items-center justify-center bg-wave-100 text-3xl">
+            {emoji}
+          </div>
+        )}
+        <div className="min-w-0 flex-1 p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-1 truncate font-display text-base font-bold text-wave-900">
+                {title}
+                <ChevronRight className="h-3.5 w-3.5 flex-none text-slate-400" />
+              </div>
+              <div className="text-[11px] text-slate-500">{meta}</div>
+            </div>
+            {points != null ? (
+              <div className="flex flex-col items-end">
+                <div className="font-display text-lg font-black text-wave-700">
+                  +{points}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          {note ? (
+            <p className="mt-1 line-clamp-2 text-xs text-slate-600">{note}</p>
+          ) : null}
+          {chips ? (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">{chips}</div>
+          ) : null}
+        </div>
+      </Link>
+    </motion.li>
   );
 }

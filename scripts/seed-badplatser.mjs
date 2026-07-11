@@ -12,7 +12,9 @@
  * Notes:
  *   - Requires `firebase-admin` (devDep) and a service-account JSON.
  *   - Idempotent: skips any place whose (name, lat-rounded, lng-rounded)
- *     already exists in Firestore, so re-running won't duplicate.
+ *     already exists in Firestore, so re-running won't duplicate. A rerun
+ *     also backfills the `tempSource` tag onto existing SE docs (matched
+ *     by externalId) that predate that field.
  *   - Writes in chunks of 400 to stay safely below the 500-op batch limit.
  *   - Each seeded doc gets `seeded: true`, `source: "havochvatten.se"`,
  *     and `createdBy: "system:badplatsen"` so they're distinguishable
@@ -129,11 +131,17 @@ async function main() {
   console.log("→ loading existing places from Firestore for dedup…");
   const existingSnap = await db.collection("places").get();
   const existingKeys = new Set();
+  // Existing havochvatten docs keyed by externalId, so a rerun backfills
+  // the `tempSource` tag onto docs seeded before that field existed.
+  const seById = new Map();
   for (const doc of existingSnap.docs) {
     const data = doc.data();
     existingKeys.add(
       `${(data.name ?? "").toLowerCase()}|${(data.lat ?? 0).toFixed(4)}|${(data.lng ?? 0).toFixed(4)}`,
     );
+    if (data.source === "havochvatten.se" && data.externalId) {
+      seById.set(String(data.externalId), { id: doc.id, data });
+    }
   }
   console.log(`→ ${existingKeys.size} existing places loaded`);
 
@@ -142,10 +150,27 @@ async function main() {
     `→ ${fresh.length} new places to insert (${places.length - fresh.length} duplicates skipped)`,
   );
 
+  // Backfill `tempSource` onto already-imported SE docs that lack it.
+  const updates = [];
+  for (const p of places) {
+    if (!p.externalId) continue;
+    const known = seById.get(String(p.externalId));
+    if (known && known.data.tempSource !== "havochvatten") {
+      updates.push({ id: known.id, name: p.name });
+    }
+  }
+  if (updates.length) {
+    console.log(
+      `→ ${updates.length} existing SE docs need tempSource backfill`,
+    );
+  }
+
   if (!WRITE) {
     console.log("\nsample (first 5):");
     for (const p of fresh.slice(0, 5)) console.log("   ", p);
-    console.log(`\nrun again with --write to commit ${fresh.length} docs.`);
+    console.log(
+      `\nrun again with --write to commit ${fresh.length} new + ${updates.length} updated docs.`,
+    );
     return;
   }
 
@@ -166,14 +191,34 @@ async function main() {
         firstSwumAt: now,
         seeded: true,
         source: "havochvatten.se",
+        // Prefer the official SE feed; the refresh function falls back to
+        // Open-Meteo when Hav och Vatten has no reading for this spot.
+        tempSource: "havochvatten",
         ...(p.externalId ? { externalId: p.externalId } : {}),
       });
     }
     await batch.commit();
     written += chunk.length;
-    process.stdout.write(`\r→ wrote ${written}/${fresh.length}`);
+    process.stdout.write(`\r→ wrote ${written}/${fresh.length} new`);
   }
-  console.log("\n✓ done");
+  if (written) console.log("");
+
+  // Backfill tempSource onto existing SE docs (idempotent rerun).
+  let updated = 0;
+  for (let i = 0; i < updates.length; i += chunkSize) {
+    const chunk = updates.slice(i, i + chunkSize);
+    const batch = db.batch();
+    for (const u of chunk) {
+      batch.update(db.collection("places").doc(u.id), {
+        tempSource: "havochvatten",
+      });
+    }
+    await batch.commit();
+    updated += chunk.length;
+    process.stdout.write(`\r→ updated ${updated}/${updates.length} existing`);
+  }
+  if (updated) console.log("");
+  console.log("✓ done");
 }
 
 main().catch((e) => {

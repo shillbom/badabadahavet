@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ChevronLeft, ChevronRight, Award } from "lucide-react";
-import { useStore } from "@/store/sessions";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Award,
+  Share2,
+} from "lucide-react";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { startOfYear, endOfYear } from "@/lib/scoring";
 import { computeMyStats } from "@/lib/stats";
-import {
-  ACHIEVEMENTS,
-  ACHIEVEMENTS_BY_ID,
-  evaluateAchievements,
-} from "@/lib/achievements";
+import { ACHIEVEMENTS_BY_ID, evaluateAchievements } from "@/lib/achievements";
 import { monthShort, useT } from "@/lib/i18n";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { toast } from "@/components/ui/Toast";
+import { shareRecapCard } from "@/lib/recapCard";
 
 const slideVariants = {
   enter: (dir: 1 | -1) => ({
@@ -33,6 +38,9 @@ export default function RecapPage() {
   const t = useT();
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
+  // The recap's community slides read the year feed — keep it subscribed
+  // while the recap is open (this page is behind login).
+  useAllSessionsFeed();
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
@@ -69,14 +77,8 @@ export default function RecapPage() {
   );
   const unlockedYear = useMemo(() => evaluateAchievements(ctxYear), [ctxYear]);
 
-  const yearBonus = useMemo(() => {
-    let pts = 0;
-    for (const a of ACHIEVEMENTS) if (unlockedYear.has(a.id)) pts += a.points;
-    return pts;
-  }, [unlockedYear]);
-
   const slides = useMemo<Slide[]>(() => {
-    const total = stats.totalPoints + yearBonus;
+    const total = stats.totalPoints;
     const fav = stats.favouriteSpot;
     const best = stats.bestMonth;
     const winters = stats.winterSwims;
@@ -97,9 +99,7 @@ export default function RecapPage() {
       {
         kind: "stat",
         title: t("recap.points.title"),
-        subtitle: yearBonus
-          ? t("recap.points.bonus", { n: yearBonus })
-          : t("recap.points.normal"),
+        subtitle: t("recap.points.normal"),
         accent: "🏆",
         big: total.toString(),
         bigLabel: t("recap.points.label"),
@@ -185,10 +185,74 @@ export default function RecapPage() {
         accent: "💧",
       },
     ];
-  }, [stats, yearBonus, year, yearSessions, unlockedYear, t]);
+  }, [stats, year, yearSessions, unlockedYear, t]);
 
   const [idx, setIdx] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
+  const [sharing, setSharing] = useState(false);
+
+  async function onShare() {
+    setSharing(true);
+    try {
+      const fav = stats.favouriteSpot;
+      const result = await shareRecapCard({
+        year,
+        appName: t("app.name"),
+        title: t("recap.share.title"),
+        big: {
+          value: String(yearSessions.length),
+          label:
+            yearSessions.length === 1
+              ? t("recap.intro.label_one")
+              : t("recap.intro.label_many"),
+        },
+        rows: [
+          {
+            emoji: "🏆",
+            value: String(stats.totalPoints),
+            label: t("recap.points.label"),
+          },
+          {
+            emoji: "📍",
+            value: String(stats.uniquePlaces),
+            label: t("recap.spots.label"),
+          },
+          {
+            emoji: "❄️",
+            value: String(stats.winterSwims),
+            label:
+              stats.winterSwims === 1
+                ? t("recap.winter.label_one")
+                : t("recap.winter.label_many"),
+          },
+          {
+            emoji: "🔥",
+            value: String(stats.streak.longest),
+            label: t("recap.share.streak_label"),
+          },
+          ...(fav
+            ? [
+                {
+                  emoji: "⭐",
+                  value: String(fav.count),
+                  label:
+                    fav.name.length > 24
+                      ? `${fav.name.slice(0, 23)}…`
+                      : fav.name,
+                },
+              ]
+            : []),
+        ],
+        footer: t("app.tagline"),
+      });
+      if (result === "downloaded") toast.success(t("recap.share.downloaded"));
+      else if (result === "failed") toast.error(t("recap.share.error"));
+    } catch {
+      toast.error(t("recap.share.error"));
+    } finally {
+      setSharing(false);
+    }
+  }
 
   // Reset to first slide when browsing a different year
   useEffect(() => {
@@ -203,7 +267,7 @@ export default function RecapPage() {
   };
 
   return (
-    <div className="relative min-h-[calc(100dvh-4rem)] overflow-hidden px-4 pt-2 pb-12">
+    <div className="relative min-h-[calc(var(--app-height,100dvh)-4rem)] overflow-hidden px-4 pt-2 pb-12">
       <ConfettiBackdrop />
       <div className="relative z-10 mb-3 flex items-center gap-2">
         <button
@@ -287,19 +351,30 @@ export default function RecapPage() {
           <ChevronLeft className="h-5 w-5" />
         </motion.button>
         {isLast ? (
-          <motion.div whileTap={{ scale: 0.96 }}>
-            <Link
-              to="/"
-              className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-5 py-3 text-sm font-medium text-white shadow"
+          <div className="flex items-center gap-2">
+            <Button
+              size="lg"
+              className="text-sm"
+              icon={<Share2 className="h-4 w-4" />}
+              loading={sharing}
+              onClick={onShare}
             >
-              {t("recap.back_to_map")}
-            </Link>
-          </motion.div>
+              {t("recap.share.button", { year })}
+            </Button>
+            <motion.div whileTap={{ scale: 0.96 }}>
+              <Link
+                to="/"
+                className={buttonClasses("secondary", "lg", "text-sm")}
+              >
+                {t("recap.back_to_map")}
+              </Link>
+            </motion.div>
+          </div>
         ) : (
           <motion.button
             whileTap={{ scale: 0.92 }}
             onClick={() => advance(1)}
-            className="rounded-full bg-wave-600 p-3 text-white shadow"
+            className={buttonClasses("primary", "icon", "h-11 w-11")}
             aria-label={t("common.next")}
           >
             <ChevronRight className="h-5 w-5" />

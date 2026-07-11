@@ -1,5 +1,4 @@
-import { httpsCallable } from "firebase/functions";
-import { auth, functions } from "@/firebase";
+import { auth, cloudFn } from "@/firebase";
 
 const STALE_AFTER_MS = 60 * 60 * 1000; // 1 hour
 const LOCAL_THROTTLE_MS = 5 * 60 * 1000; // don't ask for the same place more than once per 5 min
@@ -10,22 +9,17 @@ const lastRequested = new Map<string, number>();
 
 type Place = { id: string; externalId?: string; waterTempAt?: number };
 
-const callable = httpsCallable<{ placeId: string }, unknown>(
-  functions,
-  "refreshPlaceTemp",
-);
+const callable = cloudFn<{ placeId: string }, unknown>("refreshPlaceTemp");
 
 /**
  * Trigger a server-side temperature refresh for `place` if the stored
  * reading is older than an hour. Silently no-ops if:
- *   - the place has no externalId (we can't refresh it),
  *   - the reading is fresh,
  *   - we already asked recently,
  *   - or the user isn't signed in.
  */
 export function maybeRefreshPlaceTemp(place: Place): void {
   if (!auth.currentUser) return;
-  if (!place.externalId) return;
 
   const now = Date.now();
   const age = place.waterTempAt ? now - place.waterTempAt : Infinity;

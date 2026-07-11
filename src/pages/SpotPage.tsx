@@ -1,50 +1,77 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
   Snowflake,
   Sparkles,
   Users,
-  Calendar,
+  ListChecks,
+  LogIn,
   MapPin,
+  Share2,
   Thermometer,
-  X,
   Pencil,
   Trash2,
   ImageOff,
+  Delete,
+  X,
 } from "lucide-react";
 import {
+  addToSwim,
   adminClearSessionPhoto,
   adminDeletePlace,
   adminDeleteSession,
   adminRenamePlace,
   getPlace,
-  REACTION_EMOJIS,
-  toggleReaction,
+  removeFromSwim,
   watchPlaceSessions,
 } from "@/lib/data";
 import type { PlaceDoc, SessionDoc } from "@/lib/types";
-import { formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate, rememberReturnPath, shareOrCopy } from "@/lib/utils";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import SwimMap from "@/components/SwimMap";
+import SwimPhoto from "@/components/SwimPhoto";
+import ReactionBar from "@/components/ReactionBar";
+import SwimListItem from "@/components/SwimListItem";
 import { useAuth } from "@/auth/AuthContext";
-import { useStore } from "@/store/sessions";
 import { useT } from "@/lib/i18n";
+import { buttonClasses } from "@/components/ui/Button";
+import Stat from "@/components/ui/Stat";
 import { toast } from "@/components/ui/Toast";
 
-export default function SpotPage() {
-  const { placeId } = useParams<{ placeId: string }>();
+/**
+ * The spot detail UI (map, stats, photos, recent dips). Extracted from the
+ * routed page so it can also be rendered inside a {@link BottomSheet} (e.g.
+ * tapping a place in the recap) without a full navigation.
+ *
+ * `variant` swaps the top-left affordance: "page" shows a back button that
+ * pops the history stack; "sheet" shows a close button that calls `onClose`.
+ */
+export function SpotView({
+  placeId,
+  variant = "page",
+  onClose,
+}: {
+  placeId: string;
+  variant?: "page" | "sheet";
+  onClose?: () => void;
+}) {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const isAdmin = profile?.isAdmin === true;
   const t = useT();
-  const groups = useStore((s) => s.groups);
   const [place, setPlace] = useState<PlaceDoc | null>(null);
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [scope, setScope] = useState<"all" | string>("all");
-  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [searchParams] = useSearchParams();
+  const focusedSessionId = searchParams.get("session");
+  // Track which sessions have been highlighted once so we don't replay
+  // the effect every time the sessions list re-streams from Firestore.
+  const highlightedRef = useRef<Set<string>>(new Set());
+  const sessionRefs = useRef<Map<string, HTMLLIElement>>(new Map());
+  const isGuest = !user;
+  const toswimEntry = placeId ? profile?.toswim?.[placeId] : undefined;
+  const onToswim = !!toswimEntry;
 
   useEffect(() => {
     if (!placeId) return;
@@ -62,13 +89,7 @@ export default function SpotPage() {
     };
   }, [placeId]);
 
-  const visibleSessions = useMemo(() => {
-    if (scope === "all") return sessions;
-    const g = groups.find((g) => g.id === scope);
-    if (!g) return sessions;
-    const memberSet = new Set(g.members);
-    return sessions.filter((s) => memberSet.has(s.uid));
-  }, [sessions, scope, groups]);
+  const visibleSessions = sessions;
 
   const stats = useMemo(
     () => buildStats(visibleSessions, user?.uid),
@@ -85,6 +106,69 @@ export default function SpotPage() {
     () => visibleSessions.filter((s) => s.photoUrl),
     [visibleSessions],
   );
+
+  // When a `?session=<id>` deep link is opened, scroll the matching swim
+  // into view once it has streamed in, and flash a highlight ring so the
+  // user can spot it in the list.
+  useEffect(() => {
+    if (!focusedSessionId) return;
+    if (highlightedRef.current.has(focusedSessionId)) return;
+    const exists = visibleSessions.some((s) => s.id === focusedSessionId);
+    if (!exists) return;
+    highlightedRef.current.add(focusedSessionId);
+    // Wait a tick so the freshly mounted <li ref={...}> is in the map.
+    const raf = requestAnimationFrame(() => {
+      const el = sessionRefs.current.get(focusedSessionId);
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [focusedSessionId, visibleSessions]);
+
+  async function onShareSpot() {
+    if (!place) return;
+    const url = `${window.location.origin}/spot/${place.id}`;
+    const result = await shareOrCopy({
+      url,
+      title: t("spot.share.title", { name: place.name }),
+      text: t("spot.share.text", { name: place.name }),
+    });
+    if (result === "copied") toast.success(t("spot.share.copied"));
+    else if (result === "failed") toast.error(t("spot.share.failed"));
+  }
+
+  async function onShareSession(s: SessionDoc) {
+    if (!place) return;
+    const url = `${window.location.origin}/spot/${place.id}?session=${s.id}`;
+    const result = await shareOrCopy({
+      url,
+      title: t("spot.share.session_title", {
+        name: s.displayName,
+        place: place.name,
+      }),
+      text: t("spot.share.session_text", {
+        name: s.displayName,
+        place: place.name,
+      }),
+    });
+    if (result === "copied") toast.success(t("spot.share.copied"));
+    else if (result === "failed") toast.error(t("spot.share.failed"));
+  }
+
+  async function onToggleToswim() {
+    if (!user || !place) return;
+    try {
+      if (onToswim) {
+        await removeFromSwim(user.uid, place.id);
+        toast.success(t("spot.toswim.removed"));
+      } else {
+        await addToSwim(user.uid, place.id);
+        toast.success(t("spot.toswim.added"));
+      }
+    } catch {
+      toast.error(t("spot.toswim.error"));
+    }
+  }
 
   async function onAdminRename() {
     if (!place) return;
@@ -116,7 +200,8 @@ export default function SpotPage() {
     try {
       await adminDeletePlace(place.id);
       toast.success(t("admin.delete_spot.success"));
-      navigate("/", { replace: true });
+      if (variant === "sheet") onClose?.();
+      else navigate("/", { replace: true });
     } catch {
       toast.error(t("admin.delete_spot.error"));
     }
@@ -161,13 +246,19 @@ export default function SpotPage() {
     <div className="px-4 pt-2 pb-12">
       <div className="mb-3 flex items-center gap-2">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => (variant === "sheet" ? onClose?.() : navigate(-1))}
           className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
+          aria-label={
+            variant === "sheet" ? t("common.close") : t("common.back")
+          }
         >
-          <ArrowLeft className="h-4 w-4" />
+          {variant === "sheet" ? (
+            <X className="h-4 w-4" />
+          ) : (
+            <ArrowLeft className="h-4 w-4" />
+          )}
         </button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="truncate font-display text-2xl font-black text-wave-900">
             {place.name}
           </h2>
@@ -189,6 +280,15 @@ export default function SpotPage() {
             ) : null}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onShareSpot}
+          className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+          aria-label={t("spot.share")}
+          title={t("spot.share")}
+        >
+          <Share2 className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="h-44 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
@@ -198,8 +298,33 @@ export default function SpotPage() {
           center={[place.lat, place.lng]}
           zoom={13}
           linkToSpot={false}
+          viewKey={`spot-${place.id}`}
         />
       </div>
+
+      {!isGuest ? (
+        <button
+          type="button"
+          onClick={onToggleToswim}
+          className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow ring-1 transition active:scale-95 ${
+            onToswim
+              ? "bg-rose-50 text-rose-800 ring-rose-200 hover:bg-rose-50"
+              : "bg-white/80 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"
+          }`}
+        >
+          {onToswim ? (
+            <>
+              <Delete className="h-3.5 w-3.5" />
+              {t("spot.toswim.remove")}
+            </>
+          ) : (
+            <>
+              <ListChecks className="h-3.5 w-3.5" />
+              {t("spot.toswim.add")}
+            </>
+          )}
+        </button>
+      ) : null}
 
       {isAdmin ? (
         <div className="mt-3 flex flex-wrap gap-2 rounded-2xl bg-amber-50/80 p-2 ring-1 ring-amber-200">
@@ -221,45 +346,17 @@ export default function SpotPage() {
         </div>
       ) : null}
 
-      {groups.length > 0 ? (
-        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
-          <ScopeChip
-            label={t("spot.scope.everyone")}
-            active={scope === "all"}
-            onClick={() => setScope("all")}
-          />
-          {groups.map((g) => (
-            <ScopeChip
-              key={g.id}
-              label={`👥 ${g.name}`}
-              active={scope === g.id}
-              onClick={() => setScope(g.id)}
-            />
-          ))}
-        </div>
-      ) : null}
-
       {photoSessions.length > 0 ? (
         <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
-          {photoSessions.map((s, idx) => (
+          {photoSessions.map((s) => (
             <div
               key={s.id}
               className="relative h-24 w-24 flex-none overflow-hidden rounded-xl ring-1 ring-white/60"
             >
-              <button
-                onClick={() => setLightboxIdx(idx)}
-                className="block h-full w-full"
-                aria-label={`${s.displayName}`}
-              >
-                <img
-                  src={s.photoUrl!}
-                  alt=""
-                  className="h-full w-full object-cover transition-transform hover:scale-110"
-                />
-                <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                  {s.displayName}
-                </span>
-              </button>
+              <SwimPhoto session={s} className="h-full w-full" />
+              <span className="pointer-events-none absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                {s.displayName}
+              </span>
               {isAdmin ? (
                 <button
                   onClick={(e) => {
@@ -307,297 +404,110 @@ export default function SpotPage() {
       ) : null}
 
       <h3 className="mt-5 mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-        {scope === "all" ? t("spot.recent_dips") : t("spot.group_dips")}
+        {t("spot.recent_dips")}
       </h3>
       <ul className="space-y-2">
         {visibleSessions.map((s, i) => (
-          <motion.li
+          <SwimListItem
             key={s.id}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(i, 8) * 0.03 }}
-            className="glass flex items-start gap-3 p-3"
+            ref={(el) => {
+              if (el) sessionRefs.current.set(s.id, el);
+              else sessionRefs.current.delete(s.id);
+            }}
+            index={i}
+            className={
+              focusedSessionId === s.id ? "animate-highlight" : undefined
+            }
+            thumb={
+              s.photoUrl ? (
+                <SwimPhoto
+                  session={s}
+                  className="h-14 w-14 flex-none rounded-lg"
+                />
+              ) : undefined
+            }
+            title={
+              <div className="truncate font-semibold text-wave-900">
+                {s.displayName}
+                {s.uid === user?.uid ? (
+                  <span className="ml-1.5 text-[10px] text-wave-600">
+                    {t("common.you")}
+                  </span>
+                ) : null}
+              </div>
+            }
+            points={s.points}
+            aside={
+              <>
+                <button
+                  onClick={() => onShareSession(s)}
+                  className="rounded-full bg-white/80 p-1 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+                  aria-label={t("spot.share_session")}
+                  title={t("spot.share_session")}
+                >
+                  <Share2 className="h-3 w-3" />
+                </button>
+                {!isGuest && isAdmin ? (
+                  <button
+                    onClick={() => onAdminDeleteSession(s.id)}
+                    className="rounded-full bg-white/80 p-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
+                    aria-label={t("admin.delete_session")}
+                    title={t("admin.delete_session")}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                ) : null}
+              </>
+            }
+            date={s.date}
+            winter={s.isWinter}
+            unique={s.isUniqueForUser}
+            note={s.note}
           >
-            {s.photoUrl ? (
-              <img
-                src={s.photoUrl}
-                alt=""
-                className="h-14 w-14 flex-none rounded-lg object-cover"
-              />
-            ) : (
-              <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
-                🌊
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <div className="truncate font-semibold text-wave-900">
-                  {s.displayName}
-                  {s.uid === user?.uid ? (
-                    <span className="ml-1.5 text-[10px] text-wave-600">
-                      {t("common.you")}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="font-display text-base font-black text-wave-700">
-                    +{s.points}
-                  </div>
-                  {isAdmin ? (
-                    <button
-                      onClick={() => onAdminDeleteSession(s.id)}
-                      className="rounded-full bg-white/80 p-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
-                      aria-label={t("admin.delete_session")}
-                      title={t("admin.delete_session")}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              {s.note ? (
-                <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">
-                  {s.note}
-                </p>
-              ) : null}
-              <div className="flex items-end justify-between">
-                <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                  <Calendar className="h-3 w-3" />
-                  {formatDateTime(s.date)}
-                  {s.isWinter ? <span className="ml-1">❄️</span> : null}
-                  {s.isUniqueForUser ? (
-                    <span className="ml-0.5">✨</span>
-                  ) : null}
-                </div>
-                <ReactionBar session={s} myUid={user?.uid} />
-              </div>
-            </div>
-          </motion.li>
+            <ReactionBar session={s} myUid={user?.uid} />
+          </SwimListItem>
         ))}
         {visibleSessions.length === 0 ? (
           <li className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
-            {scope === "all" ? t("spot.empty.all") : t("spot.empty.group")}
+            {t("spot.empty.all")}
           </li>
         ) : null}
       </ul>
 
       <div className="mt-6 text-center">
-        <Link
-          to={`/log?placeId=${place.id}`}
-          className="inline-flex items-center gap-1.5 rounded-full bg-wave-600 px-4 py-2 text-sm font-medium text-white shadow"
-        >
-          {t("spot.log_here")}
-        </Link>
-      </div>
-
-      <Lightbox
-        sessions={photoSessions}
-        index={lightboxIdx}
-        onClose={() => setLightboxIdx(null)}
-      />
-    </div>
-  );
-}
-
-function ScopeChip({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      data-active={active}
-      className="chip whitespace-nowrap data-[active=true]:bg-wave-600 data-[active=true]:text-white data-[active=true]:ring-wave-700"
-    >
-      {label}
-    </button>
-  );
-}
-
-function Lightbox({
-  sessions,
-  index,
-  onClose,
-}: {
-  sessions: SessionDoc[];
-  index: number | null;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const s = index != null ? sessions[index] : null;
-  return (
-    <AnimatePresence>
-      {s ? (
-        <motion.div
-          key={s.id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 z-[1500] flex items-center justify-center bg-black/85 p-4"
-        >
-          <button
-            onClick={onClose}
-            className="absolute top-[max(env(safe-area-inset-top),1rem)] right-4 rounded-full bg-white/10 p-2 text-white"
-            aria-label={t("common.close")}
+        {isGuest ? (
+          <Link
+            to="/login"
+            onClick={rememberReturnPath}
+            className={buttonClasses("primary", "md")}
           >
-            <X className="h-4 w-4" />
-          </button>
-          <motion.div
-            initial={{ scale: 0.92, y: 8 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.92, y: 8 }}
-            onClick={(e) => e.stopPropagation()}
-            className="max-h-[85dvh] max-w-full"
+            <LogIn className="h-3.5 w-3.5" />
+            {t("spot.guest.cta")}
+          </Link>
+        ) : (
+          <Link
+            to={`/log?placeId=${place.id}`}
+            className={buttonClasses("primary", "md")}
           >
-            <img
-              src={s.photoUrl!}
-              alt=""
-              className="max-h-[80dvh] max-w-full rounded-xl"
-            />
-            <div className="mt-2 text-center text-xs text-white/80">
-              {s.displayName} · {formatDate(s.date)}
-              {s.note ? ` · ${s.note}` : ""}
-            </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: number;
-  icon?: React.ReactNode;
-}) {
-  return (
-    <div className="glass flex flex-col items-start gap-0.5 px-3 py-2">
-      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-wave-700 uppercase">
-        {icon}
-        {label}
-      </div>
-      <div className="font-display text-xl font-black text-wave-900">
-        {value}
+            {t("spot.log_here")}
+          </Link>
+        )}
       </div>
     </div>
   );
 }
 
-function ReactionBar({
-  session,
-  myUid,
-}: {
-  session: SessionDoc;
-  myUid?: string;
-}) {
-  const [showPicker, setShowPicker] = useState(false);
-  const [pending, setPending] = useState<string | null>(null);
-  const pickerRef = useRef<HTMLDivElement>(null);
+export default function SpotPage() {
+  const { placeId } = useParams<{ placeId: string }>();
   const t = useT();
-
-  useEffect(() => {
-    if (!showPicker) return;
-    function onOutside(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node))
-        setShowPicker(false);
-    }
-    document.addEventListener("mousedown", onOutside);
-    return () => document.removeEventListener("mousedown", onOutside);
-  }, [showPicker]);
-
-  const reactions = session.reactions ?? {};
-  const activeEmojis = REACTION_EMOJIS.filter(
-    (e) => (reactions[e]?.length ?? 0) > 0,
-  );
-
-  async function onToggle(emoji: string) {
-    if (!myUid || pending) return;
-    setPending(emoji);
-    try {
-      await toggleReaction(session.id, emoji, myUid, reactions[emoji] ?? []);
-    } finally {
-      setPending(null);
-      setShowPicker(false);
-    }
+  if (!placeId) {
+    return (
+      <div className="px-4 pt-6 text-center text-sm text-slate-500">
+        {t("spot.not_found")}
+      </div>
+    );
   }
-
-  return (
-    <div className="relative mt-1.5 flex flex-wrap items-center gap-1">
-      {activeEmojis.map((emoji) => {
-        const reactors = reactions[emoji] ?? [];
-        const mine = !!myUid && reactors.includes(myUid);
-        return (
-          <motion.button
-            key={emoji}
-            whileTap={{ scale: 0.85 }}
-            disabled={!myUid || pending === emoji}
-            onClick={() => onToggle(emoji)}
-            aria-label={t("reactions.toggle", { emoji })}
-            aria-pressed={mine}
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition-colors ${
-              mine
-                ? "bg-wave-100 text-wave-800 ring-wave-400"
-                : "bg-white/70 text-slate-600 ring-slate-200 hover:bg-slate-50"
-            } ${pending === emoji ? "opacity-60" : ""}`}
-          >
-            <span>{emoji}</span>
-            <span className="font-medium tabular-nums">{reactors.length}</span>
-          </motion.button>
-        );
-      })}
-
-      {myUid ? (
-        <div className="relative" ref={pickerRef}>
-          <button
-            onClick={() => setShowPicker((v) => !v)}
-            aria-label={t("reactions.add")}
-            className="flex h-6 w-6 items-center justify-center rounded-full bg-white/70 text-sm ring-1 ring-slate-200 hover:bg-slate-50"
-          >
-            +
-          </button>
-          <AnimatePresence>
-            {showPicker ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 4 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 4 }}
-                transition={{ duration: 0.12 }}
-                className="absolute right-0 bottom-full z-10 mb-1 flex gap-1 rounded-2xl bg-white p-1.5 shadow-lg ring-1 ring-slate-100"
-              >
-                {REACTION_EMOJIS.map((emoji) => {
-                  const mine =
-                    !!myUid && (reactions[emoji] ?? []).includes(myUid);
-                  return (
-                    <button
-                      key={emoji}
-                      onClick={() => onToggle(emoji)}
-                      aria-label={emoji}
-                      aria-pressed={mine}
-                      className={`flex h-8 w-8 items-center justify-center rounded-xl text-lg transition-colors ${
-                        mine ? "bg-wave-100" : "hover:bg-slate-100"
-                      }`}
-                    >
-                      {emoji}
-                    </button>
-                  );
-                })}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-        </div>
-      ) : null}
-    </div>
-  );
+  return <SpotView placeId={placeId} variant="page" />;
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -624,10 +534,18 @@ function WaterTempCard({
 
   const isWarm = place.waterTemp >= 17;
   const isCool = place.waterTemp < 10;
+  const mutedColor = isWarm
+    ? "text-amber-600"
+    : isCool
+      ? "text-sky-600"
+      : "text-teal-600";
+  const sourceLabel = place.waterTempProvider
+    ? t(`temp.source.${place.waterTempProvider}`)
+    : null;
 
   return (
     <div
-      className={`mt-3 flex items-center gap-2.5 rounded-2xl px-3 py-2.5 ring-1 ${
+      className={`mt-3 rounded-2xl px-3 py-2.5 ring-1 ${
         isWarm
           ? "bg-amber-50/80 ring-amber-200"
           : isCool
@@ -635,19 +553,22 @@ function WaterTempCard({
             : "bg-teal-50/80 ring-teal-200"
       }`}
     >
-      <Thermometer
-        className={`h-4 w-4 flex-none ${isWarm ? "text-amber-500" : isCool ? "text-sky-500" : "text-teal-500"}`}
-      />
-      <span
-        className={`font-semibold ${isWarm ? "text-amber-900" : isCool ? "text-sky-900" : "text-teal-900"}`}
-      >
-        {place.waterTemp.toFixed(1)} °C
-      </span>
-      <span
-        className={`text-xs ${isWarm ? "text-amber-600" : isCool ? "text-sky-600" : "text-teal-600"}`}
-      >
-        {ageLabel}
-      </span>
+      <div className="flex items-center gap-2.5">
+        <Thermometer
+          className={`h-4 w-4 flex-none ${isWarm ? "text-amber-500" : isCool ? "text-sky-500" : "text-teal-500"}`}
+        />
+        <span
+          className={`font-semibold ${isWarm ? "text-amber-900" : isCool ? "text-sky-900" : "text-teal-900"}`}
+        >
+          {place.waterTemp.toFixed(1)} °C
+        </span>
+        <span className={`text-xs ${mutedColor}`}>{ageLabel}</span>
+      </div>
+      {sourceLabel ? (
+        <div className={`mt-0.5 pl-[26px] text-[11px] ${mutedColor}`}>
+          {t("spot.temp.source", { source: sourceLabel })}
+        </div>
+      ) : null}
     </div>
   );
 }

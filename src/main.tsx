@@ -1,17 +1,30 @@
-import React from "react";
+import { StrictMode, lazy, Suspense } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import "leaflet/dist/leaflet.css";
+import { BrowserRouter } from "react-router";
 import "./index.css";
-import App from "./App";
-import { AuthProvider } from "./auth/AuthContext";
+import { installAppHeight } from "./lib/appHeight";
+import { BootSplash } from "./components/Splash";
 
+// Before first paint: publish the real viewport height as --app-height so
+// the shell isn't sized by iOS's lying launch viewport (see appHeight.ts).
+installAppHeight();
+
+// App is lazy so the Firebase/Leaflet/page chunks load *after* first paint.
+// Auth state lives in the Zustand store (no provider needed), so importing the
+// store — and with it the ~618 KB Firebase chunk — happens inside this lazy
+// boundary rather than eagerly here on the critical path.
+const App = lazy(() => import("./App"));
+
+// BootSplash is mounted eagerly (outside the lazy boundary) so it paints before
+// the app chunk loads. It's pure CSS + a tiny signal, so it stays off the
+// critical path, and it animates itself out once App reports ready.
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
+  <StrictMode>
     <BrowserRouter>
-      <AuthProvider>
+      <Suspense fallback={null}>
         <App />
-      </AuthProvider>
+      </Suspense>
+      <BootSplash />
     </BrowserRouter>
-  </React.StrictMode>,
+  </StrictMode>,
 );

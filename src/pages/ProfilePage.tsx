@@ -1,15 +1,17 @@
 import { useState, useTransition } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft,
   Award,
   CalendarHeart,
   Check,
+  ChevronRight,
   Clock,
   Compass,
   Flame,
+  History as HistoryIcon,
   Info,
+  Lock,
   LogOut,
   MapPin,
   Pencil,
@@ -18,6 +20,7 @@ import {
   Star,
   Trash2,
   Trophy,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import { updateProfile } from "firebase/auth";
@@ -25,20 +28,32 @@ import { auth } from "@/firebase";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import {
+  updateUserBorder,
   updateUserDisplayName,
   updateUserEmoji,
   updateUserHomeCountry,
   updateUserLocale,
 } from "@/lib/data";
 import { useLocale } from "@/lib/i18n";
+import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { COUNTRIES, flagEmoji } from "@/lib/countries";
 import { ACHIEVEMENTS } from "@/lib/achievements";
+import {
+  BORDERS,
+  isBorderUnlocked,
+  resolveBorder,
+  type Border,
+} from "@/lib/borders";
+import { sumScores } from "@/lib/scoring";
 import type { MyStats } from "@/lib/stats";
 import { formatDate, cn } from "@/lib/utils";
 import { monthShort, useT } from "@/lib/i18n";
+import { Button } from "@/components/ui/Button";
+import Stat from "@/components/ui/Stat";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { Input } from "@/components/ui/Input";
 import { toast } from "@/components/ui/Toast";
+import BackButton from "@/components/ui/BackButton";
 
 const EMOJI_POOL = [
   "🐬",
@@ -65,7 +80,6 @@ export default function ProfilePage() {
   const t = useT();
   const myStats = useStore((s) => s.myStats);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
-  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(profile?.displayName ?? "");
@@ -75,6 +89,21 @@ export default function ProfilePage() {
   const [deleting, deleteTransition] = useTransition();
   const locale = useLocale((s) => s.locale);
   const setLocale = useLocale((s) => s.setLocale);
+  const achievementCount = unlockedAchievements.size;
+  const myBorder = resolveBorder(
+    profile?.selectedBorder,
+    achievementCount,
+    unlockedAchievements,
+  );
+
+  async function pickBorder(id: string) {
+    if (!user) return;
+    try {
+      await updateUserBorder(user.uid, id);
+    } catch {
+      toast.error(t("profile.save_error"));
+    }
+  }
 
   async function pickLocale(next: "sv" | "en") {
     setLocale(next);
@@ -122,14 +151,21 @@ export default function ProfilePage() {
 
     startBusy(async () => {
       try {
+        await assertTextAllowed(trimmed);
         // Keep Firebase Auth and Firestore in sync so ensureUserDoc
         // doesn't revert the name on the next app load.
         await updateProfile(auth.currentUser!, { displayName: trimmed });
         await updateUserDisplayName(user.uid, trimmed);
         toast.success(t("profile.name_saved"));
         setEditingName(false);
-      } catch {
-        toast.error(t("profile.save_error"));
+      } catch (err) {
+        toast.error(
+          t(
+            err instanceof ModerationError
+              ? "moderation.name_rejected"
+              : "profile.save_error",
+          ),
+        );
       }
     });
   }
@@ -148,13 +184,7 @@ export default function ProfilePage() {
   return (
     <div className="px-4 pt-2 pb-12">
       <div className="mb-5 flex items-center gap-2">
-        <button
-          onClick={() => navigate(-1)}
-          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        <BackButton />
         <h2 className="font-display text-2xl font-black text-wave-900">
           {t("profile.title")}
         </h2>
@@ -164,7 +194,15 @@ export default function ProfilePage() {
       <div className="mb-5 flex flex-col items-center gap-3">
         <button
           onClick={() => setEmojiOpen((v) => !v)}
-          className="flex h-20 w-20 items-center justify-center rounded-full bg-wave-100 text-5xl shadow-md ring-4 ring-white transition-transform active:scale-95"
+          className={cn(
+            "flex h-20 w-20 items-center justify-center rounded-full bg-wave-100 text-5xl shadow-md ring-4 transition-transform active:scale-95",
+            myBorder.id === "none" ? "ring-white" : myBorder.ringClass,
+          )}
+          style={
+            myBorder.id === "none"
+              ? undefined
+              : { boxShadow: `0 0 0 1px white, 0 6px 18px ${myBorder.glow}` }
+          }
           aria-label={t("profile.change_emoji")}
           title={t("profile.change_emoji")}
         >
@@ -207,13 +245,12 @@ export default function ProfilePage() {
               maxLength={40}
               className="text-center font-display text-lg font-bold"
             />
-            <button
+            <Button
               type="submit"
+              size="icon-sm"
               disabled={busy}
-              className="rounded-full bg-wave-600 p-2 text-white shadow disabled:opacity-50"
-            >
-              <Check className="h-4 w-4" />
-            </button>
+              icon={<Check className="h-4 w-4" />}
+            />
             <button
               type="button"
               onClick={() => {
@@ -237,6 +274,26 @@ export default function ProfilePage() {
             <Pencil className="h-4 w-4 text-slate-400" />
           </button>
         )}
+
+        <Link
+          to="/achievements"
+          className={cn(
+            "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1",
+            myBorder.id === "none"
+              ? "bg-white/80 text-slate-500 ring-slate-200"
+              : cn(myBorder.bgClass, "text-white shadow-sm ring-white/40"),
+          )}
+          title={t("border.tooltip", {
+            n: achievementCount,
+            total: ACHIEVEMENTS.length,
+          })}
+        >
+          {myBorder.id !== "none" ? <span>{myBorder.emoji}</span> : null}
+          {t(`border.${myBorder.id}`)}
+          <span className="opacity-80">
+            · {achievementCount}/{ACHIEVEMENTS.length}
+          </span>
+        </Link>
       </div>
 
       {/* Home country */}
@@ -298,7 +355,9 @@ export default function ProfilePage() {
         <MiniCard
           icon={<Trophy className="h-3.5 w-3.5" />}
           label={t("map.stat.points")}
-          value={myStats.totalPoints + achievementBonusPoints}
+          value={
+            profile?.scores ? sumScores(profile.scores) : myStats.totalPoints
+          }
         />
         <MiniCard
           icon={<Flame className="h-3.5 w-3.5" />}
@@ -316,6 +375,17 @@ export default function ProfilePage() {
           value={myStats.winterSwims}
         />
       </div>
+
+      {/* Border picker — choose any frame you've unlocked (or turn it off). */}
+      {achievementCount > 0 ? (
+        <BorderPicker
+          emoji={profile?.emoji ?? "🌊"}
+          selectedId={myBorder.id}
+          achievementCount={achievementCount}
+          unlocked={unlockedAchievements}
+          onPick={pickBorder}
+        />
+      ) : null}
 
       {/* Shortcuts */}
       {myStats.totalSwims > 0 ? (
@@ -354,6 +424,21 @@ export default function ProfilePage() {
         </div>
       ) : null}
 
+      {/* History shortcut — History isn't in the bottom nav anymore, so
+          make sure it stays discoverable from the profile. */}
+      <Link to="/history" className="glass mb-4 flex items-center gap-2 p-3">
+        <HistoryIcon className="h-5 w-5 text-wave-700" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+            {t("nav.history")}
+          </div>
+          <div className="font-display text-sm font-bold text-wave-900">
+            {t("profile.history_cta")}
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-slate-400" />
+      </Link>
+
       {/* Achievement chips */}
       {/* {unlockedAchievements.size > 0 ? (
         <div className="no-scrollbar -mx-4 mb-4 flex gap-1.5 overflow-x-auto px-4">
@@ -365,7 +450,7 @@ export default function ProfilePage() {
               <span
                 key={a.id}
                 className="flex-none rounded-full bg-white/80 px-2.5 py-2 my-1 text-base ring-1 ring-amber-200"
-                title={`${t(`achievement.${a.id}.name`)} · +${a.points}`}
+                title={t(`achievement.${a.id}.name`)}
               >
                 {a.emoji}
               </span>
@@ -378,6 +463,15 @@ export default function ProfilePage() {
 
       {/* About + sign out */}
       <div className="mt-8 space-y-2">
+        {profile?.isAdmin ? (
+          <Link
+            to="/admin/users"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            {t("admin.users.cta")}
+          </Link>
+        ) : null}
         <Link
           to="/about"
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white"
@@ -441,6 +535,75 @@ export default function ProfilePage() {
   );
 }
 
+function unlockHint(b: Border, t: ReturnType<typeof useT>): string {
+  return b.unlock.kind === "count"
+    ? t("border.unlock.count", { n: b.unlock.min })
+    : t("border.unlock.achievement", {
+        name: t(`achievement.${b.unlock.achievementId}.name`),
+      });
+}
+
+function BorderPicker({
+  emoji,
+  selectedId,
+  achievementCount,
+  unlocked,
+  onPick,
+}: {
+  emoji: string;
+  selectedId: string;
+  achievementCount: number;
+  unlocked: Set<string>;
+  onPick: (id: string) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="mb-4">
+      <h3 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+        {t("border.picker.title")}
+      </h3>
+      <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 py-2">
+        {BORDERS.map((b) => {
+          const earned = isBorderUnlocked(b, achievementCount, unlocked);
+          const active = b.id === selectedId;
+          return (
+            <button
+              key={b.id}
+              type="button"
+              disabled={!earned}
+              onClick={() => onPick(b.id)}
+              title={earned ? t(`border.${b.id}`) : unlockHint(b, t)}
+              className={cn(
+                "flex flex-none flex-col items-center gap-1",
+                !earned && "opacity-60",
+              )}
+            >
+              <span
+                className={cn(
+                  "relative flex h-12 w-12 items-center justify-center rounded-full bg-wave-100 text-2xl ring-4",
+                  b.id === "none" ? "ring-slate-200" : b.ringClass,
+                  active &&
+                    "outline outline-2 outline-offset-2 outline-wave-500",
+                )}
+                style={
+                  b.id === "none"
+                    ? undefined
+                    : { boxShadow: `0 2px 10px ${b.glow}` }
+                }
+              >
+                {earned ? emoji : <Lock className="h-4 w-4 text-slate-400" />}
+              </span>
+              <span className="max-w-[4.5rem] truncate text-[10px] font-semibold text-slate-600">
+                {t(`border.${b.id}`)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function MiniCard({
   icon,
   label,
@@ -493,13 +656,13 @@ function Vibes({ stats }: { stats: MyStats }) {
       </h3>
 
       <div className="grid grid-cols-2 gap-2">
-        <VibesMini
+        <Stat
           icon={<Flame className="h-4 w-4 text-amber-500" />}
           label={t("vibes.streak")}
           value={streakValue}
           sub={streakSub}
         />
-        <VibesMini
+        <Stat
           icon={<Clock className="h-4 w-4 text-wave-600" />}
           label={t("vibes.last_swim")}
           value={lastValue}
@@ -578,31 +741,6 @@ function Vibes({ stats }: { stats: MyStats }) {
           </div>
         </Link>
       ) : null}
-    </div>
-  );
-}
-
-function VibesMini({
-  icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <div className="glass flex flex-col gap-0.5 px-3 py-2.5">
-      <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
-        {icon}
-        {label}
-      </div>
-      <div className="font-display text-lg font-black text-wave-900">
-        {value}
-      </div>
-      {sub ? <div className="text-[10px] text-slate-500">{sub}</div> : null}
     </div>
   );
 }
