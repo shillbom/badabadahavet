@@ -1,22 +1,19 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router";
 import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
 import { useT } from "@/lib/i18n";
+import BackButton from "@/components/ui/BackButton";
+
+// Pre-filled Swish payment link (amount + message are editable by the payer).
+const SWISH_URL =
+  "https://app.swish.nu/1/p/sw/?sw=0734323512&amt=20.00&cur=SEK&msg=Badligan%20rulez&edit=amt,msg&src=qr";
 
 export default function AboutPage() {
-  const navigate = useNavigate();
   const t = useT();
 
   return (
     <div className="px-4 pt-2 pb-12">
       <div className="mb-4 flex items-center gap-2">
-        <button
-          onClick={() => navigate(-1)}
-          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        <BackButton />
         <h2 className="font-display text-2xl font-black text-wave-900">
           {t("about.title")}
         </h2>
@@ -49,11 +46,21 @@ export default function AboutPage() {
 
       <Section title={t("about.scoring.title")}>
         <ul className="list-disc space-y-1.5 pl-5">
-          <li>{t("about.scoring.bracket")}</li>
+          <li>{t("about.scoring.swim")}</li>
           <li>{t("about.scoring.new_place")}</li>
-          <li>{t("about.scoring.xmas")}</li>
-          <li>{t("about.scoring.abroad")}</li>
-          <li>{t("about.scoring.streak")}</li>
+          <li>{t("about.scoring.winter")}</li>
+          <li>{t("about.scoring.achievements")}</li>
+        </ul>
+      </Section>
+
+      <Section title={t("about.rules.title")}>
+        <ul className="list-disc space-y-1.5 pl-5">
+          <li>{t("about.rules.no_cheating")}</li>
+          <li>{t("about.rules.shoulders")}</li>
+          <li>{t("about.rules.pool")}</li>
+          <li>{t("about.rules.scream")}</li>
+          <li>{t("about.rules.brag")}</li>
+          <li>{t("about.rules.have_fun")}</li>
         </ul>
       </Section>
 
@@ -69,6 +76,80 @@ export default function AboutPage() {
             badplatsen.havochvatten.se
           </a>
           .
+        </p>
+        <p className="mt-2">
+          {t("about.data.eea")}{" "}
+          <a
+            href="https://www.eea.europa.eu/themes/water/europes-seas-and-coasts/assessments/state-of-bathing-water"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-wave-700 underline hover:text-wave-800"
+          >
+            eea.europa.eu
+          </a>
+          .
+        </p>
+        <p className="mt-2">
+          {t("about.data.smhi")}{" "}
+          <a
+            href="https://www.smhi.se/data/oceanografi/havstemperatur"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-wave-700 underline hover:text-wave-800"
+          >
+            smhi.se
+          </a>
+          .
+        </p>
+        <p className="mt-2">
+          {t("about.data.meteo")}{" "}
+          <a
+            href="https://open-meteo.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-wave-700 underline hover:text-wave-800"
+          >
+            open-meteo.com
+          </a>
+          .
+        </p>
+        <p className="mt-2">{t("about.data.maps")}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-wave-700"
+          >
+            © OpenStreetMap
+          </a>
+          {" · "}
+          <a
+            href="https://carto.com/attributions"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-wave-700"
+          >
+            CARTO
+          </a>
+          {" · "}
+          <a
+            href="https://www.esri.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-wave-700"
+          >
+            Esri
+          </a>
+          {" · "}
+          <a
+            href="https://www.bigdatacloud.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-wave-700"
+          >
+            BigDataCloud
+          </a>
         </p>
       </Section>
 
@@ -90,6 +171,19 @@ export default function AboutPage() {
           </a>
           .
         </p>
+      </Section>
+
+      <Section title={t("about.support.title")}>
+        <p>{t("about.support.body")}</p>
+        <a
+          href={SWISH_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 flex items-center justify-center gap-2 rounded-full bg-gradient-to-br from-pink-500 to-rose-500 px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:from-pink-600 hover:to-rose-600 active:scale-[0.98]"
+        >
+          <span className="text-base">🍻</span>
+          {t("about.support.cta")}
+        </a>
       </Section>
 
       <div className="mt-8 text-center text-xs text-slate-500">

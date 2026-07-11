@@ -1,23 +1,34 @@
-import {
-  Link,
-  NavLink,
-  Outlet,
-  useLocation,
-  useNavigate,
-} from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
-import { Map as MapIcon, History, Trophy, Plus } from "lucide-react";
-import { Suspense } from "react";
+import {
+  Map as MapIcon,
+  Trophy,
+  Plus,
+  ListChecks,
+  LogIn,
+  History,
+  Info,
+  UsersRound,
+  WavesLadder,
+} from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
-import { cn } from "@/lib/utils";
+import { openRecap } from "@/components/SinceLastVisit";
+import { cn, rememberReturnPath } from "@/lib/utils";
+import { buttonClasses } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
+import SwimNudge from "@/components/SwimNudge";
+import DiscoRays from "@/components/DiscoRays";
 
 export default function Layout() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const t = useT();
+  const myStats = useStore((s) => s.myStats);
+
+  const [nudgeOpen, setNudgeOpen] = useState(false);
 
   const groupCount = useStore((s) => s.groups.length);
   const groupSubtitle =
@@ -33,47 +44,151 @@ export default function Layout() {
     location.pathname.startsWith("/recap") ||
     location.pathname.startsWith("/log");
 
+  const isGuest = !user;
+
+  // Last-chance nudge: when the streak dies unless the user swims today,
+  // suggest the nearest new spot — once per calendar day, and only after
+  // the page has settled so it doesn't fight the since-last-visit digest.
+  const atRisk = myStats.streak.atRisk;
+  useEffect(() => {
+    if (!user || !atRisk) return;
+    const key = `nudge-shown-${new Date().toDateString()}`;
+    if (localStorage.getItem(key)) return;
+    const timer = setTimeout(() => {
+      localStorage.setItem(key, "1");
+      setNudgeOpen(true);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [user, atRisk]);
+
   // The map page is non-scrolling — the map fills available space. Remove
   // the bottom padding so it doesn't create dead scroll space below the map.
   const isMapPage = location.pathname === "/";
 
+  // Desktop: the phone-column shell relaxes per route. The map gets the
+  // whole viewport (maps want space), story-style recap stays phone-shaped,
+  // and everything else widens to a comfortable reading column.
+  const isRecap = location.pathname.startsWith("/recap");
+  const shellWidth = isMapPage
+    ? "max-w-md lg:max-w-none"
+    : isRecap
+      ? "max-w-md"
+      : "max-w-md lg:max-w-2xl";
+
   return (
-    <div className="relative mx-auto flex h-[100dvh] w-full max-w-md flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm">
-      <header className="sticky top-0 z-[1000] flex items-center justify-between bg-gradient-to-b from-white/80 to-transparent px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-2 backdrop-blur-sm">
-        <Link to="/profile" className="flex items-center gap-2">
-          <motion.div
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ type: "spring", stiffness: 220, damping: 22 }}
-            className="flex items-center gap-2"
-          >
-            <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <div className="font-display text-base leading-none font-bold text-wave-900">
-                  {profile?.displayName ?? t("layout.swimmer")}
+    <div
+      className={cn(
+        "relative mx-auto flex h-[var(--app-height,100dvh)] w-full flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm",
+        shellWidth,
+      )}
+    >
+      <header className="sticky top-0 z-[1000] px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3">
+        {/* Backdrop fade — a blurred white gradient that extends past the
+            header and is masked to dissolve into the content, so there's no
+            hard blur/colour seam. Content above stays fully crisp. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[calc(100%+1.75rem)] bg-gradient-to-b from-white/90 via-white/55 to-transparent [mask-image:linear-gradient(to_bottom,black,black_45%,transparent)] backdrop-blur-sm [-webkit-mask-image:linear-gradient(to_bottom,black,black_45%,transparent)]"
+        />
+        <div className="flex items-center justify-between">
+          {isGuest ? (
+            <Link
+              to="/login"
+              onClick={rememberReturnPath}
+              className="flex items-center gap-2"
+            >
+              <motion.div
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                className="flex items-center gap-2"
+              >
+                <span className="text-2xl">🌊</span>
+                <div>
+                  <div className="font-display text-base leading-none font-bold text-wave-900">
+                    {t("layout.guest")}
+                  </div>
+                  <div className="text-[11px] text-wave-700/70">
+                    {t("layout.guest.subtitle")}
+                  </div>
                 </div>
-                {profile?.isAdmin ? (
-                  <span
-                    className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-white uppercase shadow"
-                    title={t("admin.label")}
-                  >
-                    {t("admin.label")}
-                  </span>
-                ) : null}
-              </div>
-              <div className="text-[11px] text-wave-700/70">
-                {groupSubtitle}
-              </div>
+              </motion.div>
+            </Link>
+          ) : (
+            <Link to="/profile" className="flex items-center gap-2">
+              <motion.div
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ type: "spring", stiffness: 220, damping: 22 }}
+                className="flex items-center gap-2"
+              >
+                <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="font-display text-base leading-none font-bold text-wave-900">
+                      {profile?.displayName ?? t("layout.swimmer")}
+                    </div>
+                    {profile?.isAdmin ? (
+                      <span
+                        className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-white uppercase shadow"
+                        title={t("admin.label")}
+                      >
+                        {t("admin.label")}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="text-[11px] text-wave-700/70">
+                    {groupSubtitle}
+                  </div>
+                </div>
+              </motion.div>
+            </Link>
+          )}
+          {isGuest ? (
+            <Link
+              to="/login"
+              onClick={rememberReturnPath}
+              className={buttonClasses("primary", "xs")}
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              {t("layout.sign_in")}
+            </Link>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setNudgeOpen(true)}
+                aria-label={t("map.nudge.button")}
+                title={t("map.nudge.button")}
+                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+              >
+                <WavesLadder className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={openRecap}
+                aria-label={t("sincevisit.open")}
+                title={t("sincevisit.open")}
+                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+              >
+                <History className="h-4 w-4" />
+              </button>
+              <Link
+                to="/about"
+                aria-label={t("about.title")}
+                title={t("about.title")}
+                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+              >
+                <Info className="h-4 w-4" />
+              </Link>
             </div>
-          </motion.div>
-        </Link>
-        <div className="w-8" aria-hidden />
+          )}
+        </div>
       </header>
 
       <main
         className={cn(
-          "relative flex flex-1 flex-col",
+          "relative flex flex-1 flex-col overflow-x-hidden",
           isMapPage
             ? "overflow-hidden"
             : hideChrome
@@ -104,10 +219,10 @@ export default function Layout() {
       </main>
 
       <AnimatePresence>
-        {!hideChrome ? (
+        {!hideChrome && !isGuest ? (
           <div
             key="fab-shell"
-            className="pointer-events-none fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center"
+            className="pointer-events-none fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center md:bottom-10"
           >
             <motion.button
               initial={{ y: 80, opacity: 0 }}
@@ -138,32 +253,46 @@ export default function Layout() {
             animate={{ y: 0 }}
             exit={{ y: 80 }}
             transition={{ type: "spring", stiffness: 280, damping: 28 }}
-            className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] backdrop-blur"
+            className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] backdrop-blur md:bottom-4 md:rounded-3xl md:border md:pb-2 md:shadow-xl md:shadow-wave-900/10"
           >
             <NavTab
               to="/"
               label={t("nav.map")}
               icon={<MapIcon className="h-5 w-5" />}
             />
-            <NavTab
-              to="/history"
-              label={t("nav.history")}
-              icon={<History className="h-5 w-5" />}
-            />
-            <span className="w-14" aria-hidden />
+            {!isGuest ? (
+              <NavTab
+                to="/toswim"
+                label={t("nav.toswim")}
+                icon={<ListChecks className="h-5 w-5" />}
+              />
+            ) : null}
+            {!isGuest ? <span className="w-14" aria-hidden /> : null}
             <NavTab
               to="/leaderboard"
               label={t("nav.top")}
               icon={<Trophy className="h-5 w-5" />}
             />
-            <NavTab
-              to="/groups"
-              label={t("nav.groups")}
-              icon={<span className="text-base">👥</span>}
-            />
+            {!isGuest ? (
+              <NavTab
+                to="/groups"
+                label={t("nav.groups")}
+                icon={<UsersRound className="h-5 w-5" />}
+              />
+            ) : null}
           </motion.nav>
         ) : null}
       </AnimatePresence>
+
+      <SwimNudge
+        open={nudgeOpen}
+        onClose={() => setNudgeOpen(false)}
+        atRisk={atRisk}
+        streakDays={myStats.streak.current}
+      />
+
+      {/* 50+ day streak: the mega-disco rays cover the whole app (self-gating). */}
+      <DiscoRays />
     </div>
   );
 }
@@ -183,7 +312,7 @@ function NavTab({
       end={to === "/"}
       className={({ isActive }) =>
         cn(
-          "relative flex w-12 flex-col items-center gap-0.5 rounded-2xl px-1 py-1 text-[10px] font-medium transition-colors",
+          "relative flex w-12 flex-col items-center gap-0.5 rounded-2xl px-4 py-2 text-[10px] font-medium transition-colors",
           isActive ? "text-wave-700" : "text-slate-400 hover:text-slate-600",
         )
       }

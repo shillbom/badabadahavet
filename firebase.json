@@ -9,10 +9,80 @@
   "hosting": {
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "rewrites": [
+      {
+        "source": "/api/lookupGroupByCode",
+        "function": {
+          "functionId": "lookupGroupByCode",
+          "region": "europe-west1"
+        }
+      },
+      {
+        "source": "/api/joinGroupByCode",
+        "function": {
+          "functionId": "joinGroupByCode",
+          "region": "europe-west1"
+        }
+      },
+      {
+        "source": "/api/leaveGroup",
+        "function": { "functionId": "leaveGroup", "region": "europe-west1" }
+      },
+      {
+        "source": "/api/refreshPlaceTemp",
+        "function": {
+          "functionId": "refreshPlaceTemp",
+          "region": "europe-west1"
+        }
+      },
+      {
+        "source": "/api/logSession",
+        "function": { "functionId": "logSession", "region": "europe-west1" }
+      },
+      {
+        "source": "/api/removeSession",
+        "function": { "functionId": "removeSession", "region": "europe-west1" }
+      },
+      {
+        "source": "/api/deleteAccount",
+        "function": { "functionId": "deleteAccount", "region": "europe-west1" }
+      },
+      {
+        "source": "/api/banUser",
+        "function": { "functionId": "banUser", "region": "europe-west1" }
+      },
+      { "source": "**", "destination": "/index.html" }
+    ],
     "headers": [
       {
         "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/sw.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/registerSW.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/site.webmanifest",
         "headers": [
           {
             "key": "Cache-Control",
@@ -28,6 +98,24 @@
             "value": "public, max-age=31536000, immutable"
           }
         ]
+      },
+      {
+        "source": "/robots.txt",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600"
+          }
+        ]
+      },
+      {
+        "source": "/sitemap.xml",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600"
+          }
+        ]
       }
     ]
   },
@@ -35,8 +123,8 @@
     {
       "source": "functions",
       "codebase": "default",
-      "runtime": "nodejs20",
-      "ignore": ["node_modules", ".git", "*.log"]
+      "runtime": "nodejs24",
+      "ignore": ["node_modules", ".git", "*.log", "*.test.js"]
     }
   ],
   "emulators": {

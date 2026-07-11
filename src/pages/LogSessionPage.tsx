@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MapPin,
@@ -7,12 +7,11 @@ import {
   CalendarDays,
   Camera,
   X,
-  ArrowLeft,
   Sparkles,
   Search,
 } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
-import { useStore } from "@/store/sessions";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
@@ -23,13 +22,25 @@ import {
   findOrCreatePlace,
   updateUserLastLocation,
 } from "@/lib/data";
-import { isChristmasEve, resolveHomeBracket } from "@/lib/scoring";
+import { checkImageFile, ImageProcessingError } from "@/lib/image";
+import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { reverseGeocodeCountry } from "@/lib/geocode";
-import { flagEmoji } from "@/lib/countries";
 import { haversineMeters } from "@/lib/utils";
-import { PLACE_RADIUS_METERS } from "@/lib/scoring";
-import type { SessionDoc } from "@/lib/types";
+import {
+  PLACE_RADIUS_METERS,
+  isWinterMonth,
+  previewPoints,
+} from "@/lib/scoring";
+import { resolveBorder } from "@/lib/borders";
+import {
+  computeStreak,
+  streakLevel,
+  streakTier,
+  SWIM_DAYS_PER_SKIP,
+} from "@/lib/streak";
 import { useLocale, useT } from "@/lib/i18n";
+import BackButton from "@/components/ui/BackButton";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 
 type Mode = "now" | "pick";
 
@@ -45,7 +56,12 @@ export default function LogSessionPage() {
   const locale = useLocale((s) => s.locale);
   const inputLang = locale === "sv" ? "sv-SE" : "en-GB";
   const places = useStore((s) => s.places);
-  const allSessions = useStore((s) => s.allSessions);
+  const mySessions = useStore((s) => s.mySessions);
+  const myPlaceIds = useStore((s) => s.myPlaceIds);
+  const unlockedAchievements = useStore((s) => s.unlockedAchievements);
+  // Pin popups + achievement checks read the community feed — keep it
+  // subscribed while logging (this page is behind login).
+  useAllSessionsFeed();
 
   // Pre-select a place when navigating from SpotPage (?placeId=xxx).
   const preselectedPlaceId = searchParams.get("placeId");
@@ -217,9 +233,23 @@ export default function LogSessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
+    // Reject oversized / unsupported images right away so the user gets a
+    // clear message instead of a failed (or hung) upload at submit time.
+    const reason = await checkImageFile(f);
+    if (reason) {
+      toast.error(
+        t(
+          reason === "too-large"
+            ? "log.error.image_too_large"
+            : "log.error.image_failed",
+        ),
+      );
+      if (photoInput.current) photoInput.current.value = "";
+      return;
+    }
     setPhotoFile(f);
     setPhotoPreview(URL.createObjectURL(f));
   }
@@ -250,16 +280,36 @@ export default function LogSessionPage() {
     }
     setBusy(true);
     try {
+      // Pre-check the note before the (potentially slow) photo upload —
+      // the logSession function re-checks it authoritatively anyway.
+      if (note.trim()) await assertTextAllowed(note);
       const place = await findOrCreatePlace({
         name: finalName,
         lat: coords.lat,
         lng: coords.lng,
         createdBy: user.uid,
         date: ts,
+        existingPlaces: places,
       });
+      // Rate limit: max one swim per hour at the same place. A violation
+      // implies an earlier session at this place, so `place` can't be a
+      // just-created orphan when we bail here.
+      const HOUR_MS = 3_600_000;
+      if (
+        mySessions.some(
+          (s) => s.placeId === place.id && Math.abs(s.date - ts) < HOUR_MS,
+        )
+      ) {
+        toast.error(t("log.error.too_soon"));
+        return;
+      }
+      const myBorder = resolveBorder(
+        profile.selectedBorder,
+        unlockedAchievements.size,
+        unlockedAchievements,
+      );
       const session = await createSession({
         uid: user.uid,
-        displayName: profile.displayName,
         place,
         lat: coords.lat,
         lng: coords.lng,
@@ -267,74 +317,105 @@ export default function LogSessionPage() {
         note,
         photoFile,
         country,
-        homeCountry: profile.homeCountry ?? null,
+        border: myBorder.id,
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
+      // Streak feedback, computed against the pre-log session list: crossing
+      // a tier (3/7/30) or an intensity step within one (10/20/40/50) queues
+      // a celebration after the swim splash; banking a new life buoy (every
+      // 4th swim day) gets a toast.
+      const dates = mySessions.map((s) => s.date);
+      const before = computeStreak(dates);
+      const after = computeStreak([...dates, ts]);
+      const tier = streakTier(after.current);
+      if (
+        after.current > before.current &&
+        tier !== "plain" &&
+        (tier !== streakTier(before.current) ||
+          streakLevel(after.current) > streakLevel(before.current))
+      ) {
+        celebrate.streak(tier, after.current);
+      } else if (
+        after.currentStart !== null &&
+        Math.floor(after.swimDays / SWIM_DAYS_PER_SKIP) >
+          Math.floor(before.swimDays / SWIM_DAYS_PER_SKIP)
+      ) {
+        toast.success(t("log.buoy_earned"));
+      }
       navigate("/history");
-    } catch {
-      toast.error(t("log.error.generic"));
+    } catch (err) {
+      // A too-large / unreadable photo gets a specific message, a name or
+      // note rejected by moderation gets another; everything else falls
+      // back to the generic "couldn't save".
+      if (err instanceof ImageProcessingError) {
+        toast.error(
+          t(
+            err.reason === "too-large"
+              ? "log.error.image_too_large"
+              : "log.error.image_failed",
+          ),
+        );
+      } else if (err instanceof ModerationError) {
+        toast.error(t("moderation.text_rejected"));
+      } else {
+        toast.error(t("log.error.generic"));
+      }
     } finally {
       setBusy(false);
     }
   }
 
   const dateObj = new Date(date);
-  const homeCountry = profile?.homeCountry ?? null;
-  const bracket = resolveHomeBracket(homeCountry, country, dateObj.getMonth());
-  const isHome = bracket.isHome;
-  const xmasBonus =
-    isHome && homeCountry !== "OTHER" && isChristmasEve(dateObj);
-  const sessionsByPlace = useMemo(() => {
-    const m = new Map<string, SessionDoc[]>();
-    for (const s of allSessions) {
-      const arr = m.get(s.placeId) ?? [];
-      arr.push(s);
-      m.set(s.placeId, arr);
-    }
-    return m;
-  }, [allSessions]);
+  const isWinterSwim = isWinterMonth(dateObj);
+  // "New spot" = a place the user hasn't logged before. A brand-new pin
+  // (no pickedPlaceId) is always new; a picked existing place is new only
+  // if it's not already in the user's own history.
+  const isNewSpot = !pickedPlaceId || !myPlaceIds.has(pickedPlaceId);
+  const pointsPreview = previewPoints({
+    isNewSpot,
+    isWinter: isWinterSwim,
+  });
+  const sessionsByPlace = useStore((s) => s.sessionsByPlace);
 
   return (
     <form onSubmit={submit} className="px-4 pt-2 pb-10">
       <div className="mb-3 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        <BackButton />
         <h2 className="font-display text-xl font-black text-wave-900">
           {t("log.title")}
         </h2>
         <span className="w-8" />
       </div>
 
-      <div className="flex rounded-full bg-slate-100 p-1">
-        <button
-          type="button"
-          data-active={mode === "now"}
-          onClick={() => {
-            intentionalNowRef.current = true;
-            setMode("now");
-          }}
-          className="pill-tab"
-        >
-          <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
-        </button>
-        <button
-          type="button"
-          data-active={mode === "pick"}
-          onClick={() => {
-            intentionalNowRef.current = false;
-            setMode("pick");
-          }}
-          className="pill-tab"
-        >
-          <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
-        </button>
-      </div>
+      <SegmentedControl
+        value={mode}
+        onChange={(next) => {
+          intentionalNowRef.current = next === "now";
+          setMode(next);
+        }}
+        options={[
+          {
+            value: "now",
+            label: (
+              <>
+                <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
+              </>
+            ),
+          },
+          {
+            value: "pick",
+            label: (
+              <>
+                <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
+              </>
+            ),
+          },
+        ]}
+      />
+
+      <p className="mt-2 px-1 text-center text-[11px] text-slate-500">
+        {mode === "now" ? t("log.mode.now.hint") : t("log.mode.pick.hint")}
+      </p>
 
       <AnimatePresence mode="wait">
         <motion.div
@@ -474,26 +555,41 @@ export default function LogSessionPage() {
 
           <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-white/60">
             <div className="flex items-center gap-2 text-xs text-slate-600">
-              <MapPin className="h-3.5 w-3.5 text-wave-600" />
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-wave-600" />
               {coords ? (
-                <span>
-                  {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
-                  {suggestion ? (
-                    <span className="ml-2 text-wave-700">
-                      · {t("log.coords.near", { name: suggestion })}
+                <span className="flex flex-1 items-center gap-2">
+                  {pickedPlaceId ? (
+                    <span className="chip bg-slate-100 text-slate-700 ring-slate-200">
+                      📍 {t("log.badge.existing_spot")}
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="chip bg-emerald-100 text-emerald-800 ring-emerald-200">
+                      ✨ {t("log.badge.new_spot")}
+                    </span>
+                  )}
+                  <span className="text-slate-500">
+                    {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+                    {suggestion ? (
+                      <span className="ml-1 text-wave-700">
+                        · {t("log.coords.near", { name: suggestion })}
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
               ) : mode === "now" ? (
                 <span>{t("log.coords.reading")}</span>
               ) : (
-                <span>{t("log.coords.tap_map")}</span>
+                <span>{t("log.empty.pick")}</span>
               )}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="name">{t("log.field.spot_name")}</Label>
+            <Label htmlFor="name">
+              {coords && !pickedPlaceId
+                ? t("log.field.spot_name.new")
+                : t("log.field.spot_name")}
+            </Label>
             <div className="relative">
               <Input
                 id="name"
@@ -519,6 +615,11 @@ export default function LogSessionPage() {
                 </button>
               ) : null}
             </div>
+            {pickedPlaceId ? (
+              <p className="text-[11px] text-slate-500">
+                {t("log.field.spot_name.locked_hint")}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
@@ -540,32 +641,23 @@ export default function LogSessionPage() {
                 {t("log.field.when.now_hint")}
               </div>
             ) : null}
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {isHome ? (
-                <div
-                  className={
-                    bracket.category === "D"
-                      ? "chip bg-sky-100 text-sky-800 ring-sky-200"
-                      : bracket.category === "C"
-                        ? "chip bg-indigo-100 text-indigo-800 ring-indigo-200"
-                        : bracket.category === "B"
-                          ? "chip bg-amber-100 text-amber-800 ring-amber-200"
-                          : "chip bg-emerald-100 text-emerald-800 ring-emerald-200"
-                  }
-                >
-                  {t(`log.bracket.${bracket.category}`)} · +{bracket.basePoints}
-                </div>
-              ) : (
-                <div className="chip bg-slate-100 text-slate-700 ring-slate-200">
-                  {country ? `${flagEmoji(country)} ` : ""}
-                  {t("log.bracket.abroad")}
-                </div>
-              )}
-              {xmasBonus ? (
-                <div className="chip bg-rose-100 text-rose-800 ring-rose-200">
-                  🎄 {t("log.xmas_chip")}
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <div className="chip bg-wave-100 text-wave-800 ring-wave-200">
+                💧 {t("log.points.swim")}
+              </div>
+              {isNewSpot ? (
+                <div className="chip bg-emerald-100 text-emerald-800 ring-emerald-200">
+                  ✨ {t("log.points.new_spot")}
                 </div>
               ) : null}
+              {isWinterSwim ? (
+                <div className="chip bg-sky-100 text-sky-800 ring-sky-200">
+                  ❄️ {t("log.points.winter")}
+                </div>
+              ) : null}
+              <span className="ml-auto font-display text-sm font-black text-wave-700">
+                {t("log.points.total", { n: pointsPreview })}
+              </span>
             </div>
           </div>
 
@@ -608,11 +700,13 @@ export default function LogSessionPage() {
                 {t("log.add_photo")}
               </button>
             )}
+            {/* No `capture` attribute — that would force the camera. Leaving
+                it off lets mobile users choose the photo library OR take a
+                new photo. */}
             <input
               ref={photoInput}
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={onPhotoChange}
             />

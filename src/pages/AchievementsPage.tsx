@@ -1,24 +1,37 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Lock } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Lock } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
-import { useStore } from "@/store/sessions";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import {
   ACHIEVEMENTS,
+  achievementProgress,
+  computeAchievementStats,
   type Achievement,
-  type AchievementContext,
 } from "@/lib/achievements";
+import { tierForCount, nextTier } from "@/lib/borders";
 import { cn, formatDate } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
+import BackButton from "@/components/ui/BackButton";
 
 export default function AchievementsPage() {
-  const navigate = useNavigate();
   const { profile } = useAuth();
   const t = useT();
   const achievementCtx = useStore((s) => s.achievementCtx);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
-  const achievementBonusPoints = useStore((s) => s.achievementBonusPoints);
+  // Community-dependent achievements (and their progress bars) evaluate
+  // against the year feed — keep it subscribed while this page is open.
+  useAllSessionsFeed();
+
+  const tier = tierForCount(unlockedAchievements.size);
+  const next = nextTier(unlockedAchievements.size);
+
+  // One aggregate pass feeds every row's progress bar — recomputing per row
+  // would rescan the session arrays once per achievement, every render.
+  const stats = useMemo(
+    () => computeAchievementStats(achievementCtx),
+    [achievementCtx],
+  );
 
   const items = useMemo(() => {
     return [...ACHIEVEMENTS].sort((a, b) => {
@@ -32,13 +45,7 @@ export default function AchievementsPage() {
   return (
     <div className="px-4 pt-2 pb-12">
       <div className="mb-3 flex items-center gap-2">
-        <button
-          onClick={() => navigate(-1)}
-          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
+        <BackButton />
         <div>
           <h2 className="font-display text-2xl font-black text-wave-900">
             {t("achievements.title")}
@@ -47,9 +54,36 @@ export default function AchievementsPage() {
             {t("achievements.summary", {
               n: unlockedAchievements.size,
               total: ACHIEVEMENTS.length,
-              pts: achievementBonusPoints,
             })}
           </p>
+        </div>
+      </div>
+
+      {/* Rank banner — turns achievement count into a visible badge that
+          also decorates the user's pins and profile. */}
+      <div
+        className={cn(
+          "mb-3 flex items-center gap-3 rounded-2xl p-3 text-white shadow-sm",
+          tier.id === "none"
+            ? "bg-gradient-to-br from-slate-300 to-slate-500"
+            : tier.bgClass,
+        )}
+      >
+        <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-white/25 text-2xl ring-2 ring-white/50">
+          {tier.id === "none" ? "🌊" : tier.emoji}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-display text-lg font-black">
+            {t(`border.${tier.id}`)}
+          </div>
+          <div className="text-[11px] text-white/90">
+            {next
+              ? t("border.next", {
+                  n: next.remaining,
+                  rank: t(`border.${next.border.id}`),
+                })
+              : t("border.maxed")}
+          </div>
         </div>
       </div>
 
@@ -60,7 +94,9 @@ export default function AchievementsPage() {
             achievement={a}
             unlocked={unlockedAchievements.has(a.id)}
             unlockedAt={profile?.achievements?.[a.id]}
-            ctx={achievementCtx}
+            progress={
+              unlockedAchievements.has(a.id) ? 1 : achievementProgress(a, stats)
+            }
             index={i}
           />
         ))}
@@ -73,17 +109,16 @@ function Row({
   achievement,
   unlocked,
   unlockedAt,
-  ctx,
+  progress,
   index,
 }: {
   achievement: Achievement;
   unlocked: boolean;
   unlockedAt?: number;
-  ctx: AchievementContext;
+  progress: number;
   index: number;
 }) {
   const t = useT();
-  const progress = achievement.progress?.(ctx) ?? (unlocked ? 1 : 0);
   return (
     <motion.li
       initial={{ opacity: 0, y: 4 }}
@@ -134,8 +169,9 @@ function Row({
                   ? "bg-wave-100 text-wave-800"
                   : "bg-slate-100 text-slate-600",
             )}
+            title={t("achievements.tier", { n: achievement.tier })}
           >
-            +{achievement.points}
+            {"★".repeat(achievement.tier)}
           </span>
         </div>
         <div className="text-[11px] text-slate-500">

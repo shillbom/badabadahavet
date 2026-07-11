@@ -3,18 +3,17 @@ import {
   doc,
   deleteDoc,
   deleteField,
+  documentId,
   getDoc,
   getDocs,
+  limit,
   setDoc,
   updateDoc,
   query,
   where,
   orderBy,
   onSnapshot,
-  serverTimestamp,
   arrayRemove,
-  arrayUnion,
-  limit,
   writeBatch,
   Unsubscribe,
 } from "firebase/firestore";
@@ -24,12 +23,12 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { db, functions, storage } from "@/firebase";
-import { httpsCallable } from "firebase/functions";
-import { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "./types";
+import { cloudFn, db, storage } from "@/firebase";
+import { GroupDoc, PlaceDoc, SessionDoc, UserDoc, BannedUser } from "./types";
 import { generateGroupCode, haversineMeters } from "./utils";
-import { PLACE_RADIUS_METERS, scoreSession } from "./scoring";
-import { compressImage } from "./image";
+import { PLACE_RADIUS_METERS } from "./scoring";
+import { compressImage, makeThumbDataUrl } from "./image";
+import { assertTextAllowed, ModerationError } from "./moderation";
 
 const usersCol = collection(db, "users");
 const placesCol = collection(db, "places");
@@ -115,12 +114,32 @@ export async function updateUserEmoji(uid: string, emoji: string) {
   await updateDoc(doc(usersCol, uid), { emoji });
 }
 
+/** Set the user's chosen cosmetic border (pass "none" to clear it). */
+export async function updateUserBorder(uid: string, borderId: string) {
+  await updateDoc(doc(usersCol, uid), { selectedBorder: borderId });
+}
+
 export async function updateUserLastLocation(
   uid: string,
   lat: number,
   lng: number,
 ) {
   await updateDoc(doc(usersCol, uid), { lastLocation: { lat, lng } });
+}
+
+/**
+ * Stamp the user's "last seen" timestamp to `ts` (call once per app boot).
+ * The value that was stored *before* this write is what drives the
+ * "while you were away" digest, so callers must read the old value first.
+ * Best-effort: a failed write just means no digest next time, so we never
+ * let it surface as an error.
+ */
+export async function touchLastSeen(uid: string, ts: number): Promise<void> {
+  try {
+    await updateDoc(doc(usersCol, uid), { lastSeenAt: ts });
+  } catch {
+    /* offline / transient — ignore, it's a non-critical convenience field */
+  }
 }
 
 export async function recordAchievements(uid: string, ids: string[]) {
@@ -131,6 +150,24 @@ export async function recordAchievements(uid: string, ids: string[]) {
   await updateDoc(doc(usersCol, uid), updates);
 }
 
+// ---------- Toswim list ----------
+
+/** Add a place to the user's "want to swim" list. No-op if already there. */
+export async function addToSwim(uid: string, placeId: string): Promise<void> {
+  await updateDoc(doc(usersCol, uid), {
+    [`toswim.${placeId}`]: { addedAt: Date.now() },
+  });
+}
+
+export async function removeFromSwim(
+  uid: string,
+  placeId: string,
+): Promise<void> {
+  await updateDoc(doc(usersCol, uid), {
+    [`toswim.${placeId}`]: deleteField(),
+  });
+}
+
 function pickEmoji(seed: string): string {
   const pool = ["🐬", "🦭", "🐟", "🦦", "🐳", "🪼", "🐠", "🦑", "🐢", "🦞"];
   let h = 0;
@@ -138,12 +175,43 @@ function pickEmoji(seed: string): string {
   return pool[h % pool.length];
 }
 
+/** The leaderboard shows at most this many users — keeps the roster
+ *  subscription from streaming every user doc as the app grows. */
+export const LEADERBOARD_LIMIT = 100;
+
+/**
+ * Live leaderboard roster: users ordered by their server-maintained
+ * score for `year`, highest first (top LEADERBOARD_LIMIT). Users with no
+ * score that year are absent from the query result — which is exactly
+ * "not on the board".
+ */
+export function watchUsersByYearScore(
+  year: number,
+  cb: (users: UserDoc[]) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(
+      usersCol,
+      orderBy(`scores.${year}`, "desc"),
+      limit(LEADERBOARD_LIMIT),
+    ),
+    (snap) => cb(snap.docs.map((d) => d.data() as UserDoc)),
+  );
+}
+
 export async function fetchUsers(uids: string[]): Promise<UserDoc[]> {
+  if (uids.length === 0) return [];
+  // Firestore `in` supports up to 30 values; chunk if needed. One query per
+  // chunk instead of one getDoc round-trip per uid.
+  const chunks: string[][] = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
   const out: UserDoc[] = [];
   await Promise.all(
-    uids.map(async (uid) => {
-      const s = await getDoc(doc(usersCol, uid));
-      if (s.exists()) out.push(s.data() as UserDoc);
+    chunks.map(async (chunk) => {
+      const snap = await getDocs(
+        query(usersCol, where(documentId(), "in", chunk)),
+      );
+      snap.forEach((d) => out.push(d.data() as UserDoc));
     }),
   );
   return out;
@@ -157,23 +225,29 @@ export async function findOrCreatePlace(opts: {
   lng: number;
   createdBy: string;
   date: number;
+  /** Current known places — the store's live `places` array. Matching runs
+   *  against this instead of re-downloading the whole collection per log. */
+  existingPlaces: PlaceDoc[];
 }): Promise<PlaceDoc> {
   // Match an existing place by exact name (case-insensitive) within radius.
-  const all = await getDocs(placesCol);
   const target = { lat: opts.lat, lng: opts.lng };
   const nameKey = opts.name.trim().toLowerCase();
   let best: PlaceDoc | null = null;
   let bestDist = Infinity;
-  all.forEach((d) => {
-    const p = d.data() as PlaceDoc;
+  for (const p of opts.existingPlaces) {
     const sameName = p.name.trim().toLowerCase() === nameKey;
     const dist = haversineMeters(target, { lat: p.lat, lng: p.lng });
     if (sameName && dist < PLACE_RADIUS_METERS && dist < bestDist) {
       best = p;
       bestDist = dist;
     }
-  });
+  }
   if (best) return best;
+
+  // Only brand-new names get the moderation pre-check — matching an
+  // existing place must never be blocked by a false positive on a name
+  // that's already on the map.
+  await assertTextAllowed(opts.name);
 
   const ref = doc(placesCol);
   const data: PlaceDoc = {
@@ -183,6 +257,9 @@ export async function findOrCreatePlace(opts: {
     lng: opts.lng,
     createdBy: opts.createdBy,
     firstSwumAt: opts.date,
+    source: "manual",
+    // No official feed for user-added spots — read temps from Open-Meteo.
+    tempSource: "open-meteo",
   };
   await setDoc(ref, data);
   return data;
@@ -196,75 +273,109 @@ export function watchPlaces(cb: (places: PlaceDoc[]) => void): Unsubscribe {
 
 // ---------- Sessions ----------
 
+export type LoggedSession = {
+  id: string;
+  points: number;
+  isUniqueForUser: boolean;
+  isWinter: boolean;
+};
+
+/**
+ * Log a swim. The session doc and the user's score are written server-side
+ * by the `logSession` Cloud Function (clients can't write either directly),
+ * so scoring can't be forged. We only upload the photo here — the function
+ * records its URL/path and computes points + uniqueness + winter.
+ */
 export async function createSession(opts: {
   uid: string;
-  displayName: string;
   place: PlaceDoc;
   lat: number;
   lng: number;
   date: number;
   note?: string;
   photoFile?: File | null;
-  /** Pre-resolved country (ISO alpha-2) — passed in so scoring can use it. */
+  /** Pre-resolved country (ISO alpha-2) — flags home vs. abroad swims. */
   country?: string | null;
-  /** Home country of the swimmer, used for bracket scoring. */
-  homeCountry?: string | null;
-}): Promise<SessionDoc> {
-  // Has this user swum at this place before?
-  const prev = await getDocs(
-    query(
-      sessionsCol,
-      where("uid", "==", opts.uid),
-      where("placeId", "==", opts.place.id),
-      limit(1),
-    ),
-  );
-  const isUniqueForUser = prev.empty;
-  const { points, isWinter, isHomeCountry, monthCategory } = scoreSession({
-    isUniqueForUser,
-    date: opts.date,
-    country: opts.country ?? null,
-    homeCountry: opts.homeCountry ?? null,
-  });
-
+  /** The swimmer's chosen border id — stamped onto the place for the map. */
+  border?: string;
+}): Promise<LoggedSession> {
   let photoUrl: string | undefined;
   let photoPath: string | undefined;
+  let photoThumb: string | undefined;
   if (opts.photoFile) {
+    // Compress first, then derive the tiny inline placeholder from the
+    // already-downscaled file. Doing it sequentially (rather than decoding
+    // the full-resolution original twice in parallel) keeps peak memory low
+    // so large photos don't OOM the tab. `compressImage` throws an
+    // ImageProcessingError for images too big to handle; we let that
+    // propagate so the caller can show a specific message.
     const compressed = await compressImage(opts.photoFile);
+    const thumb = await makeThumbDataUrl(compressed);
+    photoThumb = thumb;
     const ext = compressed.name.split(".").pop()?.toLowerCase() ?? "jpg";
     photoPath = `sessions/${opts.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const r = storageRef(storage, photoPath);
     await uploadBytes(r, compressed, {
       contentType: compressed.type || "image/jpeg",
+      // The path is unique per upload and the object is never rewritten, so
+      // browsers/CDNs may cache the download URL forever — saves re-fetching
+      // photos that the service-worker cache has evicted.
+      cacheControl: "public, max-age=31536000, immutable",
     });
     photoUrl = await getDownloadURL(r);
   }
 
-  const ref = doc(sessionsCol);
-  const data: SessionDoc = {
-    id: ref.id,
-    uid: opts.uid,
-    displayName: opts.displayName,
-    placeId: opts.place.id,
-    placeName: opts.place.name,
-    lat: opts.lat,
-    lng: opts.lng,
-    date: opts.date,
-    note: opts.note?.trim() || undefined,
-    photoUrl,
-    photoPath,
-    isUniqueForUser,
-    isWinter,
-    isHomeCountry,
-    country: opts.country ?? undefined,
-    monthCategory,
-    points,
-    createdAt: Date.now(),
-  };
-  // strip undefineds for Firestore
-  const clean = JSON.parse(JSON.stringify(data));
-  await setDoc(ref, { ...clean, createdAtServer: serverTimestamp() });
-  return data;
+  const callable = cloudFn<
+    {
+      placeId: string;
+      placeName: string;
+      lat: number;
+      lng: number;
+      date: number;
+      note?: string;
+      country?: string;
+      photoUrl?: string;
+      photoPath?: string;
+      photoThumb?: string;
+      border?: string;
+    },
+    LoggedSession
+  >("logSession");
+  try {
+    const res = await callable({
+      placeId: opts.place.id,
+      placeName: opts.place.name,
+      lat: opts.lat,
+      lng: opts.lng,
+      date: opts.date,
+      note: opts.note?.trim() || undefined,
+      country: opts.country ?? undefined,
+      photoUrl,
+      photoPath,
+      photoThumb,
+      border: opts.border,
+    });
+    return res.data;
+  } catch (err) {
+    // The function's authoritative moderation check flags its rejection
+    // via details — surface it as the same error the client-side
+    // pre-checks throw so callers show one specific message.
+    const details = (err as { details?: { reason?: string } })?.details;
+    if (details?.reason === "moderation") throw new ModerationError();
+    throw err;
+  }
+}
+
+/**
+ * Remove a swim via the `removeSession` Cloud Function, which deletes the
+ * session, fixes the owner's score, and cleans up the photo. The owner may
+ * remove their own; admins may remove anyone's.
+ */
+export async function removeSession(sessionId: string): Promise<void> {
+  const callable = cloudFn<{ sessionId: string }, { ok: true }>(
+    "removeSession",
+  );
+  await callable({ sessionId });
 }
 
 export function watchUserSessions(
@@ -275,6 +386,50 @@ export function watchUserSessions(
     query(sessionsCol, where("uid", "==", uid), orderBy("date", "desc")),
     (snap) => cb(snap.docs.map((d) => d.data() as SessionDoc)),
   );
+}
+
+/**
+ * Subscribe to this year's sessions for a fixed set of users (e.g. a group).
+ * Year-bounded like `watchAllSessions` — the group board compares the
+ * current season, and an unbounded query would re-download every member's
+ * full history and keep growing each year.
+ */
+export function watchMemberSessions(
+  uids: string[],
+  cb: (sessions: SessionDoc[]) => void,
+  year: number = new Date().getFullYear(),
+): Unsubscribe {
+  if (uids.length === 0) {
+    cb([]);
+    return () => {};
+  }
+  const start = new Date(year, 0, 1).getTime();
+  const end = new Date(year + 1, 0, 1).getTime();
+  // Firestore `in` supports up to 30 values; chunk if needed.
+  const chunks: string[][] = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+
+  const results = new Map<string, SessionDoc[]>();
+  const unsubs = chunks.map((chunk, idx) =>
+    onSnapshot(
+      query(
+        sessionsCol,
+        where("uid", "in", chunk),
+        where("date", ">=", start),
+        where("date", "<", end),
+        // Matches the existing (uid, date DESC) composite index.
+        orderBy("date", "desc"),
+      ),
+      (snap) => {
+        results.set(
+          String(idx),
+          snap.docs.map((d) => d.data() as SessionDoc),
+        );
+        cb([...results.values()].flat());
+      },
+    ),
+  );
+  return () => unsubs.forEach((u) => u());
 }
 
 /**
@@ -297,21 +452,45 @@ export function watchAllSessions(
 export const REACTION_EMOJIS = ["🔥", "💪", "❄️", "🤩", "👏"] as const;
 
 /**
+ * Reactor UIDs for a single emoji entry, tolerant of both the current
+ * `{ uid: addedAt }` map shape and the legacy `uid[]` array shape.
+ */
+export function reactorUids(
+  entry: Record<string, number> | string[] | undefined,
+): string[] {
+  if (!entry) return [];
+  return Array.isArray(entry) ? entry : Object.keys(entry);
+}
+
+/**
+ * Epoch ms when `uid` added their reaction for this emoji entry, or 0 when
+ * unknown (legacy array-shaped reactions carried no timestamp).
+ */
+export function reactionAddedAt(
+  entry: Record<string, number> | string[] | undefined,
+  uid: string,
+): number {
+  if (!entry || Array.isArray(entry)) return 0;
+  return entry[uid] ?? 0;
+}
+
+/**
  * Toggle an emoji reaction on a session. If the user has already reacted
- * with this emoji, remove them; otherwise add them.
+ * with this emoji, remove them; otherwise add them with the current time as
+ * the reaction timestamp (used by the "while you were away" recap).
  */
 export async function toggleReaction(
   sessionId: string,
   emoji: string,
   uid: string,
-  currentReactors: string[],
+  hasReacted: boolean,
 ): Promise<void> {
   const ref = doc(sessionsCol, sessionId);
-  const field = `reactions.${emoji}`;
-  if (currentReactors.includes(uid)) {
-    await updateDoc(ref, { [field]: arrayRemove(uid) });
+  const field = `reactions.${emoji}.${uid}`;
+  if (hasReacted) {
+    await updateDoc(ref, { [field]: deleteField() });
   } else {
-    await updateDoc(ref, { [field]: arrayUnion(uid) });
+    await updateDoc(ref, { [field]: Date.now() });
   }
 }
 
@@ -355,10 +534,10 @@ export async function lookupGroupByCode(code: string): Promise<{
   emoji: string | null;
   memberCount: number;
 } | null> {
-  const callable = httpsCallable<
+  const callable = cloudFn<
     { code: string },
     { id: string; name: string; emoji: string | null; memberCount: number }
-  >(functions, "lookupGroupByCode");
+  >("lookupGroupByCode");
   try {
     const res = await callable({ code });
     return res.data ?? null;
@@ -377,10 +556,7 @@ export async function joinGroupByCode(opts: {
   // a Cloud Function (Admin SDK) which validates the code and atomically
   // adds the caller to the group.
   void opts.uid; // uid comes from auth context server-side; kept for callsite compat
-  const callable = httpsCallable<{ code: string }, GroupDoc>(
-    functions,
-    "joinGroupByCode",
-  );
+  const callable = cloudFn<{ code: string }, GroupDoc>("joinGroupByCode");
   try {
     const res = await callable({ code: opts.code });
     return res.data ?? null;
@@ -406,10 +582,7 @@ export async function leaveGroup(opts: {
   uid: string;
 }): Promise<void> {
   void opts.uid; // handled server-side from auth context
-  const callable = httpsCallable<{ groupId: string }, void>(
-    functions,
-    "leaveGroup",
-  );
+  const callable = cloudFn<{ groupId: string }, void>("leaveGroup");
   await callable({ groupId: opts.groupId });
 }
 
@@ -459,37 +632,16 @@ export function watchPlaceSessions(
 // ---------- Account deletion ----------
 
 /**
- * Tear down everything a user owns: their sessions (and photos), their
- * group memberships, and the user doc itself. Call before deleting the
- * Firebase Auth user — once the auth user is gone the client can't
- * authenticate the deletes.
+ * Tear down everything the caller owns: their sessions (and photos), their
+ * group memberships, and the user doc itself. Runs server-side via the
+ * `deleteAccount` Cloud Function — sessions can no longer be deleted by the
+ * client (rules forbid it). Call before deleting the Firebase Auth user.
  */
-export async function deleteAccountData(uid: string): Promise<void> {
-  // Sessions (with their storage photos) — only the owner's docs.
-  const sessions = await getDocs(query(sessionsCol, where("uid", "==", uid)));
-  await Promise.all(
-    sessions.docs.map(async (s) => {
-      const data = s.data() as SessionDoc;
-      if (data.photoPath) {
-        try {
-          await deleteObject(storageRef(storage, data.photoPath));
-        } catch {
-          // photo may already be gone — ignore.
-        }
-      }
-      await deleteDoc(s.ref);
-    }),
+export async function deleteAccountData(): Promise<void> {
+  const callable = cloudFn<Record<string, never>, { ok: true }>(
+    "deleteAccount",
   );
-
-  // Drop the user from every group they're a member of.
-  const memberOf = await getDocs(
-    query(groupsCol, where("members", "array-contains", uid)),
-  );
-  await Promise.all(
-    memberOf.docs.map((g) => updateDoc(g.ref, { members: arrayRemove(uid) })),
-  );
-
-  await deleteDoc(doc(usersCol, uid));
+  await callable({});
 }
 
 // ---------- Admin / moderation ----------
@@ -530,20 +682,12 @@ export async function adminClearSessionPhoto(sessionId: string) {
   });
 }
 
-/** Delete a single session and its photo, if any. */
+/**
+ * Delete a single session. Routes through the removeSession Cloud Function
+ * (Admin SDK) so the owner's score and the photo are cleaned up too.
+ */
 export async function adminDeleteSession(sessionId: string) {
-  const snap = await getDoc(doc(sessionsCol, sessionId));
-  if (snap.exists()) {
-    const data = snap.data() as SessionDoc;
-    if (data.photoPath) {
-      try {
-        await deleteObject(storageRef(storage, data.photoPath));
-      } catch {
-        // ignore
-      }
-    }
-  }
-  await deleteDoc(doc(sessionsCol, sessionId));
+  await removeSession(sessionId);
 }
 
 /** Delete a place and cascade-delete every session at it. */
@@ -551,6 +695,37 @@ export async function adminDeletePlace(placeId: string) {
   const sessions = await getDocs(
     query(sessionsCol, where("placeId", "==", placeId)),
   );
-  await Promise.all(sessions.docs.map((s) => adminDeleteSession(s.id)));
+  // removeSession fixes each owner's score; do them sequentially to avoid
+  // hammering the function with a burst.
+  for (const s of sessions.docs) await removeSession(s.id);
   await deleteDoc(doc(placesCol, placeId));
+}
+
+/** Every user (admin view). Readable by any signed-in user per the rules. */
+export async function fetchAllUsers(): Promise<UserDoc[]> {
+  const snap = await getDocs(usersCol);
+  return snap.docs
+    .map((d) => d.data() as UserDoc)
+    .sort((a, b) =>
+      (a.displayName ?? "").localeCompare(b.displayName ?? "", undefined, {
+        sensitivity: "base",
+      }),
+    );
+}
+
+/** The ban audit list, most-recent first (admin view). */
+export async function fetchBannedUsers(): Promise<BannedUser[]> {
+  const snap = await getDocs(collection(db, "bannedUsers"));
+  return snap.docs
+    .map((d) => d.data() as BannedUser)
+    .sort((a, b) => b.bannedAt - a.bannedAt);
+}
+
+/**
+ * Ban a user via the admin-only `banUser` Cloud Function: wipes their app
+ * data and disables their Firebase Auth account so they can't sign back in.
+ */
+export async function banUser(uid: string): Promise<void> {
+  const callable = cloudFn<{ uid: string }, { ok: true }>("banUser");
+  await callable({ uid });
 }

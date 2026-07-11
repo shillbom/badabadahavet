@@ -5,14 +5,20 @@ import {
   setPersistence,
   browserLocalPersistence,
 } from "firebase/auth";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
-import { getStorage, connectStorageEmulator } from "firebase/storage";
-import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 import {
-  getAnalytics,
-  isSupported as analyticsSupported,
-} from "firebase/analytics";
-
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  connectFirestoreEmulator,
+} from "firebase/firestore";
+import { getStorage, connectStorageEmulator } from "firebase/storage";
+import {
+  getFunctions,
+  connectFunctionsEmulator,
+  httpsCallable,
+  httpsCallableFromURL,
+  type HttpsCallable,
+} from "firebase/functions";
 const firebaseConfig: FirebaseOptions = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "demo-key",
   authDomain:
@@ -32,7 +38,17 @@ const firebaseConfig: FirebaseOptions = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Persistent (IndexedDB) cache so a returning visit resumes every listener
+// from local data and only downloads the delta — without it each boot
+// re-reads the full `places` collection (~4k docs) and the whole year's
+// community feed from the server. Multi-tab manager so a second open tab
+// shares the cache instead of failing to acquire it; browsers without
+// IndexedDB fall back to the in-memory cache with a console warning.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+  }),
+});
 export const storage = getStorage(app);
 export const functions = getFunctions(app, "europe-west1");
 
@@ -55,17 +71,45 @@ setPersistence(auth, browserLocalPersistence).catch(() => {
 
 // Firebase Analytics — only in real (non-emulator) builds, only when the
 // browser supports it (no SSR, not blocked by privacy add-ons, etc.) and
-// only when a measurementId was actually configured.
+// only when a measurementId was actually configured. Imported dynamically
+// so the analytics module stays out of the boot-critical firebase chunk.
 if (
   !useEmulators &&
   typeof window !== "undefined" &&
   firebaseConfig.measurementId
 ) {
-  analyticsSupported()
-    .then((ok) => {
-      if (ok) getAnalytics(app);
+  import("firebase/analytics")
+    .then(async ({ getAnalytics, isSupported }) => {
+      if (await isSupported()) getAnalytics(app);
     })
     .catch(() => {
       /* analytics is best-effort — ignore failures */
     });
+}
+
+/**
+ * Create a callable for a Cloud Function.
+ *
+ *  - Emulator: the SDK talks to the local Functions emulator.
+ *  - Local dev (Vite, not Firebase Hosting): there's no `/api/*` rewrite, so
+ *    call the deployed function directly (its CORS is enabled). Without this,
+ *    `${origin}/api/<name>` just hits the dev server and every callable —
+ *    logging a swim, joining a group, refreshing temps — silently fails.
+ *  - Production (served by Firebase Hosting): route through the same-origin
+ *    `/api/*` rewrite to avoid CORS and keep it first-party.
+ */
+export function cloudFn<Req, Res>(name: string): HttpsCallable<Req, Res> {
+  if (useEmulators) {
+    return httpsCallable<Req, Res>(functions, name);
+  }
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const isLocalhost =
+    host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  if (isLocalhost) {
+    return httpsCallable<Req, Res>(functions, name);
+  }
+  return httpsCallableFromURL<Req, Res>(
+    functions,
+    `${window.location.origin}/api/${name}`,
+  );
 }

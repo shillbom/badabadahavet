@@ -1,76 +1,40 @@
 /**
  * Scoring rules for Badligan.
  *
- * Per-session points (awarded at log time):
- *   A  May–Sep, home country ........... 1
- *   B  Apr & Oct, home country .......... 2
- *   C  Mar & Nov, home country .......... 3
- *   D  Jan, Feb, Dec, home country ...... 4
- *   H  New spot (any country) ........... +2
- *   J  Christmas Eve, home country ...... +5
+ * Deliberately simple so anyone can do the maths in their head:
  *
- * Abroad: 0 base points. The +4-per-country bonus (rule G) is awarded
- * as a separate per-user stat from distinct foreign country codes.
+ *   • Each logged swim ................. +1
+ *   • First swim at a brand-new spot ... +3
+ *   • Winter dip (Nov–Mar) ............. +2
+ *
+ * Achievements grant separate bonus points (see achievements.ts) and a
+ * swimmer "rank" that decorates their pins/profile (see ranks.ts). There
+ * are no month brackets, home-country brackets, or country bonuses — the
+ * old seasonal multipliers were impossible to reason about.
  */
 
-export const POINTS_NEW_PLACE = 2;
-export const POINTS_CHRISTMAS_EVE = 5;
-export const POINTS_COUNTRY_BONUS = 4;
+export const POINTS_PER_SWIM = 1;
+export const POINTS_NEW_SPOT = 3;
+export const POINTS_WINTER = 2;
 export const PLACE_RADIUS_METERS = 100;
 
-export type MonthCategory = "A" | "B" | "C" | "D";
-
-export function monthCategory(month: number): {
-  category: MonthCategory;
-  points: number;
-} {
-  // month: 0–11 (Jan = 0)
-  if (month >= 4 && month <= 8) return { category: "A", points: 1 }; // May–Sep
-  if (month === 3 || month === 9) return { category: "B", points: 2 }; // Apr, Oct
-  if (month === 2 || month === 10) return { category: "C", points: 3 }; // Mar, Nov
-  return { category: "D", points: 4 }; // Jan, Feb, Dec
-}
-
-export function isChristmasEve(d: Date | number): boolean {
-  const date = typeof d === "number" ? new Date(d) : d;
-  return date.getMonth() === 11 && date.getDate() === 24;
-}
-
 export function isWinterMonth(d: Date | number): boolean {
-  // Kept for backwards-compat displays — categories C and D are "winter-y".
+  // Nov, Dec, Jan, Feb, Mar — the cold-water months.
   const date = typeof d === "number" ? new Date(d) : d;
   const m = date.getMonth();
   return m === 10 || m === 11 || m === 0 || m === 1 || m === 2;
 }
 
-import { COLD_CLIMATE_COUNTRIES } from "./countries";
-
 /**
- * Resolve whether a swim counts as "home" and which bracket applies.
- *
- *   - Cold-climate home (SE/NO/DK/FI/IS/EE/LV/LT): home only when swim
- *     country matches; full A–D bracket; Christmas bonus eligible.
- *   - "OTHER" home: every swim is treated as home but always category A.
- *   - Anything else (no homeCountry set yet): abroad.
+ * Whether a swim counts as being in the user's home country. Used only for
+ * the "countries abroad" display stat — it does not affect points.
  */
-export function resolveHomeBracket(
+export function isHomeSwim(
   homeCountry: string | null | undefined,
   country: string | null | undefined,
-  month: number,
-): { isHome: boolean; category: MonthCategory; basePoints: number } {
-  const home = homeCountry ?? null;
-  if (home === "OTHER") {
-    return { isHome: true, category: "A", basePoints: 1 };
-  }
-  if (home && COLD_CLIMATE_COUNTRIES.has(home)) {
-    if (country && country === home) {
-      const { category, points } = monthCategory(month);
-      return { isHome: true, category, basePoints: points };
-    }
-    return { isHome: false, category: "A", basePoints: 0 };
-  }
-  // No home country yet — treat as abroad, no base points.
-  return { isHome: false, category: "A", basePoints: 0 };
+): boolean {
+  if (!homeCountry || homeCountry === "OTHER") return false;
+  return !!country && country === homeCountry;
 }
 
 export function scoreSession(opts: {
@@ -82,26 +46,33 @@ export function scoreSession(opts: {
   points: number;
   isWinter: boolean;
   isHomeCountry: boolean;
-  monthCategory: MonthCategory;
 } {
-  const date = typeof opts.date === "number" ? new Date(opts.date) : opts.date;
-  const { isHome, category, basePoints } = resolveHomeBracket(
-    opts.homeCountry,
-    opts.country,
-    date.getMonth(),
-  );
-  let points = basePoints;
-  if (opts.isUniqueForUser) points += POINTS_NEW_PLACE;
-  // Christmas-Eve bonus only applies to cold-climate homes (it's a Nordic
-  // tradition); OTHER-home users still get their category-A base.
-  if (isHome && opts.homeCountry !== "OTHER" && isChristmasEve(date))
-    points += POINTS_CHRISTMAS_EVE;
+  const isWinter = isWinterMonth(opts.date);
+  let points = POINTS_PER_SWIM;
+  if (opts.isUniqueForUser) points += POINTS_NEW_SPOT;
+  if (isWinter) points += POINTS_WINTER;
   return {
     points,
-    isWinter: isWinterMonth(date),
-    isHomeCountry: isHome,
-    monthCategory: category,
+    isWinter,
+    isHomeCountry: isHomeSwim(opts.homeCountry, opts.country),
   };
+}
+
+/** Points a swim *will* earn, for previews before it's logged. */
+export function previewPoints(opts: {
+  isNewSpot: boolean;
+  isWinter: boolean;
+}): number {
+  return (
+    POINTS_PER_SWIM +
+    (opts.isNewSpot ? POINTS_NEW_SPOT : 0) +
+    (opts.isWinter ? POINTS_WINTER : 0)
+  );
+}
+
+/** Sum a user's stored per-year scores into an all-time total. */
+export function sumScores(scores?: Record<string, number>): number {
+  return scores ? Object.values(scores).reduce((a, b) => a + (b || 0), 0) : 0;
 }
 
 export function startOfYear(year: number): number {

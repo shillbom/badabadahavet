@@ -21,25 +21,30 @@ service cloud.firestore {
     function unchanged(field) {
       return !changedKeys().hasAny([field]);
     }
-    // Returns true when the only change to the reactions map is that
-    // request.auth.uid was added to, or removed from, exactly one emoji key.
+    // Returns true when the only delta to the reactions map is that
+    // request.auth.uid was added to, or removed from, one or more emoji
+    // keys. We validate each known reaction emoji individually (instead
+    // of picking out the changed key, which would need toList() and
+    // trips the rules linter) and restrict affectedKeys to the known
+    // emoji set so unknown keys can't slip through.
     function onlyOwnReactionChanged() {
-      let myUid = request.auth.uid;
       let oldR = resource.data.get('reactions', {});
       let newR = request.resource.data.get('reactions', {});
-      let changed = newR.diff(oldR).affectedKeys();
-      return changed.size() == 1
-        && validReactionDelta(changed.toList()[0], oldR, newR, myUid);
+      let affected = newR.diff(oldR).affectedKeys();
+      return affected.hasOnly(['🔥', '💪', '❄️', '🤩', '👏'])
+        && validReactionDelta('🔥', oldR, newR)
+        && validReactionDelta('💪', oldR, newR)
+        && validReactionDelta('❄️', oldR, newR)
+        && validReactionDelta('🤩', oldR, newR)
+        && validReactionDelta('👏', oldR, newR);
     }
-    function validReactionDelta(emoji, oldR, newR, myUid) {
-      let oldSet = oldR.get(emoji, []).toSet();
-      let newSet = newR.get(emoji, []).toSet();
-      // Added own uid — nothing else changed
-      return (newSet.difference(oldSet) == [myUid].toSet()
-              && oldSet.difference(newSet).size() == 0)
-          // Removed own uid — nothing else changed
-          || (oldSet.difference(newSet) == [myUid].toSet()
-              && newSet.difference(oldSet).size() == 0);
+    function validReactionDelta(emoji, oldR, newR) {
+      let myUid = request.auth.uid;
+      // Each emoji maps to { uid: addedAt }. The only key that may be added,
+      // removed, or changed under an emoji is the caller's own uid.
+      let oldE = oldR.get(emoji, {});
+      let newE = newR.get(emoji, {});
+      return newE.diff(oldE).affectedKeys().hasOnly([myUid]);
     }
     function validLatLng(lat, lng) {
       return lat is number && lng is number
@@ -67,12 +72,20 @@ service cloud.firestore {
                     && (
                       !('isAdmin' in request.resource.data)
                       || request.resource.data.isAdmin == false
-                    );
+                    )
+                    // Score + leaderboard stats are server-owned; never set
+                    // by a client.
+                    && !('scores' in request.resource.data)
+                    && !('statsByYear' in request.resource.data);
 
       allow update: if isSelf(uid)
                     && unchanged('uid')
                     && unchanged('createdAt')
                     && unchanged('isAdmin')
+                    // Score + leaderboard stats are maintained only by the
+                    // logSession / removeSession Cloud Functions (Admin SDK).
+                    && unchanged('scores')
+                    && unchanged('statsByYear')
                     && request.resource.data.uid == uid
                     && request.resource.data.displayName is string
                     && request.resource.data.displayName.size() > 0
@@ -81,6 +94,11 @@ service cloud.firestore {
                       !('lastLocation' in request.resource.data)
                       || (validLatLng(request.resource.data.lastLocation.lat,
                                       request.resource.data.lastLocation.lng))
+                    )
+                    && (
+                      !('toswim' in request.resource.data)
+                      || (request.resource.data.toswim is map
+                          && request.resource.data.toswim.size() <= 200)
                     );
 
       // Account deletion: the owner may wipe their own user doc as part
@@ -90,11 +108,23 @@ service cloud.firestore {
     }
 
     // ============================================================
+    // bannedUsers/{uid}
+    //   Audit trail written only by the banUser Cloud Function (Admin
+    //   SDK bypasses these rules). Admins may read it; no one writes
+    //   from the client.
+    // ============================================================
+    match /bannedUsers/{uid} {
+      allow read: if isAdminUser();
+      allow write: if false;
+    }
+
+    // ============================================================
     // places/{id}
-    //   World-readable. Admins may rename/delete for moderation.
+    //   World-readable so logged-out visitors can browse. Admins may
+    //   rename/delete for moderation.
     // ============================================================
     match /places/{placeId} {
-      allow read: if signedIn();
+      allow read: if true;
 
       allow create: if signedIn()
                     && request.resource.data.createdBy == request.auth.uid
@@ -126,28 +156,15 @@ service cloud.firestore {
 
     // ============================================================
     // sessions/{id}
+    //   World-readable so logged-out visitors can browse swim history.
     // ============================================================
     match /sessions/{sessionId} {
-      allow read: if signedIn();
+      allow read: if true;
 
-      allow create: if signedIn()
-                    && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.placeId is string
-                    && request.resource.data.placeId.size() > 0
-                    && request.resource.data.placeName is string
-                    && request.resource.data.placeName.size() <= 80
-                    && validLatLng(request.resource.data.lat,
-                                   request.resource.data.lng)
-                    && request.resource.data.date is number
-                    && request.resource.data.date >= 946684800000
-                    && request.resource.data.date <= request.time.toMillis() + 86400000
-                    && request.resource.data.points is number
-                    && request.resource.data.points >= 0
-                    && request.resource.data.points <= 15
-                    && request.resource.data.isUniqueForUser is bool
-                    && request.resource.data.isWinter is bool
-                    && request.resource.data.displayName is string
-                    && request.resource.data.displayName.size() <= 40;
+      // Sessions are created ONLY by the logSession Cloud Function (Admin
+      // SDK bypasses rules). This keeps points honest — a client can't mint
+      // a session with arbitrary points or skip the score update.
+      allow create: if false;
 
       // Owners can edit cosmetic fields only; admins can moderate (e.g.
       // strip a bad photoUrl, fix a placeName after a rename).
@@ -170,8 +187,10 @@ service cloud.firestore {
         && onlyOwnReactionChanged()
       ) || isAdminUser();
 
-      allow delete: if (signedIn() && resource.data.uid == request.auth.uid)
-                    || isAdminUser();
+      // Removed ONLY via the removeSession Cloud Function, which also fixes
+      // the owner's score. Direct deletes (even by the owner) would let
+      // someone drop a swim while keeping its points.
+      allow delete: if false;
     }
 
     // ============================================================

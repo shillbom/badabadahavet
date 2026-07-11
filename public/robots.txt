@@ -1,0 +1,7 @@
+# Badligan — allow all crawlers. The app is a login-gated SPA, so every
+# route serves the same landing/login shell to a signed-out crawler; there is
+# nothing sensitive to hide here. The sitemap points at the one public URL.
+User-agent: *
+Allow: /
+
+Sitemap: https://badligan.club/sitemap.xml

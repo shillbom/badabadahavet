@@ -1,39 +1,82 @@
-import { motion } from "framer-motion";
+/**
+ * Boot / loading splash.
+ *
+ * Pure CSS (no image, no framer-motion, no Pixi) on purpose: <BootSplash> is
+ * mounted eagerly in main.tsx so it can paint before the lazy <App> (and its
+ * ~618 KB Firebase chunk) loads. Pulling an animation lib in here would drag
+ * that chunk onto the first-paint critical path — the very thing the app's
+ * lazy boundaries exist to avoid. CSS animates it for free. Styles live in
+ * src/index.css (`.app-splash*`).
+ */
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { getBootReady, subscribeBootReady } from "@/lib/bootSignal";
 
+function SplashArt() {
+  return (
+    <div className="app-splash__panel">
+      <div className="app-splash__waves" aria-hidden="true">
+        <div className="app-splash__water">
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
+          <span className="app-splash__wave" />
+        </div>
+      </div>
+      <div className="app-splash__word">Badligan</div>
+    </div>
+  );
+}
+
+/** Static resting splash — the Suspense fallback for in-app lazy route loads. */
 export function FullSplash() {
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-3">
-      <div className="relative h-20 w-20">
-        {[0, 1, 2].map((i) => (
-          <motion.span
-            key={i}
-            initial={{ scale: 0.5, opacity: 0.5 }}
-            animate={{ scale: 1.6, opacity: 0 }}
-            transition={{
-              duration: 1.6,
-              delay: i * 0.4,
-              repeat: Infinity,
-              ease: "easeOut",
-            }}
-            className="absolute inset-0 rounded-full border-2 border-wave-400"
-          />
-        ))}
-        <motion.img
-          src="/web-app-manifest-192x192.png"
-          alt="Badligan"
-          animate={{ y: [0, -6, 0] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute inset-0 h-full w-full rounded-full object-cover"
-        />
-      </div>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="font-display text-sm font-bold tracking-widest text-wave-700 uppercase"
-      >
-        Badligan
-      </motion.div>
+    <div className="app-splash">
+      <SplashArt />
+    </div>
+  );
+}
+
+// Guarantee the entrance is actually seen even when boot is instant (warm
+// cache / already signed in) before letting the exit start.
+const MIN_VISIBLE_MS = 1100;
+
+/**
+ * The boot splash. Mounts at first paint (main.tsx, outside the lazy <App>),
+ * plays the entrance, and once App signals ready (bootSignal) it plays the
+ * exit and unmounts — revealing the app underneath.
+ */
+export function BootSplash() {
+  const ready = useSyncExternalStore(subscribeBootReady, getBootReady);
+  const [phase, setPhase] = useState<"intro" | "leaving" | "gone">("intro");
+  const startedAt = useRef(Date.now());
+
+  useEffect(() => {
+    if (!ready) return;
+    const wait = Math.max(0, MIN_VISIBLE_MS - (Date.now() - startedAt.current));
+    const timer = window.setTimeout(
+      () => setPhase((p) => (p === "intro" ? "leaving" : p)),
+      wait,
+    );
+    return () => window.clearTimeout(timer);
+  }, [ready]);
+
+  if (phase === "gone") return null;
+
+  return (
+    <div
+      className={`app-splash app-splash--${phase}`}
+      // Only the root's own fade-out (app-splash-out) unmounts us; the child
+      // water/word animations bubble their animationend here too, so ignore
+      // anything that isn't the root element.
+      onAnimationEnd={(e) => {
+        if (phase === "leaving" && e.target === e.currentTarget) {
+          setPhase("gone");
+        }
+      }}
+    >
+      <SplashArt />
     </div>
   );
 }

@@ -44,11 +44,20 @@ const PAGES = [
     load: withStaleReload(() => import("@/pages/AchievementsPage")),
   },
   {
+    key: "Streak",
+    load: withStaleReload(() => import("@/pages/StreakPage")),
+  },
+  {
     key: "Profile",
     load: withStaleReload(() => import("@/pages/ProfilePage")),
   },
   { key: "About", load: withStaleReload(() => import("@/pages/AboutPage")) },
   { key: "Recap", load: withStaleReload(() => import("@/pages/RecapPage")) },
+  { key: "Toswim", load: withStaleReload(() => import("@/pages/ToswimPage")) },
+  {
+    key: "AdminUsers",
+    load: withStaleReload(() => import("@/pages/AdminUsersPage")),
+  },
 ] as const;
 
 type PageKey = (typeof PAGES)[number]["key"];
