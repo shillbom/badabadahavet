@@ -435,6 +435,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.geo.failed": 'Kunde inte hämta din plats — prova "Välj på karta"',
     "log.coords.near": "nära {name}",
     "log.coords.reading": "Läser av din plats…",
+    "log.coords.locking": "Väntar på GPS…",
     "log.coords.tap_map":
       "Tryck på en tom plats på kartan för att lägga till en ny badplats.",
     "log.empty.pick":
@@ -1094,6 +1095,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.geo.failed": "Couldn't read your location — try Pick on map",
     "log.coords.near": "near {name}",
     "log.coords.reading": "Reading your location…",
+    "log.coords.locking": "Waiting for GPS…",
     "log.coords.tap_map":
       "Tap an empty spot on the map to add a new swim spot.",
     "log.empty.pick": "Search above or tap the map to choose a spot.",

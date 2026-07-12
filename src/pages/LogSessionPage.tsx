@@ -51,7 +51,7 @@ const NOW_ATTACH_RADIUS_METERS = 800;
 // than this — the first fix from a cold GPS is routinely hundreds of
 // meters off (enableHighAccuracy only turns the GPS on, it doesn't make
 // the first callback wait for it).
-const NOW_FALLBACK_ACCURACY_METERS = 200;
+const NOW_FALLBACK_ACCURACY_METERS = 500;
 // How long to wait for a trustworthy fix before deciding with what we have.
 const NOW_FIX_DEADLINE_MS = 10_000;
 
@@ -114,6 +114,9 @@ export default function LogSessionPage() {
   // Flips when a now-mode entry has waited NOW_FIX_DEADLINE_MS without a
   // trustworthy fix, forcing the auto-attach decision with what we have.
   const [fixDeadline, setFixDeadline] = useState(false);
+  // True from now-mode entry until the auto-attach decision (or a
+  // geolocation failure) — drives the non-blocking "waiting for GPS" hint.
+  const [locating, setLocating] = useState(false);
   // Render-synced mirror so the position-watch callback sees the current
   // pick without re-subscribing.
   const pickedPlaceIdRef = useRef(pickedPlaceId);
@@ -182,6 +185,7 @@ export default function LogSessionPage() {
     }
     if (best) {
       autoPickedNowRef.current = true;
+      setLocating(false);
       setCoords({ lat: best.p.lat, lng: best.p.lng });
       setName(best.p.name);
       setPickedPlaceId(best.p.id);
@@ -197,6 +201,7 @@ export default function LogSessionPage() {
     )
       return;
     autoPickedNowRef.current = true;
+    setLocating(false);
     if (places.length > 0 && !intentionalNowRef.current) {
       // No known place nearby — switch to pick-on-map so the user can
       // drop a pin at their actual location. Skip when the user explicitly
@@ -258,6 +263,7 @@ export default function LogSessionPage() {
       setMode("pick");
       return;
     }
+    setLocating(true);
     // Watch rather than getCurrentPosition: the one-shot returns the first
     // fix the OS can produce, which on a cold GPS is a coarse cell/Wi-Fi
     // position. Watching lets coords sharpen until the auto-attach effect
@@ -275,6 +281,7 @@ export default function LogSessionPage() {
         // A watch can emit transient errors after a good fix — only bail
         // when we never got a position at all.
         if (fixAccuracyRef.current !== null) return;
+        setLocating(false);
         toast.error(t("log.geo.failed"));
         setMode("pick");
       },
@@ -287,6 +294,7 @@ export default function LogSessionPage() {
     return () => {
       navigator.geolocation.clearWatch(watchId);
       clearTimeout(deadline);
+      setLocating(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
@@ -633,9 +641,18 @@ export default function LogSessionPage() {
                       </span>
                     ) : null}
                   </span>
+                  {locating && !pickedPlaceId ? (
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-wave-700">
+                      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                      {t("log.coords.locking")}
+                    </span>
+                  ) : null}
                 </span>
               ) : mode === "now" ? (
-                <span>{t("log.coords.reading")}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-wave-600 border-r-transparent" />
+                  {t("log.coords.reading")}
+                </span>
               ) : (
                 <span>{t("log.empty.pick")}</span>
               )}
