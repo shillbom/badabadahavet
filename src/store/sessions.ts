@@ -24,6 +24,7 @@ import {
   touchLastSeen,
   watchAllSessions,
   watchPlaces,
+  watchTempSummary,
   watchUserGroups,
   watchUserSessions,
 } from "@/lib/data";
@@ -33,7 +34,15 @@ import {
 } from "@/lib/achievements";
 import { computeMyStats, type MyStats } from "@/lib/stats";
 import { computeStreak } from "@/lib/streak";
-import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
+import { mergePlaceTemps } from "@/lib/temps";
+import type {
+  GroupDoc,
+  PlaceDoc,
+  PlaceWithTemp,
+  SessionDoc,
+  TempReading,
+  UserDoc,
+} from "@/lib/types";
 import { useLocale } from "@/lib/i18n";
 
 // Resolves when the current signup write finishes, so the auth-state
@@ -84,6 +93,10 @@ type State = {
    *  least one snapshot, i.e. `allSessions` can be trusted. */
   allSessionsReady: boolean;
   places: PlaceDoc[];
+  /** Latest water temperature per place id, from the single
+   *  `tempSummary/current` doc (rebuilt by the daily sweep). Kept off the
+   *  place docs so temp churn never re-streams the `places` collection. */
+  tempsByPlace: Map<string, TempReading>;
   groups: GroupDoc[];
 
   // ── Derived / pre-computed ────────────────────────────────────────────
@@ -91,8 +104,11 @@ type State = {
   myStats: MyStats;
   /** Current user's sessions indexed by place id. */
   sessionsByPlace: Map<string, SessionDoc[]>;
-  /** Places the current user has logged a swim at. */
-  myPlaces: PlaceDoc[];
+  /** `places` with each place's summary reading merged in — what the map
+   *  and any temp-reading UI should consume instead of `places`. */
+  placesWithTemps: PlaceWithTemp[];
+  /** Places the current user has logged a swim at (temps merged in). */
+  myPlaces: PlaceWithTemp[];
   /** Context object for achievement evaluation (uid + both session arrays). */
   achievementCtx: AchievementContext;
   /** Set of achievement ids the current user has unlocked. */
@@ -166,7 +182,7 @@ export const useStore = create<State>((set, get) => {
     if (feedUnsub || feedRefs === 0 || !feedAuthReady || !auth.currentUser)
       return;
     feedUnsub = watchAllSessions((allSessions) => {
-      const { myUid, mySessions, places, profile } = get();
+      const { myUid, mySessions, places, tempsByPlace, profile } = get();
       set({
         allSessions,
         allSessionsReady: true,
@@ -175,6 +191,7 @@ export const useStore = create<State>((set, get) => {
           mySessions,
           allSessions,
           places,
+          tempsByPlace,
           profile?.achievements,
         ),
       });
@@ -207,9 +224,11 @@ export const useStore = create<State>((set, get) => {
     allSessions: [],
     allSessionsReady: false,
     places: [],
+    tempsByPlace: new Map(),
     groups: [],
     myStats: EMPTY_STATS,
     sessionsByPlace: new Map(),
+    placesWithTemps: [],
     myPlaces: [],
     achievementCtx: { uid: "", mySessions: [], allSessions: [] },
     unlockedAchievements: new Set(),
@@ -377,7 +396,8 @@ export const useStore = create<State>((set, get) => {
         publicStarted = true;
         publicUnsubs = [
           watchPlaces((places) => {
-            const { myUid, mySessions, allSessions, profile } = get();
+            const { myUid, mySessions, allSessions, tempsByPlace, profile } =
+              get();
             set({
               places,
               ...derive(
@@ -385,6 +405,24 @@ export const useStore = create<State>((set, get) => {
                 mySessions,
                 allSessions,
                 places,
+                tempsByPlace,
+                profile?.achievements,
+              ),
+            });
+          }),
+          // One doc that only the daily sweep rewrites (~1 read/client/day),
+          // so always-on is fine — no lazy refcounting like the community
+          // feed. Needed by guests too (the map shows temps signed-out).
+          watchTempSummary((tempsByPlace) => {
+            const { myUid, mySessions, allSessions, places, profile } = get();
+            set({
+              tempsByPlace,
+              ...derive(
+                myUid ?? "",
+                mySessions,
+                allSessions,
+                places,
+                tempsByPlace,
                 profile?.achievements,
               ),
             });
@@ -434,7 +472,7 @@ export const useStore = create<State>((set, get) => {
             groups: [],
             lastSeenBaseline: null,
             lastSeenResolved: false,
-            ...derive("", [], [], get().places),
+            ...derive("", [], [], get().places, get().tempsByPlace),
           });
           return;
         }
@@ -507,7 +545,7 @@ export const useStore = create<State>((set, get) => {
             (snap) => {
               if (snap.exists()) {
                 const data = snap.data() as UserDoc;
-                const { mySessions, allSessions, places } = get();
+                const { mySessions, allSessions, places, tempsByPlace } = get();
                 set({
                   profile: data,
                   loading: false,
@@ -519,6 +557,7 @@ export const useStore = create<State>((set, get) => {
                     mySessions,
                     allSessions,
                     places,
+                    tempsByPlace,
                     data.achievements,
                   ),
                 });
@@ -531,7 +570,7 @@ export const useStore = create<State>((set, get) => {
           ),
 
           watchUserSessions(u.uid, (mySessions) => {
-            const { allSessions, places, profile } = get();
+            const { allSessions, places, tempsByPlace, profile } = get();
             set({
               mySessions,
               ...derive(
@@ -539,6 +578,7 @@ export const useStore = create<State>((set, get) => {
                 mySessions,
                 allSessions,
                 places,
+                tempsByPlace,
                 profile?.achievements,
               ),
             });
@@ -605,15 +645,18 @@ export function useAllSessionsFeed(active: boolean = true): void {
 /** Inputs and outputs of the previous derive() call, for input-identity
  *  memoization. Firestore snapshots always deliver fresh array references,
  *  so `memo.x === x` means that input genuinely didn't change — e.g. a
- *  water-temp write to a place doc must not re-scan the community feed. */
+ *  temp-summary snapshot must only rebuild placesWithTemps/myPlaces, never
+ *  re-scan the community feed or re-evaluate achievements. */
 type DeriveMemo = {
   uid: string;
   mySessions: SessionDoc[];
   allSessions: SessionDoc[];
   places: PlaceDoc[];
+  temps: Map<string, TempReading>;
   myStats: MyStats;
   sessionsByPlace: Map<string, SessionDoc[]>;
-  myPlaces: PlaceDoc[];
+  placesWithTemps: PlaceWithTemp[];
+  myPlaces: PlaceWithTemp[];
   myPlaceIds: Set<string>;
   achievementCtx: AchievementContext;
   unlockedAchievements: Set<string>;
@@ -622,7 +665,7 @@ let deriveMemo: DeriveMemo | null = null;
 
 /**
  * Compute all derived state from raw data in one pass.
- * Called whenever sessions or places change so every component reads
+ * Called whenever sessions, places, or temps change so every component reads
  * pre-computed values instead of recomputing in useMemo. Each derived value
  * is reused (same reference) when the inputs it depends on are unchanged,
  * so store subscribers don't re-render on unrelated snapshots.
@@ -632,12 +675,14 @@ function derive(
   mySessions: SessionDoc[],
   allSessions: SessionDoc[],
   places: PlaceDoc[],
+  temps: Map<string, TempReading>,
   persistedAchievements?: Record<string, number>,
 ) {
   const m = deriveMemo;
   const sameMine = m !== null && m.mySessions === mySessions;
   const sameAll = m !== null && m.allSessions === allSessions;
   const samePlaces = m !== null && m.places === places;
+  const sameTemps = m !== null && m.temps === temps;
   const sameCtx = m !== null && m.uid === uid && sameMine && sameAll;
 
   const myStats = sameMine ? m.myStats : computeMyStats(mySessions);
@@ -657,14 +702,22 @@ function derive(
     }
   }
 
-  // "My places" stays scoped to the current user's own swims.
+  // Places with their current summary reading merged in — what the map and
+  // any temp-reading UI consume. The merge is by id, no query involved.
+  const placesWithTemps =
+    samePlaces && sameTemps
+      ? m.placesWithTemps
+      : mergePlaceTemps(places, temps);
+
+  // "My places" stays scoped to the current user's own swims. Filters the
+  // merged array (not raw `places`) because MapPage feeds it to SwimMap.
   const myPlaceIds = sameMine
     ? m.myPlaceIds
     : new Set(mySessions.map((s) => s.placeId));
   const myPlaces =
-    sameMine && samePlaces
+    sameMine && samePlaces && sameTemps
       ? m.myPlaces
-      : places.filter((p) => myPlaceIds.has(p.id));
+      : placesWithTemps.filter((p) => myPlaceIds.has(p.id));
 
   const achievementCtx: AchievementContext = sameCtx
     ? m.achievementCtx
@@ -693,8 +746,10 @@ function derive(
     mySessions,
     allSessions,
     places,
+    temps,
     myStats,
     sessionsByPlace,
+    placesWithTemps,
     myPlaces,
     myPlaceIds,
     achievementCtx,
@@ -704,6 +759,7 @@ function derive(
   return {
     myStats,
     sessionsByPlace,
+    placesWithTemps,
     myPlaces,
     myPlaceIds,
     achievementCtx,

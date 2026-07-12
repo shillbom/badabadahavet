@@ -9,7 +9,7 @@ import SwimListItem from "@/components/SwimListItem";
 import BottomSheet from "@/components/BottomSheet";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import EmojiAvatar from "@/components/EmojiAvatar";
-import type { PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
+import type { PlaceWithTemp, SessionDoc, UserDoc } from "@/lib/types";
 
 /**
  * Bottom-sheet showing one swimmer's swims with a map / list switcher.
@@ -29,7 +29,7 @@ export default function MemberSwimsSheet({
 }: {
   member: UserDoc | null;
   sessions: SessionDoc[];
-  places: PlaceDoc[];
+  places: PlaceWithTemp[];
   onClose: () => void;
   /** Backdrop z-index; the sheet sits at zBase + 100. */
   zBase?: number;

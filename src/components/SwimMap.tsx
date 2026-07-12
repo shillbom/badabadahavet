@@ -28,9 +28,8 @@ import {
 import { MAP_THEMES } from "@/lib/mapThemes";
 import Photo from "@/components/Photo";
 import { watchPlaceSessions } from "@/lib/data";
-import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import { pinRingFor } from "@/lib/borders";
-import type { PlaceDoc, SessionDoc } from "@/lib/types";
+import type { PlaceWithTemp, SessionDoc } from "@/lib/types";
 import { formatDate, cn } from "@/lib/utils";
 import { buttonClasses } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
@@ -188,7 +187,7 @@ function pinIcon(
 
 // Stable key for a place's position so we can look up its temperature
 // from a cluster's child markers (which only expose lat/lng, not the
-// original PlaceDoc).
+// original PlaceWithTemp).
 function clusterPosKey(lat: number, lng: number): string {
   return `${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
@@ -202,8 +201,8 @@ function clusterPosKey(lat: number, lng: number): string {
 // _moveChild). A fresh `[p.lat, p.lng]` literal on every render — which
 // `places.map(...)` produces every time the Firestore listener re-emits —
 // was therefore rebuilding every marker on the map on every re-render,
-// which is what made clicking a pin (which re-renders SwimMap 2-3 times via
-// popup autoPan + the temp-refresh echoing back) visibly flicker.
+// which is what made clicking a pin (which re-renders SwimMap 2-3 times
+// via popup autoPan) visibly flicker.
 const positionCache = new Map<string, [number, number]>();
 function stablePosition(
   id: string,
@@ -291,7 +290,7 @@ export type MapAction = {
 };
 
 export type SwimMapProps = {
-  places: PlaceDoc[];
+  places: PlaceWithTemp[];
   sessionsByPlace: Map<string, SessionDoc[]>;
   center?: LatLngExpression;
   zoom?: number;
@@ -307,7 +306,7 @@ export type SwimMapProps = {
   /** Bumping this triggers a re-fit to all places. */
   fitToken?: number;
   /** When set, clicking an existing place pin offers a "use this spot" action. */
-  onPickExisting?: (place: PlaceDoc) => void;
+  onPickExisting?: (place: PlaceWithTemp) => void;
   /** Highlight one place's pin with an "active" icon — used when the
    *  user has picked an existing place. The standalone new-swim pin is
    *  then suppressed so we don't double up. */
@@ -319,7 +318,7 @@ export type SwimMapProps = {
   keepCenteredOn?: { lat: number; lng: number } | null;
   /** Filter which existing places offer the "Use this spot" affordance.
    *  Defaults to all places when `onPickExisting` is set. */
-  canPickExisting?: (place: PlaceDoc) => boolean;
+  canPickExisting?: (place: PlaceWithTemp) => boolean;
   /** When true, suppresses the initial auto-fit-to-all-places so the
    *  map stays on the explicitly provided center/zoom. */
   skipInitialFit?: boolean;
@@ -361,8 +360,8 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Returns true only when a place has a numeric temp that is ≤ 7 days old. */
 function hasFreshTemp(
-  p: PlaceDoc,
-): p is PlaceDoc & { waterTemp: number; waterTempAt: number } {
+  p: PlaceWithTemp,
+): p is PlaceWithTemp & { waterTemp: number; waterTempAt: number } {
   if (typeof p.waterTemp !== "number") return false;
   if (!p.waterTempAt) return false;
   return Date.now() - p.waterTempAt <= WEEK_MS;
@@ -453,18 +452,19 @@ export default function SwimMap({
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    const starts: PlaceDoc[] = [];
-    const contains: PlaceDoc[] = [];
+    const starts: PlaceWithTemp[] = [];
+    const contains: PlaceWithTemp[] = [];
     for (const p of places) {
       const name = p.name.toLowerCase();
       if (name.startsWith(q)) starts.push(p);
       else if (name.includes(q)) contains.push(p);
     }
-    const byName = (a: PlaceDoc, b: PlaceDoc) => a.name.localeCompare(b.name);
+    const byName = (a: PlaceWithTemp, b: PlaceWithTemp) =>
+      a.name.localeCompare(b.name);
     return [...starts.sort(byName), ...contains.sort(byName)].slice(0, 8);
   }, [query, places]);
 
-  const pickSearchResult = useCallback((p: PlaceDoc) => {
+  const pickSearchResult = useCallback((p: PlaceWithTemp) => {
     setSearchFocus({
       lat: p.lat,
       lng: p.lng,
@@ -695,9 +695,7 @@ export default function SwimMap({
                   recencyFactor(p.lastSwimAt),
                 )}
                 eventHandlers={{
-                  mouseover: () => maybeRefreshPlaceTemp(p),
                   click: () => {
-                    maybeRefreshPlaceTemp(p);
                     if (isPickable) {
                       mapRef.current?.closePopup();
                       onPickExisting(p);
@@ -737,9 +735,7 @@ export default function SwimMap({
               position={stablePosition(p.id, p.lat, p.lng)}
               icon={activePlaceIcon}
               eventHandlers={{
-                mouseover: () => maybeRefreshPlaceTemp(p),
                 click: () => {
-                  maybeRefreshPlaceTemp(p);
                   if (isPickable) {
                     mapRef.current?.closePopup();
                     onPickExisting(p);
@@ -967,7 +963,7 @@ function ViewportPinCount({
   places,
   onCount,
 }: {
-  places: PlaceDoc[];
+  places: PlaceWithTemp[];
   onCount: (n: number) => void;
 }) {
   const map = useMap();
@@ -1103,7 +1099,7 @@ function FitToPlaces({
   skipInitialFit,
   fitBoundsToPlaces = false,
 }: {
-  places: PlaceDoc[];
+  places: PlaceWithTemp[];
   userLocation: { lat: number; lng: number } | null;
   fitToken?: number;
   skipInitialFit?: boolean;
@@ -1176,7 +1172,7 @@ function PlacePopup({
   sessions,
   linkToSpot,
 }: {
-  place: PlaceDoc;
+  place: PlaceWithTemp;
   sessions: SessionDoc[];
   linkToSpot: boolean;
 }) {

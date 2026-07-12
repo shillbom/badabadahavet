@@ -55,7 +55,7 @@ export default function LogSessionPage() {
   // this where it ignores the page locale entirely.
   const locale = useLocale((s) => s.locale);
   const inputLang = locale === "sv" ? "sv-SE" : "en-GB";
-  const places = useStore((s) => s.places);
+  const places = useStore((s) => s.placesWithTemps);
   const mySessions = useStore((s) => s.mySessions);
   const myPlaceIds = useStore((s) => s.myPlaceIds);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);

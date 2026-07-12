@@ -263,6 +263,20 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Water temperatures, written ONLY by the daily sweep script and the
+    // refreshPlaceTemp Cloud Function (Admin SDK bypasses these rules).
+    // World-readable so logged-out visitors see temps on the map.
+    //   tempSummary/current — every place's latest reading in one doc.
+    //   placeTemps/{placeId} — the live per-place reading (open spot only).
+    match /tempSummary/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    match /placeTemps/{placeId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

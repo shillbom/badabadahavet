@@ -24,7 +24,17 @@ import {
   deleteObject,
 } from "firebase/storage";
 import { cloudFn, db, storage } from "@/firebase";
-import { GroupDoc, PlaceDoc, SessionDoc, UserDoc, BannedUser } from "./types";
+import {
+  GroupDoc,
+  PlaceDoc,
+  PlaceTempDoc,
+  SessionDoc,
+  TempReading,
+  TempSummaryDoc,
+  UserDoc,
+  BannedUser,
+} from "./types";
+import { summaryToMap } from "./temps";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS } from "./scoring";
 import { compressImage, makeThumbDataUrl } from "./image";
@@ -269,6 +279,35 @@ export function watchPlaces(cb: (places: PlaceDoc[]) => void): Unsubscribe {
   return onSnapshot(placesCol, (snap) => {
     cb(snap.docs.map((d) => d.data() as PlaceDoc));
   });
+}
+
+/**
+ * Every place's latest water temperature, packed into the single
+ * `tempSummary/current` doc by the daily sweep. One always-on listener on
+ * one doc (~1 read/client/day) replaces receiving each temp write as a
+ * per-place delta on the whole-collection `places` listener.
+ */
+export function watchTempSummary(
+  cb: (temps: Map<string, TempReading>) => void,
+): Unsubscribe {
+  return onSnapshot(doc(db, "tempSummary", "current"), (snap) => {
+    const data = snap.exists() ? (snap.data() as TempSummaryDoc) : null;
+    cb(summaryToMap(data?.entries));
+  });
+}
+
+/**
+ * The live per-place reading (`placeTemps/{placeId}`) — fresher than the
+ * daily summary when an on-demand refreshPlaceTemp call has landed. Only
+ * subscribe to this for the currently open spot.
+ */
+export function watchPlaceTemp(
+  placeId: string,
+  cb: (temp: PlaceTempDoc | null) => void,
+): Unsubscribe {
+  return onSnapshot(doc(db, "placeTemps", placeId), (snap) =>
+    cb(snap.exists() ? (snap.data() as PlaceTempDoc) : null),
+  );
 }
 
 // ---------- Sessions ----------

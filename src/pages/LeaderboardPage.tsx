@@ -82,7 +82,7 @@ export default function LeaderboardPage() {
   // target). Sessions are subscribed per clicked member — one year-bounded
   // single-uid query — instead of preloading the whole scope.
   const isGroupScope = scope !== "global";
-  const places = useStore((s) => s.places);
+  const places = useStore((s) => s.placesWithTemps);
   const [selectedMember, setSelectedMember] = useState<UserDoc | null>(null);
   const [memberSessions, setMemberSessions] = useState<SessionDoc[]>([]);
   const selectedUid = selectedMember?.uid;
