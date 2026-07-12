@@ -57,6 +57,51 @@ export type BannedUser = {
   bannedBy: string;
 };
 
+/** The upstream feeds a water-temperature reading can come from. */
+export type TempProvider = "havochvatten" | "smhi" | "open-meteo";
+
+/** One water-temperature reading. Field names are single letters because
+ *  thousands of these are packed into the one `tempSummary/current` doc
+ *  (doc-size budget): t = °C, at = epoch ms sampled, p = producing feed. */
+export type TempReading = { t: number; at: number; p: TempProvider };
+
+/** tempSummary/current — every place's latest reading keyed by placeId,
+ *  rebuilt by the daily sweep (scripts/update-temperatures.mjs). Clients
+ *  subscribe to this single doc instead of receiving each temp write as a
+ *  per-place snapshot delta, which is what keeps the always-on `places`
+ *  listener quiet (temps are the collection's highest-churn data). */
+export type TempSummaryDoc = {
+  updatedAt: number;
+  entries: Record<string, TempReading>;
+};
+
+/** placeTemps/{placeId} — the latest reading for one place, written by the
+ *  refreshPlaceTemp Cloud Function (and the daily sweep). Only the open
+ *  spot subscribes to it, so on-demand refreshes reach that viewer live
+ *  without fanning out to every client. Reading fields are absent when no
+ *  upstream has ever produced data for the place. */
+export type PlaceTempDoc = Partial<TempReading> & {
+  placeId: string;
+  /** Epoch ms of the last upstream fetch *attempt* — throttles re-fetches
+   *  for spots whose feeds keep coming back empty. */
+  checkedAt?: number;
+};
+
+/** A place with its current reading merged in — the shape `derive()` hands
+ *  to the map/UI, field-compatible with the pre-split PlaceDoc so temp
+ *  consumers (pins, popups, nudge) didn't have to change. */
+export type PlaceWithTemp = PlaceDoc & {
+  /** Latest measured water temperature in °C (if known). */
+  waterTemp?: number;
+  /** Epoch ms — when waterTemp was sampled. */
+  waterTempAt?: number;
+  /** Which upstream actually produced the current `waterTemp`. Distinct
+   *  from `tempSource` (the preference) — a "havochvatten" or "smhi" place
+   *  can end up with an "open-meteo" reading when its preferred feed has
+   *  none. */
+  waterTempProvider?: TempProvider;
+};
+
 export type PlaceDoc = {
   id: string;
   name: string;
@@ -76,17 +121,9 @@ export type PlaceDoc = {
    *  SMHI station first and falls back to Open-Meteo. The default (or
    *  "open-meteo") goes straight to Open-Meteo satellite data. Auto-promoted
    *  from "havochvatten" to "smhi" server-side once SMHI actually supplies a
-   *  reading for a place whose official feed has nothing. */
-  tempSource?: "havochvatten" | "smhi" | "open-meteo";
-  /** Latest measured water temperature in °C (if known). */
-  waterTemp?: number;
-  /** Epoch ms — when waterTemp was sampled. */
-  waterTempAt?: number;
-  /** Which upstream actually produced the current `waterTemp`. Distinct
-   *  from `tempSource` (the preference) — a "havochvatten" or "smhi" place
-   *  can end up with an "open-meteo" reading when its preferred feed has
-   *  none. */
-  waterTempProvider?: "havochvatten" | "smhi" | "open-meteo";
+   *  reading for a place whose official feed has nothing. (A preference, not
+   *  a reading — readings live in tempSummary/placeTemps.) */
+  tempSource?: TempProvider;
   /** Denormalised "last swim here", maintained by the logSession /
    *  removeSession Cloud Functions. Lets the map outline each pin with the
    *  most recent swimmer's frame without loading any sessions. */

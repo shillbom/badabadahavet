@@ -227,9 +227,16 @@ async function fetchSmhiTemp(lat, lng) {
  *   data: { placeId: string }
  *   returns: { status: "updated" | "fresh" | "no-data", waterTemp?, waterTempAt? }
  *
- * Skips the upstream call entirely when the stored reading is < 15 min
- * old, returning "fresh". Tracks per-user invocations in
- * `refreshUsage/{uid}` so a runaway client maxes out at 60/hour.
+ * The reading is written to `placeTemps/{placeId}` — never to the place
+ * doc, whose whole-collection listener would fan the write out to every
+ * connected client. Only the open spot subscribes to placeTemps, so the
+ * refresh reaches exactly the viewer who asked for it; everyone else keeps
+ * the daily `tempSummary/current` reading.
+ *
+ * Skips the upstream call entirely when the stored reading (or the last
+ * fetch attempt, for spots whose feeds keep coming back empty) is < 15 min
+ * old. Tracks per-user invocations in `refreshUsage/{uid}` so a runaway
+ * client maxes out at 60/hour.
  */
 export const refreshPlaceTemp = onCall(
   {
@@ -267,21 +274,31 @@ export const refreshPlaceTemp = onCall(
     }
     await usageRef.set({ calls: [...recentCalls, now] }, { merge: true });
 
+    // The place doc is still needed for the upstream preference + coords,
+    // but the reading itself lives in placeTemps/{placeId}.
     const placeRef = db.collection("places").doc(placeId);
-    const placeSnap = await placeRef.get();
+    const tempRef = db.collection("placeTemps").doc(placeId);
+    const [placeSnap, tempSnap] = await Promise.all([
+      placeRef.get(),
+      tempRef.get(),
+    ]);
     if (!placeSnap.exists) {
       throw new HttpsError("not-found", "Place doesn't exist.");
     }
     const place = placeSnap.data();
+    const stored = tempSnap.exists ? tempSnap.data() : null;
+    // A recent fetch attempt (reading or not) means there's nothing newer
+    // upstream — don't hit the APIs again yet.
+    const recentlyChecked =
+      typeof stored?.checkedAt === "number" &&
+      now - stored.checkedAt < FRESH_WINDOW_MS;
     if (
-      typeof place.waterTempAt === "number" &&
-      now - place.waterTempAt < FRESH_WINDOW_MS
+      recentlyChecked ||
+      (typeof stored?.at === "number" && now - stored.at < FRESH_WINDOW_MS)
     ) {
-      return {
-        status: "fresh",
-        waterTemp: place.waterTemp,
-        waterTempAt: place.waterTempAt,
-      };
+      return typeof stored?.at === "number"
+        ? { status: "fresh", waterTemp: stored.t, waterTempAt: stored.at }
+        : { status: "no-data" };
     }
 
     // Decide the preferred upstream. Fall back to the legacy `source`
@@ -344,35 +361,32 @@ export const refreshPlaceTemp = onCall(
 
     if (!reading) {
       // Still record the attempt so we don't hammer immediately again.
-      await placeRef.update({
-        waterTempCheckedAt: FieldValue.serverTimestamp(),
-      });
+      await tempRef.set({ placeId, checkedAt: now }, { merge: true });
       return { status: "no-data" };
     }
 
-    // Only write what actually changed.
-    const updates = {};
-    if (place.waterTemp !== reading.temp) updates.waterTemp = reading.temp;
-    if (place.waterTempAt !== reading.stamp)
-      updates.waterTempAt = reading.stamp;
-    if (place.waterTempProvider !== reading.source) {
-      // Which upstream actually produced this reading ("havochvatten",
-      // "smhi", or "open-meteo") — distinct from `tempSource` (the
-      // preference).
-      updates.waterTempProvider = reading.source;
-    }
+    // t/at/p is the compact reading shape shared with tempSummary/current
+    // (see functions/tempLogic.js).
+    await tempRef.set(
+      {
+        placeId,
+        t: reading.temp,
+        at: reading.stamp,
+        p: reading.source,
+        checkedAt: now,
+      },
+      { merge: true },
+    );
     // Hav och Vatten had nothing (or nothing fresh) and SMHI actually
     // supplied the reading — prefer SMHI going forward instead of paying
-    // for a Hav och Vatten call that keeps coming back empty.
+    // for a Hav och Vatten call that keeps coming back empty. This is the
+    // one remaining place-doc write: a once-ever flip, not reading churn.
     if (
       tempSource === "havochvatten" &&
       reading.source === "smhi" &&
       place.tempSource !== "smhi"
     ) {
-      updates.tempSource = "smhi";
-    }
-    if (Object.keys(updates).length > 0) {
-      await placeRef.update(updates);
+      await placeRef.update({ tempSource: "smhi" });
     }
 
     return {

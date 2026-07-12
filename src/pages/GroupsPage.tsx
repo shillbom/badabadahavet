@@ -30,7 +30,7 @@ import {
   updateGroupMeta,
   watchMemberSessions,
 } from "@/lib/data";
-import type { GroupDoc, PlaceDoc, SessionDoc, UserDoc } from "@/lib/types";
+import type { GroupDoc, PlaceWithTemp, SessionDoc, UserDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { longestStreakInYear } from "@/lib/streak";
@@ -72,7 +72,7 @@ export default function GroupsPage() {
   const { user } = useAuth();
   const t = useT();
   const groups = useStore((s) => s.groups);
-  const places = useStore((s) => s.places);
+  const places = useStore((s) => s.placesWithTemps);
   const [groupName, setGroupName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -418,7 +418,7 @@ function GroupDetailSheet({
 }: {
   group: GroupDoc | null;
   myUid: string;
-  places: PlaceDoc[];
+  places: PlaceWithTemp[];
   onClose: () => void;
   onLeave: () => void;
 }) {
