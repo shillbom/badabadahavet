@@ -125,6 +125,7 @@ actually persist (dry-run by default):
 | `npm run backfill:scores`     | Recompute every user's per-year score                 |
 | `npm run backfill:thumbnails` | Regenerate photo LQIP placeholders                    |
 | `npm run merge:places`        | Merge a duplicate spot into the one it duplicates     |
+| `npm run scrub:usernames`     | Censor profane display names to their `***` variant   |
 
 ## Admin / moderation
 

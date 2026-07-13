@@ -647,9 +647,7 @@ export default function SwimMap({
         className={cn("h-full w-full", !fullscreen && "rounded-2xl")}
         ref={(m) => {
           mapRef.current = m;
-          if (externalMapRef)
-            (externalMapRef as React.MutableRefObject<L.Map | null>).current =
-              m;
+          if (externalMapRef) externalMapRef.current = m;
         }}
       >
         <TileLayer
