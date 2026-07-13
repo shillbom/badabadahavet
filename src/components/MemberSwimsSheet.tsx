@@ -173,11 +173,12 @@ export default function MemberSwimsSheet({
                   <SwimListItem
                     key={s.id}
                     index={i}
+                    seed={s.id}
                     thumb={
                       s.photoUrl ? (
                         <SwimPhoto
                           session={s}
-                          className="h-14 w-14 flex-none rounded-lg"
+                          className="h-14 w-14 flex-none rounded-lg ring-1 ring-wave-200 ring-inset"
                         />
                       ) : undefined
                     }

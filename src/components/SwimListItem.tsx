@@ -2,6 +2,7 @@ import type { ReactNode, Ref } from "react";
 import { motion } from "framer-motion";
 import { Calendar } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
+import { waterEmojiFor } from "@/lib/waterEmoji";
 
 /**
  * The standard compact swim row used in feeds and sheets: a 56px photo/emoji
@@ -15,7 +16,8 @@ export default function SwimListItem({
   index = 0,
   className,
   thumb,
-  fallbackEmoji = "🌊",
+  fallbackEmoji,
+  seed,
   title,
   points,
   aside,
@@ -31,7 +33,10 @@ export default function SwimListItem({
   className?: string;
   /** Custom thumbnail node (photo, lightbox button…); emoji block otherwise. */
   thumb?: ReactNode;
+  /** Force a specific placeholder emoji; otherwise derived from `seed`. */
   fallbackEmoji?: string;
+  /** Stable seed (usually the session id) for picking the placeholder emoji. */
+  seed?: string;
   title: ReactNode;
   /** Standard "+n" badge. Use `aside` for anything fancier. */
   points?: number;
@@ -53,8 +58,10 @@ export default function SwimListItem({
       className={cn("glass flex items-start gap-3 p-3", className)}
     >
       {thumb ?? (
-        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-wave-100 text-2xl">
-          {fallbackEmoji}
+        <div className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-gradient-to-br from-wave-50 to-wave-200 text-2xl ring-1 ring-wave-200 ring-inset">
+          <span className="drop-shadow-sm">
+            {fallbackEmoji ?? waterEmojiFor(seed ?? "")}
+          </span>
         </div>
       )}
       <div className="min-w-0 flex-1">

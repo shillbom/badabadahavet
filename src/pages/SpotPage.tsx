@@ -482,11 +482,12 @@ export function SpotView({
             className={
               focusedSessionId === s.id ? "animate-highlight" : undefined
             }
+            seed={s.id}
             thumb={
               s.photoUrl ? (
                 <SwimPhoto
                   session={s}
-                  className="h-14 w-14 flex-none rounded-lg"
+                  className="h-14 w-14 flex-none rounded-lg ring-1 ring-wave-200 ring-inset"
                 />
               ) : undefined
             }
