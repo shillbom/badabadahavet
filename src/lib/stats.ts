@@ -58,7 +58,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
   let totalPoints = 0;
   let winterSwims = 0;
   const placeCounts = new Map<string, { name: string; count: number }>();
-  const monthPoints = new Array(12).fill(0) as number[];
+  const monthPoints = Array.from({ length: 12 }, () => 0);
   const weeksWithSwim = new Set<number>();
   const abroadCountries = new Set<string>();
   let minLat = Infinity;

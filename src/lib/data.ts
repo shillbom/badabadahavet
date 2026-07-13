@@ -15,8 +15,8 @@ import {
   onSnapshot,
   arrayRemove,
   writeBatch,
-  Unsubscribe,
 } from "firebase/firestore";
+import type { Unsubscribe } from "firebase/firestore";
 import {
   ref as storageRef,
   uploadBytes,
@@ -24,7 +24,7 @@ import {
   deleteObject,
 } from "firebase/storage";
 import { cloudFn, db, storage } from "@/firebase";
-import {
+import type {
   GroupDoc,
   PlaceDoc,
   PlaceTempDoc,

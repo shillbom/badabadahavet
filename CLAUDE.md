@@ -12,7 +12,8 @@ work in the code.
 ```bash
 npm run dev            # Vite dev server (expects the Firebase emulators, see below)
 npm run build          # tsc -b && vite build (also what CI runs)
-npm run lint           # tsc -b --noEmit — type-checking IS the lint step; there is no eslint
+npm run lint           # oxlint (Rust linter, config in .oxlintrc.json)
+npm run typecheck      # tsc -b --noEmit — the TypeScript 7 native compiler (tsgo)
 npm test               # vitest run (all tests)
 npx vitest run src/lib/streak.test.ts        # single test file
 npx vitest run -t "buoy"                     # tests matching a name
@@ -28,10 +29,17 @@ firebase emulators:start        # auth/firestore/storage/functions + UI at :4000
 npm run dev                     # separate terminal
 ```
 
-The pre-commit hook (husky + lint-staged) runs `prettier --check` and
-`tsc -b --noEmit` on staged files and **rejects the commit** on any formatting
-drift — run `npx prettier --write <files>` before committing. Prettier uses
-`prettier-plugin-tailwindcss`, so class order in `className` is enforced too.
+The pre-commit hook (husky + lint-staged) runs `prettier --check`, `oxlint`,
+and `tsc -b --noEmit` on staged files and **rejects the commit** on any
+formatting drift or lint/type error — run `npx prettier --write <files>` before
+committing. Prettier uses `prettier-plugin-tailwindcss`, so class order in
+`className` is enforced too.
+
+Linting is [oxlint](https://oxc.rs), not eslint: typescript-eslint needs the
+classic TypeScript compiler API, which the TS 7 native port (tsgo) doesn't
+expose, so type-aware rules (e.g. `no-deprecated`) aren't available. oxlint is
+config-light and type-unaware; errors block, warnings advise. Tune rules in
+`.oxlintrc.json`.
 
 ## Architecture
 
