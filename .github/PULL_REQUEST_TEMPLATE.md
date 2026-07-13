@@ -7,6 +7,8 @@ Keep this PR focused on one thing — split unrelated changes.
 
 <!-- What does this change, and why? Link any related issue. -->
 
+<!-- For UI / UX changes, add screenshots if needed -->
+
 ## How it works
 
 <!-- Key implementation notes, trade-offs, or anything non-obvious a reviewer should know. -->
