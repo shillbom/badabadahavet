@@ -246,10 +246,12 @@ function withTimeout<T>(p: Promise<T>, ms = DECODE_TIMEOUT_MS): Promise<T> {
       (v) => {
         window.clearTimeout(timer);
         resolve(v);
+        return;
       },
       (e) => {
         window.clearTimeout(timer);
         reject(e);
+        return;
       },
     );
   });

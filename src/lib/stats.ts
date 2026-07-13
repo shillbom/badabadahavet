@@ -93,7 +93,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
     if (s.lng > maxLng) maxLng = s.lng;
   }
 
-  const sortedDesc = [...sessions].sort((a, b) => b.date - a.date);
+  const sortedDesc = [...sessions].toSorted((a, b) => b.date - a.date);
   const lastDate = sortedDesc[0].date;
 
   // Difference in *calendar days* (round, not floor) so "yesterday at 14:00"

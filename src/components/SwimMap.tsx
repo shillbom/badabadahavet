@@ -485,7 +485,10 @@ export default function SwimMap({
     }
     const byName = (a: PlaceWithTemp, b: PlaceWithTemp) =>
       a.name.localeCompare(b.name);
-    return [...starts.sort(byName), ...contains.sort(byName)].slice(0, 8);
+    return [...starts.toSorted(byName), ...contains.toSorted(byName)].slice(
+      0,
+      8,
+    );
   }, [query, places]);
 
   const pickSearchResult = useCallback((p: PlaceWithTemp) => {
@@ -1301,7 +1304,7 @@ function PlacePopup({
 }) {
   const t = useT();
   const sorted = useMemo(
-    () => [...sessions].sort((a, b) => b.date - a.date),
+    () => [...sessions].toSorted((a, b) => b.date - a.date),
     [sessions],
   );
   const photoSessions = sorted.filter((s) => s.photoUrl);

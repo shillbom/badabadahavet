@@ -162,6 +162,7 @@ export default function LogSessionPage() {
     const ctrl = new AbortController();
     reverseGeocodeCountry(coords.lat, coords.lng, ctrl.signal).then((c) => {
       if (!ctrl.signal.aborted) setCountry(c);
+      return;
     });
     return () => ctrl.abort();
   }, [coords]);
@@ -801,7 +802,8 @@ function formatDistance(m: number): string {
   return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
 }
 
+const pad = (n: number) => n.toString().padStart(2, "0");
+
 function toLocalInput(d: Date) {
-  const pad = (n: number) => n.toString().padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

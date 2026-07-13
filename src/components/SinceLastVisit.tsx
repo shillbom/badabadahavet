@@ -93,7 +93,7 @@ function computeActivity(
 
   const friendSwims = allSessions
     .filter((s) => friendUids.has(s.uid) && (s.createdAt ?? s.date) > since)
-    .sort((a, b) => (b.createdAt ?? b.date) - (a.createdAt ?? a.date));
+    .toSorted((a, b) => (b.createdAt ?? b.date) - (a.createdAt ?? a.date));
 
   // New reactions on any of my swims — an old swim can pick up a fresh
   // reaction, so we look at all my swims and count reactions added after
@@ -114,7 +114,7 @@ function computeActivity(
       session: s,
     })),
     ...reactionItems
-      .sort((a, b) => b.ts - a.ts)
+      .toSorted((a, b) => b.ts - a.ts)
       .slice(0, MAX_REACTION_ITEMS)
       .map((r): FeedItem => ({
         kind: "reaction",
@@ -122,7 +122,7 @@ function computeActivity(
         session: r.session,
         delta: r.delta,
       })),
-  ].sort((a, b) => b.ts - a.ts);
+  ].toSorted((a, b) => b.ts - a.ts);
 
   return {
     mode,
@@ -337,6 +337,7 @@ function Sheet({
           for (const u of users) next.set(u.uid, u.displayName);
           return next;
         });
+        return;
       })
       // Names are best-effort — unresolved reactors just fall back to
       // "someone", so a failed lookup shouldn't surface as an error.

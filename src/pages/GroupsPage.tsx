@@ -518,6 +518,7 @@ function GroupDetailSheet({
     fetchUsers(group.members).then((users) => {
       setProfiles(users);
       setLoadingProfiles(false);
+      return;
     });
   }, [membersKey]);
 
@@ -575,7 +576,7 @@ function GroupDetailSheet({
   }, [allSessions, shown?.members]);
 
   const sortedMembers = useMemo(() => {
-    return [...profiles].sort((a, b) => {
+    return [...profiles].toSorted((a, b) => {
       const sa = memberStats.get(a.uid);
       const sb = memberStats.get(b.uid);
       if (sortBy === "recent") return (sb?.lastSwim ?? 0) - (sa?.lastSwim ?? 0);

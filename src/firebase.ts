@@ -81,6 +81,7 @@ if (
   import("firebase/analytics")
     .then(async ({ getAnalytics, isSupported }) => {
       if (await isSupported()) getAnalytics(app);
+      return;
     })
     .catch(() => {
       /* analytics is best-effort — ignore failures */

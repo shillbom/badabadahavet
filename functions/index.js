@@ -117,8 +117,9 @@ const SMHI_METADATA_CACHE_MS = 6 * 60 * 60 * 1000;
 let smhiParameterIdCache = null; // { at: number, id: string | null }
 let smhiStationsCache = null; // { at: number, stations: {id, lat, lng}[] }
 
+const toRad = (x) => (x * Math.PI) / 180;
+
 function haversineMeters(a, b) {
-  const toRad = (x) => (x * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);

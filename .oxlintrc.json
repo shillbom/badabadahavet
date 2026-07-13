@@ -15,10 +15,15 @@
     "import/no-unassigned-import": "off",
     "eslint/no-underscore-dangle": "off",
     "eslint/no-await-in-loop": "off",
-    "promise/always-return": "off",
-    "unicorn/no-array-sort": "off",
-    "unicorn/consistent-function-scoping": "off",
     "unicorn/prefer-add-event-listener": "off"
   },
-  "ignorePatterns": ["dist", "dev-dist", "**/node_modules"]
+  "ignorePatterns": ["dist", "dev-dist", "**/node_modules"],
+  "overrides": [
+    {
+      "files": ["**/*.test.{ts,tsx,js}"],
+      "rules": {
+        "unicorn/consistent-function-scoping": "off"
+      }
+    }
+  ]
 }

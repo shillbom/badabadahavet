@@ -62,8 +62,9 @@ function initAdmin() {
   });
 }
 
+const toRad = (x) => (x * Math.PI) / 180;
+
 function haversineMeters(a, b) {
-  const toRad = (x) => (x * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);

@@ -80,7 +80,7 @@ export default function MemberSwimsSheet({
   }, [memberSessions]);
   // Most-recent swim first for the list view.
   const memberSwims = useMemo(
-    () => [...memberSessions].sort((a, b) => b.date - a.date),
+    () => [...memberSessions].toSorted((a, b) => b.date - a.date),
     [memberSessions],
   );
   const stats = useMemo(() => {

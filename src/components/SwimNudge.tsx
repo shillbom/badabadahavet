@@ -63,7 +63,7 @@ export default function SwimNudge({
     const friendSwim =
       allSessions
         .filter((s) => s.placeId === place.id && friendUids.has(s.uid))
-        .sort((a, b) => b.date - a.date)[0] ?? null;
+        .toSorted((a, b) => b.date - a.date)[0] ?? null;
 
     return { place, distM, friendName: friendSwim?.displayName ?? null };
   }, [

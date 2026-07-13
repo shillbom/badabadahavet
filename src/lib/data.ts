@@ -785,7 +785,7 @@ export async function fetchAllUsers(): Promise<UserDoc[]> {
   const snap = await getDocs(usersCol);
   return snap.docs
     .map((d) => d.data() as UserDoc)
-    .sort((a, b) =>
+    .toSorted((a, b) =>
       (a.displayName ?? "").localeCompare(b.displayName ?? "", undefined, {
         sensitivity: "base",
       }),
@@ -797,7 +797,7 @@ export async function fetchBannedUsers(): Promise<BannedUser[]> {
   const snap = await getDocs(collection(db, "bannedUsers"));
   return snap.docs
     .map((d) => d.data() as BannedUser)
-    .sort((a, b) => b.bannedAt - a.bannedAt);
+    .toSorted((a, b) => b.bannedAt - a.bannedAt);
 }
 
 /**

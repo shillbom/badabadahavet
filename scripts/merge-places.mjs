@@ -69,8 +69,9 @@ function initAdmin() {
   });
 }
 
+const toRad = (x) => (x * Math.PI) / 180;
+
 function haversineMeters(a, b) {
-  const toRad = (x) => (x * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
@@ -120,7 +121,7 @@ if (unresolved.length) {
       .filter(([id]) => id !== from)
       .map(([id, p]) => ({ id, p, dist: haversineMeters(dup, p) }))
       .filter((c) => c.dist <= 500)
-      .sort((a, b) => a.dist - b.dist)
+      .toSorted((a, b) => a.dist - b.dist)
       .slice(0, 8);
     if (!candidates.length) {
       console.log("  (none within 500 m)");

@@ -62,7 +62,7 @@ export default function HistoryPage() {
         });
       }
     }
-    return [...m.values()].sort(
+    return [...m.values()].toSorted(
       (a, b) => b.count - a.count || b.lastDate - a.lastDate,
     );
   }, [sessions, view]);

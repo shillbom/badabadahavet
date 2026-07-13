@@ -49,7 +49,7 @@ export default function RecapPage() {
     const years = new Set<number>();
     for (const s of mySessions) years.add(new Date(s.date).getFullYear());
     if (years.size === 0) return [currentYear];
-    return [...years].sort((a, b) => a - b);
+    return [...years].toSorted((a, b) => a - b);
   }, [mySessions, currentYear]);
 
   const minYear = availableYears[0] ?? currentYear;
