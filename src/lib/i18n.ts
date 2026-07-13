@@ -783,7 +783,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "map.popup.age.days": "för {n} dagar sedan",
     "map.filters": "Kartfilter",
     "map.filter.mine": "📍 Bara mina platser",
-    "map.filter.nude": "🍑 Naturistbad",
+    "map.filter.nude": "🍑 Nakenbad",
     "map.filter.mode.only": "Endast",
     "map.filter.mode.on": "På",
     "map.filter.mode.off": "Av",
