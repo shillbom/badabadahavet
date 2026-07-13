@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
+  Info,
   Snowflake,
   Sparkles,
   Users,
   ListChecks,
   LogIn,
   MapPin,
+  Plus,
   Share2,
   Thermometer,
   Pencil,
@@ -23,10 +25,14 @@ import {
   adminDeleteSession,
   adminRenamePlace,
   getPlace,
+  MIN_INFO_POINTS,
   removeFromSwim,
+  setPlaceInfo,
+  totalPoints,
   watchPlaceSessions,
   watchPlaceTemp,
 } from "@/lib/data";
+import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import type {
   PlaceDoc,
   PlaceTempDoc,
@@ -44,7 +50,8 @@ import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
-import { buttonClasses } from "@/components/ui/Button";
+import { Button, buttonClasses } from "@/components/ui/Button";
+import { Textarea } from "@/components/ui/Input";
 import Stat from "@/components/ui/Stat";
 import { toast } from "@/components/ui/Toast";
 
@@ -438,6 +445,16 @@ export function SpotView({
 
       <WaterTempCard reading={reading} t={t} />
 
+      {place.nude ? (
+        <div className="mt-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50/80 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
+            {t("spot.nude.badge")}
+          </span>
+        </div>
+      ) : null}
+
+      <SpotInfoCard place={place} onChange={setPlace} />
+
       {stats.topSwimmer ? (
         <div className="glass mt-3 flex items-center gap-3 p-3">
           <Sparkles className="h-4 w-4 text-amber-500" />
@@ -614,6 +631,245 @@ function WaterTempCard({
           {t("spot.temp.source", { source: sourceLabel })}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Everything `setPlaceInfo(id, null)` removes server-side, mirrored locally. */
+function withoutInfo(place: PlaceDoc): PlaceDoc {
+  const copy = { ...place };
+  delete copy.info;
+  delete copy.infoSource;
+  delete copy.infoUrl;
+  delete copy.infoBy;
+  delete copy.infoByName;
+  delete copy.infoUpdatedAt;
+  return copy;
+}
+
+/**
+ * Description of the spot — official text synced from the source feed
+ * (with a link back to the original) or user-contributed through the
+ * `setPlaceInfo` Cloud Function. Collapsed to a few lines by default
+ * (logging swims is the main event); a "show more" toggle appears only
+ * when the clamped text actually overflows. When a spot has no info yet,
+ * any signed-in user may add some — pre-checked by client moderation for
+ * fast feedback and re-checked authoritatively server-side.
+ */
+function SpotInfoCard({
+  place,
+  onChange,
+}: {
+  place: PlaceDoc;
+  onChange: (p: PlaceDoc) => void;
+}) {
+  const { user, profile } = useAuth();
+  const t = useT();
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [nudeDraft, setNudeDraft] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const textRef = useRef<HTMLParagraphElement | null>(null);
+
+  const info = place.info;
+  const isAdmin = profile?.isAdmin === true;
+  // Contributing (info or the naturist flag) requires an established
+  // account — MIN_INFO_POINTS total. UX gate; the function re-checks.
+  const mayContribute =
+    !!user && (isAdmin || totalPoints(profile?.scores) >= MIN_INFO_POINTS);
+  const canEdit =
+    !!user &&
+    mayContribute &&
+    (isAdmin || (place.infoSource === "user" && place.infoBy === user.uid));
+
+  // Show the more/less toggle only when the clamped text overflows. Kept
+  // under a ResizeObserver because the first paint measures with fallback
+  // fonts — once the webfont loads (or the viewport changes) the same text
+  // can wrap onto fewer/more lines than measured.
+  useEffect(() => {
+    if (expanded) return;
+    const el = textRef.current;
+    if (!el) return;
+    const measure = () => setClamped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [info, expanded]);
+
+  async function save(next: string | null, nude?: boolean) {
+    if (!user) return;
+    setBusy(true);
+    try {
+      // UX pre-check only — the Cloud Function re-checks authoritatively.
+      if (next) await assertTextAllowed(next);
+      const stored = (await setPlaceInfo(place.id, next, nude)).info;
+      // Mirror the function's writes locally: unchanged text keeps its
+      // attribution, new text becomes the caller's, cleared text goes.
+      const updated = stored
+        ? stored === place.info
+          ? { ...place }
+          : {
+              ...withoutInfo(place),
+              info: stored,
+              infoSource: "user",
+              infoBy: user.uid,
+              infoByName: profile?.displayName ?? "",
+              infoUpdatedAt: Date.now(),
+            }
+        : withoutInfo(place);
+      if (nude !== undefined && nude !== (place.nude === true)) {
+        updated.nude = nude;
+        updated.nudeSource = "user";
+      }
+      onChange(updated);
+      setEditing(false);
+      setExpanded(false);
+      const removedText = !stored && !!place.info;
+      toast.success(t(removedText ? "spot.info.removed" : "spot.info.saved"));
+    } catch (err) {
+      toast.error(
+        t(
+          err instanceof ModerationError
+            ? "moderation.text_rejected"
+            : "spot.info.error",
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="mt-3 rounded-2xl bg-white/70 p-3 ring-1 ring-slate-200">
+        <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-wave-900">
+          <Info className="h-4 w-4 text-wave-600" />
+          {t("spot.info.title")}
+        </div>
+        <Textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={4}
+          maxLength={1200}
+          placeholder={t("spot.info.placeholder")}
+          autoFocus
+        />
+        <label className="mt-2 flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={nudeDraft}
+            onChange={(e) => setNudeDraft(e.target.checked)}
+            className="h-4 w-4 flex-none rounded border-slate-300 text-wave-600 focus:ring-wave-400"
+          />
+          {t("spot.info.nude_label")}
+        </label>
+        <div className="mt-2 flex items-center gap-2">
+          <Button
+            size="sm"
+            loading={busy}
+            disabled={!draft.trim() && nudeDraft === (place.nude === true)}
+            onClick={() => save(draft.trim() || null, nudeDraft)}
+          >
+            {t("spot.info.save")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => setEditing(false)}
+          >
+            {t("common.cancel")}
+          </Button>
+          {info && canEdit ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => save(null)}
+              className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-rose-700 disabled:opacity-60"
+            >
+              <Trash2 className="h-3 w-3" /> {t("spot.info.remove")}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (!info) {
+    if (!mayContribute) return null;
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setDraft("");
+          setNudeDraft(place.nude === true);
+          setEditing(true);
+        }}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1.5 text-xs font-semibold text-wave-700 shadow ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+      >
+        <Plus className="h-3.5 w-3.5" /> {t("spot.info.add")}
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-2xl bg-white/70 p-3 ring-1 ring-slate-200">
+      <div className="flex items-start gap-2.5">
+        <Info className="mt-0.5 h-4 w-4 flex-none text-wave-600" />
+        <div className="min-w-0 flex-1">
+          <p
+            ref={textRef}
+            className={`text-sm whitespace-pre-line text-slate-700 ${
+              expanded ? "" : "line-clamp-3"
+            }`}
+          >
+            {info}
+          </p>
+          {clamped || expanded ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-1 text-xs font-semibold text-wave-700"
+            >
+              {expanded ? t("spot.info.less") : t("spot.info.more")}
+            </button>
+          ) : null}
+          <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
+            {place.infoSource === "user" ? (
+              <span>
+                {t("spot.info.by", { name: place.infoByName ?? "?" })}
+              </span>
+            ) : place.infoUrl ? (
+              <a
+                href={place.infoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="underline decoration-slate-300 underline-offset-2 hover:text-wave-700"
+              >
+                {t("spot.info.source", { source: place.infoSource ?? "" })}
+              </a>
+            ) : place.infoSource ? (
+              <span>{t("spot.info.source", { source: place.infoSource })}</span>
+            ) : null}
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(info);
+                  setNudeDraft(place.nude === true);
+                  setEditing(true);
+                }}
+                className="inline-flex items-center gap-1 font-medium text-wave-700"
+              >
+                <Pencil className="h-3 w-3" /> {t("spot.info.edit")}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

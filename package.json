@@ -16,6 +16,7 @@
     "emulators": "firebase emulators:start",
     "seed:badplatser": "node scripts/seed-badplatser.mjs",
     "seed:eea": "node scripts/seed-eea-bathing.mjs",
+    "seed:naturist": "node scripts/seed-naturist-spots.mjs",
     "update:temperatures": "node scripts/update-temperatures.mjs",
     "backfill:scores": "node scripts/backfill-scores.mjs",
     "backfill:thumbnails": "node scripts/backfill-thumbnails.mjs",

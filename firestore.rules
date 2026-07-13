@@ -135,16 +135,14 @@ service cloud.firestore {
                                    request.resource.data.lng)
                     && request.resource.data.firstSwumAt is number;
 
-      // Creator can rename (only); admins can change anything (still
-      // can't move a pin out of bounds because of the basic shape).
+      // Creator can rename (only — hasOnly keeps server-owned fields like
+      // waterTemp and the moderated `info` out of reach); admins can
+      // change anything (still can't move a pin out of bounds because of
+      // the basic shape).
       allow update: if (
         signedIn()
         && resource.data.createdBy == request.auth.uid
-        && unchanged('createdBy')
-        && unchanged('firstSwumAt')
-        && unchanged('lat')
-        && unchanged('lng')
-        && unchanged('id')
+        && changedKeys().hasOnly(['name'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 80

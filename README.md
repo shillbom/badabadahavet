@@ -92,6 +92,9 @@ emulator only).
   channel** (`pr-<n>`, auto-expires in 7 days) and comments the URL on the PR.
 - **`temperatures.yml`** — daily around lunchtime (Swedish time): refreshes
   water temperatures, skipping places whose stored reading is still fresh.
+  The same run syncs each Swedish spot's official description (Badplatsen
+  `bathInformation`) onto the place, re-checked monthly per spot;
+  user-contributed descriptions are left alone.
 
 Both deploy/preview workflows need these **GitHub repository secrets**:
 
@@ -113,14 +116,15 @@ Data/maintenance scripts run against a project using a local, git-ignored
 `service-account.json` (`GOOGLE_APPLICATION_CREDENTIALS`). Most take `--write` to
 actually persist (dry-run by default):
 
-| Script                        | What it does                                                 |
-| ----------------------------- | ------------------------------------------------------------ |
-| `npm run seed:badplatser`     | Import Swedish public bathing spots (Hav och Vatten)         |
-| `npm run seed:eea`            | Import EEA bathing-water spots (e.g. Denmark/Finland)        |
-| `npm run update:temperatures` | Refresh water temps (official readings, Open-Meteo fallback) |
-| `npm run backfill:scores`     | Recompute every user's per-year score                        |
-| `npm run backfill:thumbnails` | Regenerate photo LQIP placeholders                           |
-| `npm run merge:places`        | Merge a duplicate spot into the one it duplicates            |
+| Script                        | What it does                                          |
+| ----------------------------- | ----------------------------------------------------- |
+| `npm run seed:badplatser`     | Import Swedish public bathing spots (Hav och Vatten)  |
+| `npm run seed:eea`            | Import EEA bathing-water spots (e.g. Denmark/Finland) |
+| `npm run seed:naturist`       | One-shot: flag/create naturist spots from naturism.se |
+| `npm run update:temperatures` | Refresh water temps + official spot descriptions      |
+| `npm run backfill:scores`     | Recompute every user's per-year score                 |
+| `npm run backfill:thumbnails` | Regenerate photo LQIP placeholders                    |
+| `npm run merge:places`        | Merge a duplicate spot into the one it duplicates     |
 
 ## Admin / moderation
 

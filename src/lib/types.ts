@@ -124,6 +124,34 @@ export type PlaceDoc = {
    *  reading for a place whose official feed has nothing. (A preference, not
    *  a reading — readings live in tempSummary/placeTemps.) */
   tempSource?: TempProvider;
+  /** Free-form description of the spot (facilities, bottom, access…).
+   *  Synced from the official source by the temperature job, or added by
+   *  a user through the setPlaceInfo Cloud Function (which moderates it).
+   *  Capped server-side — keep the limits in functions/index.js and
+   *  scripts/update-temperatures.mjs in sync. */
+  info?: string;
+  /** Where `info` came from: "havochvatten.se" for synced official text,
+   *  "user" for user-contributed text. The sync never overwrites user
+   *  info, and non-admin users can't overwrite official info. */
+  infoSource?: string;
+  /** Link to the original source page (official info only). */
+  infoUrl?: string;
+  /** uid + display name of the contributor (user info only). */
+  infoBy?: string;
+  infoByName?: string;
+  /** Epoch ms — when `info` last changed. */
+  infoUpdatedAt?: number;
+  /** Epoch ms — when the sync job last *checked* the official source for
+   *  info (distinct from infoUpdatedAt: bookkeeping so the daily run only
+   *  re-checks each place's description monthly). */
+  infoSyncedAt?: number;
+  /** True for naturist (nude bathing) spots. Set through setPlaceInfo by
+   *  users with enough points, or seeded from naturism.se. An explicit
+   *  `false` is a tombstone: a user unflagged the spot, and the seed
+   *  script must not re-flag it. */
+  nude?: boolean;
+  /** Where the nude flag came from: "naturism.se" or "user". */
+  nudeSource?: string;
   /** Denormalised "last swim here", maintained by the logSession /
    *  removeSession Cloud Functions. Lets the map outline each pin with the
    *  most recent swimmer's frame without loading any sessions. */
