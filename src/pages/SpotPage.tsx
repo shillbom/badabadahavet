@@ -30,11 +30,20 @@ import {
   setPlaceInfo,
   totalPoints,
   watchPlaceSessions,
+  watchPlaceTemp,
 } from "@/lib/data";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
-import type { PlaceDoc, SessionDoc } from "@/lib/types";
+import type {
+  PlaceDoc,
+  PlaceTempDoc,
+  PlaceWithTemp,
+  SessionDoc,
+  TempReading,
+} from "@/lib/types";
 import { formatDate, rememberReturnPath, shareOrCopy } from "@/lib/utils";
+import { freshestReading } from "@/lib/temps";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
+import { useStore } from "@/store/sessions";
 import SwimMap from "@/components/SwimMap";
 import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
@@ -69,6 +78,13 @@ export function SpotView({
   const t = useT();
   const [place, setPlace] = useState<PlaceDoc | null>(null);
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
+  // The live per-place reading (placeTemps/{id}) — fresher than the daily
+  // summary once an on-demand refresh has landed. undefined = the snapshot
+  // hasn't delivered yet (so we don't fire a refresh against a reading we
+  // simply haven't seen); null = the doc doesn't exist.
+  const [liveTemp, setLiveTemp] = useState<PlaceTempDoc | null | undefined>(
+    undefined,
+  );
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
   const focusedSessionId = searchParams.get("session");
@@ -87,14 +103,32 @@ export function SpotView({
       if (cancelled) return;
       setPlace(p);
       setLoading(false);
-      if (p) maybeRefreshPlaceTemp(p);
     });
     const unsub = watchPlaceSessions(placeId, (s) => setSessions(s));
+    setLiveTemp(undefined);
+    const unsubTemp = watchPlaceTemp(placeId, setLiveTemp);
     return () => {
       cancelled = true;
       unsub();
+      unsubTemp();
     };
   }, [placeId]);
+
+  // Freshest known reading: the live per-place doc wins over the daily
+  // summary entry when both exist (freshestReading validates each side).
+  const summaryTemp = useStore((s) => s.tempsByPlace.get(placeId));
+  const reading = freshestReading(liveTemp, summaryTemp ?? null);
+  const readingAt = reading?.at;
+
+  // Ask the server for a fresher reading once we know what we already have
+  // (both the placeTemps snapshot and the place doc have resolved). The
+  // result streams back through the placeTemps subscription above;
+  // maybeRefreshPlaceTemp itself gates on staleness, a local throttle, and
+  // auth, so re-runs are cheap no-ops.
+  useEffect(() => {
+    if (!place || liveTemp === undefined) return;
+    maybeRefreshPlaceTemp(place.id, readingAt);
+  }, [place, liveTemp, readingAt]);
 
   const visibleSessions = sessions;
 
@@ -102,7 +136,20 @@ export function SpotView({
     () => buildStats(visibleSessions, user?.uid),
     [visibleSessions, user],
   );
-  const placesForMap = useMemo(() => (place ? [place] : []), [place]);
+  // Merge the reading onto the place so the mini-map's own pin still shows
+  // the temperature (place docs no longer carry it).
+  const placesForMap = useMemo<PlaceWithTemp[]>(() => {
+    if (!place) return [];
+    if (!reading) return [place];
+    return [
+      {
+        ...place,
+        waterTemp: reading.t,
+        waterTempAt: reading.at,
+        waterTempProvider: reading.p,
+      },
+    ];
+  }, [place, reading]);
   const sessionsByPlace = useMemo(() => {
     const m = new Map<string, SessionDoc[]>();
     if (place) m.set(place.id, visibleSessions);
@@ -396,7 +443,7 @@ export function SpotView({
         />
       </div>
 
-      <WaterTempCard place={place} t={t} />
+      <WaterTempCard reading={reading} t={t} />
 
       {place.nude ? (
         <div className="mt-3">
@@ -530,16 +577,16 @@ export default function SpotPage() {
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function WaterTempCard({
-  place,
+  reading,
   t,
 }: {
-  place: PlaceDoc;
+  reading: TempReading | null;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
-  if (!place.waterTemp || !place.waterTempAt) return null;
-  if (Date.now() - place.waterTempAt > WEEK_MS) return null;
+  if (!reading) return null;
+  if (Date.now() - reading.at > WEEK_MS) return null;
 
-  const ageMs = Date.now() - place.waterTempAt;
+  const ageMs = Date.now() - reading.at;
   const ageHrs = Math.floor(ageMs / (60 * 60 * 1000));
   const ageMins = Math.floor(ageMs / 60_000);
   const ageLabel =
@@ -549,16 +596,14 @@ function WaterTempCard({
         ? t("map.popup.age.hrs", { n: ageHrs })
         : t("map.popup.age.days", { n: Math.floor(ageHrs / 24) });
 
-  const isWarm = place.waterTemp >= 17;
-  const isCool = place.waterTemp < 10;
+  const isWarm = reading.t >= 17;
+  const isCool = reading.t < 10;
   const mutedColor = isWarm
     ? "text-amber-600"
     : isCool
       ? "text-sky-600"
       : "text-teal-600";
-  const sourceLabel = place.waterTempProvider
-    ? t(`temp.source.${place.waterTempProvider}`)
-    : null;
+  const sourceLabel = t(`temp.source.${reading.p}`);
 
   return (
     <div
@@ -577,7 +622,7 @@ function WaterTempCard({
         <span
           className={`font-semibold ${isWarm ? "text-amber-900" : isCool ? "text-sky-900" : "text-teal-900"}`}
         >
-          {place.waterTemp.toFixed(1)} °C
+          {reading.t.toFixed(1)} °C
         </span>
         <span className={`text-xs ${mutedColor}`}>{ageLabel}</span>
       </div>

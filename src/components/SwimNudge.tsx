@@ -28,7 +28,7 @@ export default function SwimNudge({
 }) {
   const t = useT();
   const { profile } = useAuth();
-  const places = useStore((s) => s.places);
+  const places = useStore((s) => s.placesWithTemps);
   const myPlaceIds = useStore((s) => s.myPlaceIds);
   const allSessions = useStore((s) => s.allSessions);
   const groups = useStore((s) => s.groups);

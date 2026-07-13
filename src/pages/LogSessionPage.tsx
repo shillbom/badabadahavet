@@ -44,6 +44,17 @@ import SegmentedControl from "@/components/ui/SegmentedControl";
 
 type Mode = "now" | "pick";
 
+// A spot pin marks one point on what can be a large beach — be lax about
+// how far away the swimmer can stand and still count as "at" the spot.
+const NOW_ATTACH_RADIUS_METERS = 800;
+// Never conclude "no spot nearby" from a fix that is itself less precise
+// than this — the first fix from a cold GPS is routinely hundreds of
+// meters off (enableHighAccuracy only turns the GPS on, it doesn't make
+// the first callback wait for it).
+const NOW_FALLBACK_ACCURACY_METERS = 500;
+// How long to wait for a trustworthy fix before deciding with what we have.
+const NOW_FIX_DEADLINE_MS = 10_000;
+
 export default function LogSessionPage() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -55,7 +66,7 @@ export default function LogSessionPage() {
   // this where it ignores the page locale entirely.
   const locale = useLocale((s) => s.locale);
   const inputLang = locale === "sv" ? "sv-SE" : "en-GB";
-  const places = useStore((s) => s.places);
+  const places = useStore((s) => s.placesWithTemps);
   const mySessions = useStore((s) => s.mySessions);
   const myPlaceIds = useStore((s) => s.myPlaceIds);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
@@ -97,6 +108,19 @@ export default function LogSessionPage() {
   // check for the current "now" mode entry. Reset each time the user
   // re-enters now mode so we run once per session.
   const autoPickedNowRef = useRef(false);
+  // Accuracy (meters) of the geolocation fix behind the current coords —
+  // null until the first fix of a now-mode entry arrives.
+  const fixAccuracyRef = useRef<number | null>(null);
+  // Flips when a now-mode entry has waited NOW_FIX_DEADLINE_MS without a
+  // trustworthy fix, forcing the auto-attach decision with what we have.
+  const [fixDeadline, setFixDeadline] = useState(false);
+  // True from now-mode entry until the auto-attach decision (or a
+  // geolocation failure) — drives the non-blocking "waiting for GPS" hint.
+  const [locating, setLocating] = useState(false);
+  // Render-synced mirror so the position-watch callback sees the current
+  // pick without re-subscribing.
+  const pickedPlaceIdRef = useRef(pickedPlaceId);
+  pickedPlaceIdRef.current = pickedPlaceId;
   // Set when the user explicitly clicks the "now" tab — suppresses the
   // auto-fallback to "pick" mode when no nearby place is found so the
   // user's intentional choice is respected.
@@ -142,32 +166,49 @@ export default function LogSessionPage() {
     return () => ctrl.abort();
   }, [coords]);
 
-  // When entering "now" mode, auto-attach to the nearest existing place
-  // within 200 m. Runs once per now-mode entry so the user can clear the
-  // lock without it snapping back. If nothing is nearby, auto-switches to
-  // "pick" mode so the user can place a pin manually.
+  // While in "now" mode, auto-attach to the nearest existing place within
+  // NOW_ATTACH_RADIUS_METERS. Attaches eagerly on the first fix that puts a
+  // known place in range, but only gives up once the fix is trustworthy or
+  // the deadline has passed — deciding on the first (often coarse) fix used
+  // to fail the radius check spuriously. Decides once per now-mode entry so
+  // the user can clear the lock without it snapping back.
   useEffect(() => {
     if (mode !== "now") return;
     if (!coords) return;
     if (autoPickedNowRef.current) return;
     if (pickedPlaceId) return;
-    autoPickedNowRef.current = true;
     let best: { p: (typeof places)[number]; dist: number } | null = null;
     for (const p of places) {
       const d = haversineMeters(coords, p);
-      if (d <= 200 && (!best || d < best.dist)) best = { p, dist: d };
+      if (d <= NOW_ATTACH_RADIUS_METERS && (!best || d < best.dist))
+        best = { p, dist: d };
     }
     if (best) {
+      autoPickedNowRef.current = true;
+      setLocating(false);
       setCoords({ lat: best.p.lat, lng: best.p.lng });
       setName(best.p.name);
       setPickedPlaceId(best.p.id);
-    } else if (places.length > 0 && !intentionalNowRef.current) {
-      // Nothing within 200 m — switch to pick-on-map so the user can
+      return;
+    }
+    // Nothing in range. Hold off on the fallback until the fix is precise
+    // enough to trust that — the position watch keeps refining coords and
+    // will re-run this effect.
+    const accuracy = fixAccuracyRef.current;
+    if (
+      (accuracy === null || accuracy > NOW_FALLBACK_ACCURACY_METERS) &&
+      !fixDeadline
+    )
+      return;
+    autoPickedNowRef.current = true;
+    setLocating(false);
+    if (places.length > 0 && !intentionalNowRef.current) {
+      // No known place nearby — switch to pick-on-map so the user can
       // drop a pin at their actual location. Skip when the user explicitly
       // chose "now" mode so their intentional choice is respected.
       setMode("pick");
     }
-  }, [mode, coords, places, pickedPlaceId]);
+  }, [mode, coords, places, pickedPlaceId, fixDeadline]);
 
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   useEffect(() => {
@@ -209,27 +250,52 @@ export default function LogSessionPage() {
   }, [coords, places]);
 
   useEffect(() => {
-    if (mode === "now") {
-      setPickedPlaceId(null);
-      setName("");
-      setSearch("");
-      autoPickedNowRef.current = false;
-      setDate(toLocalInput(new Date()));
-      if (!navigator.geolocation) {
-        toast.error(t("log.geo.unavailable"));
-        setMode("pick");
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) =>
-          setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => {
-          toast.error(t("log.geo.failed"));
-          setMode("pick");
-        },
-        { enableHighAccuracy: true, timeout: 8000 },
-      );
+    if (mode !== "now") return;
+    setPickedPlaceId(null);
+    setName("");
+    setSearch("");
+    autoPickedNowRef.current = false;
+    fixAccuracyRef.current = null;
+    setFixDeadline(false);
+    setDate(toLocalInput(new Date()));
+    if (!navigator.geolocation) {
+      toast.error(t("log.geo.unavailable"));
+      setMode("pick");
+      return;
     }
+    setLocating(true);
+    // Watch rather than getCurrentPosition: the one-shot returns the first
+    // fix the OS can produce, which on a cold GPS is a coarse cell/Wi-Fi
+    // position. Watching lets coords sharpen until the auto-attach effect
+    // has something it can trust.
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        // Stop updating once a spot is locked in — a later fix would drag
+        // coords away from the attached place (and findOrCreatePlace would
+        // then mint a near-duplicate on submit).
+        if (autoPickedNowRef.current || pickedPlaceIdRef.current) return;
+        fixAccuracyRef.current = pos.coords.accuracy;
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => {
+        // A watch can emit transient errors after a good fix — only bail
+        // when we never got a position at all.
+        if (fixAccuracyRef.current !== null) return;
+        setLocating(false);
+        toast.error(t("log.geo.failed"));
+        setMode("pick");
+      },
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+    const deadline = setTimeout(
+      () => setFixDeadline(true),
+      NOW_FIX_DEADLINE_MS,
+    );
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      clearTimeout(deadline);
+      setLocating(false);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
@@ -575,9 +641,18 @@ export default function LogSessionPage() {
                       </span>
                     ) : null}
                   </span>
+                  {locating && !pickedPlaceId ? (
+                    <span className="ml-auto flex shrink-0 items-center gap-1.5 text-wave-700">
+                      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-r-transparent" />
+                      {t("log.coords.locking")}
+                    </span>
+                  ) : null}
                 </span>
               ) : mode === "now" ? (
-                <span>{t("log.coords.reading")}</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-wave-600 border-r-transparent" />
+                  {t("log.coords.reading")}
+                </span>
               ) : (
                 <span>{t("log.empty.pick")}</span>
               )}

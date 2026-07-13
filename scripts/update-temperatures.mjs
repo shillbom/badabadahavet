@@ -20,10 +20,16 @@
  *
  * The preferred upstream is the place's `tempSource` field
  * ("havochvatten" | "smhi" | "open-meteo"), falling back to the legacy
- * `source` field for docs seeded before `tempSource` existed. Each updated
- * doc records `waterTempProvider` — which upstream actually produced the
- * reading, using that reading's own measurement date (never the time we
- * happened to fetch it).
+ * `source` field for docs seeded before `tempSource` existed.
+ *
+ * Readings are written to `placeTemps/{placeId}` and packed into the single
+ * `tempSummary/current` doc — never onto the place docs, whose always-on
+ * whole-collection listener would fan every write out to every connected
+ * client. Clients read all map temps from the one summary doc
+ * (~1 read/client/day). Each reading records `p` — which upstream actually
+ * produced it, using that reading's own measurement date (never the time we
+ * happened to fetch it). The `info`/`infoSource`/`infoUrl` description sync
+ * still writes onto the place doc: it is low-churn (monthly per place).
  *
  * Usage (local):
  *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
@@ -41,6 +47,13 @@
 import { initializeApp, applicationDefault, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
+import {
+  asReading,
+  freshestReading,
+  readingFromLegacyPlace,
+  buildSummaryEntries,
+  summaryChanged,
+} from "../functions/tempLogic.js";
 
 const WRITE = process.argv.includes("--write");
 const ALL = process.argv.includes("--all");
@@ -397,11 +410,39 @@ async function main() {
     const data = d.data();
     return typeof data.lat === "number" && typeof data.lng === "number";
   });
+  // Current readings, freshest wins per place: on-demand refreshPlaceTemp
+  // results in placeTemps, the summary written by the previous run, and —
+  // on the first run after the split — the legacy waterTemp* fields still
+  // sitting on old place docs (the automatic backfill; a no-op once those
+  // are scrubbed). Feeds both the skip filter and the rebuilt summary, so
+  // a skipped-fresh place keeps its entry.
+  console.log("→ loading current readings…");
+  const summaryRef = db.collection("tempSummary").doc("current");
+  const [summarySnap, placeTempsSnap] = await Promise.all([
+    summaryRef.get(),
+    db.collection("placeTemps").get(),
+  ]);
+  const oldEntries = summarySnap.exists
+    ? (summarySnap.data().entries ?? {})
+    : {};
+  const liveByPlace = new Map();
+  placeTempsSnap.forEach((d) => liveByPlace.set(d.id, asReading(d.data())));
+  const known = new Map();
+  for (const d of withCoords) {
+    known.set(
+      d.id,
+      freshestReading(
+        liveByPlace.get(d.id),
+        freshestReading(oldEntries[d.id], readingFromLegacyPlace(d.data())),
+      ),
+    );
+  }
+
   // Temps: skip places that already have a recent reading (see
   // REFRESH_IF_OLDER_THAN_MS) — no upstream fetch, no Firestore write.
   const cutoff = Date.now() - REFRESH_IF_OLDER_THAN_MS;
-  const tempDue = (data) => {
-    const at = data.waterTempAt;
+  const tempDue = (doc) => {
+    const at = known.get(doc.id)?.at;
     return ALL || typeof at !== "number" || at < cutoff;
   };
   // Info: only Hav och Vatten places have an official description to
@@ -415,10 +456,7 @@ async function main() {
     (ALL ||
       typeof data.infoSyncedAt !== "number" ||
       data.infoSyncedAt < infoCutoff);
-  const due = withCoords.filter((d) => {
-    const data = d.data();
-    return tempDue(data) || infoDue(data);
-  });
+  const due = withCoords.filter((d) => tempDue(d) || infoDue(d.data()));
   console.log(
     `→ ${withCoords.length} places with coordinates, ${due.length} due for refresh` +
       (ALL ? " (--all)" : ` (${withCoords.length - due.length} still fresh)`),
@@ -448,30 +486,44 @@ async function main() {
   console.log("→ starting…");
   for (const doc of due) {
     const data = doc.data();
+    // Place-doc writes: tempSource promotion (a rare once-ever flip) and
+    // the info sync. Temperature readings go to placeTemps, never here.
     const docUpdates = {};
 
     let tempStatus = "not-due";
-    if (tempDue(data)) {
+    if (tempDue(doc)) {
       const reading = await resolveReading(data);
       if (!reading) {
+        // Nothing upstream — the place keeps its previous `known` entry (if
+        // any) in the rebuilt summary.
         tempStatus = "no-data";
       } else {
-        if (
-          data.waterTemp !== reading.temp ||
-          data.waterTempAt !== reading.stamp ||
-          data.waterTempProvider !== reading.provider
-        ) {
-          docUpdates.waterTemp = reading.temp;
-          docUpdates.waterTempAt = reading.stamp;
-          docUpdates.waterTempProvider = reading.provider;
-        }
-        if (
+        const next = {
+          t: reading.temp,
+          at: reading.stamp,
+          p: reading.provider,
+        };
+        const cur = known.get(doc.id);
+        const changed =
+          !cur || cur.t !== next.t || cur.at !== next.at || cur.p !== next.p;
+        const promote =
           reading.promoteTempSource &&
-          data.tempSource !== reading.promoteTempSource
-        ) {
+          data.tempSource !== reading.promoteTempSource;
+        if (promote) {
           docUpdates.tempSource = reading.promoteTempSource;
         }
-        tempStatus = Object.keys(docUpdates).length ? "updated" : "unchanged";
+        if (changed) {
+          known.set(doc.id, next);
+          if (WRITE) {
+            batch.set(
+              db.collection("placeTemps").doc(doc.id),
+              { placeId: doc.id, ...next, checkedAt: Date.now() },
+              { merge: true },
+            );
+            inBatch++;
+          }
+        }
+        tempStatus = changed || promote ? "updated" : "unchanged";
         if (tempStatus === "updated" && tty) {
           // Per-update detail line above the progress bar so the user sees
           // *something* happening, especially when most calls return no data.
@@ -521,16 +573,35 @@ async function main() {
     if (WRITE && Object.keys(docUpdates).length > 0) {
       batch.update(doc.ref, docUpdates);
       inBatch++;
-      if (inBatch >= 400) {
-        await batch.commit();
-        batch = db.batch();
-        inBatch = 0;
-      }
+    }
+    if (WRITE && inBatch >= 400) {
+      await batch.commit();
+      batch = db.batch();
+      inBatch = 0;
     }
     writeProgress();
     await sleep(REQUEST_DELAY_MS);
   }
   if (WRITE && inBatch > 0) await batch.commit();
+
+  // Rebuild the one summary doc every client subscribes to: the freshest
+  // known reading for every current place (skipped-fresh ones included),
+  // implicitly dropping entries for deleted places. A plain set (no merge)
+  // so removals stick; only written when something actually changed, so a
+  // no-change day costs the clients nothing.
+  const newEntries = buildSummaryEntries(known);
+  const entryCount = Object.keys(newEntries).length;
+  if (!summaryChanged(oldEntries, newEntries)) {
+    console.log(`\n→ tempSummary/current unchanged (${entryCount} entries)`);
+  } else if (WRITE) {
+    await summaryRef.set({ updatedAt: Date.now(), entries: newEntries });
+    console.log(`\n→ tempSummary/current rewritten (${entryCount} entries)`);
+  } else {
+    console.log(
+      `\n→ dry-run: tempSummary/current would be rewritten (${entryCount} entries)`,
+    );
+  }
+
   console.log(
     `\n✓ done — ${updated} temps updated, ${infoUpdated} info synced, ${skipped} unchanged, ${noTemp} without data (of ${due.length})`,
   );

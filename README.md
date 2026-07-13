@@ -175,15 +175,22 @@ Simplified — see `src/lib/types.ts` for the full shapes:
 users/{uid}    { displayName, emoji?, scores?{year:pts}, achievements?, selectedBorder?,
                  homeCountry?, locale?, toswim?, lastLocation?, isAdmin?, createdAt }
 places/{id}    { name, lat, lng, createdBy, firstSwumAt, source?, externalId?,
-                 waterTemp?, waterTempAt?, tempSource?, lastSwimAt?, lastSwimBy?, lastSwimBorder? }
+                 tempSource?, lastSwimAt?, lastSwimBy?, lastSwimBorder? }
 sessions/{id}  { uid, displayName, placeId, placeName, lat, lng, date, points,
                  isUniqueForUser, isWinter, country?, border?, note?,
                  photoUrl?, photoThumb?, reactions?{emoji:[uid]}, createdAt }
 groups/{id}    { name, emoji?, code, members[], createdBy, createdAt }
+
+tempSummary/current   { updatedAt, entries{placeId: {t, at, p}} }  ← all map temps, one doc
+placeTemps/{placeId}  { placeId, t?, at?, p?, checkedAt? }         ← live reading, open spot only
 ```
 
 Scores and sessions are written only by Cloud Functions; security rules block
 direct client writes to them (reactions are the one client-writable session field).
+Water temperatures are written only by the daily sweep + `refreshPlaceTemp` and
+are kept **off** the place docs on purpose: the whole-`places` listener is
+always-on for every client, so temp churn there would bill one read per changed
+doc per connected client. The single summary doc costs ~1 read/client/day.
 
 ## Layout
 

@@ -58,6 +58,17 @@ a signed-in user (security rules reject unauthenticated session reads, so
 guests never start it). `allSessionsReady` tells you whether the feed is live;
 `SinceLastVisit` shows the pattern of waiting for it before computing.
 
+### Water temps live OFF the place docs — keep them there
+
+The always-on `places` listener streams every changed doc to every client, so
+high-churn temperature readings are stored separately: all map temps come from
+the single `tempSummary/current` doc (rebuilt by the daily sweep,
+~1 read/client/day; merged onto places in `derive()` as `placesWithTemps`),
+and the open spot subscribes to `placeTemps/{placeId}` for live on-demand
+refreshes (`refreshPlaceTemp` writes only there). Never write reading fields
+onto `places` docs, and consume `placesWithTemps` / `myPlaces` — not raw
+`places` — anywhere a temperature should show.
+
 ### Writes are server-authoritative
 
 Clients never write `sessions` docs or `users.scores` — the `logSession` /

@@ -12,7 +12,7 @@ const SwimMap = lazy(() => import("@/components/SwimMap"));
 export default function MapPage() {
   const { user, profile } = useAuth();
   const t = useT();
-  const places = useStore((s) => s.places);
+  const places = useStore((s) => s.placesWithTemps);
   const myPlaces = useStore((s) => s.myPlaces);
   const sessionsByPlace = useStore((s) => s.sessionsByPlace);
   const myStats = useStore((s) => s.myStats);
