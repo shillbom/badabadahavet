@@ -154,7 +154,7 @@ export default function GroupsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function onCreate(e: React.FormEvent) {
+  async function onCreate(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!user) return;
     if (!groupName.trim()) {
@@ -180,7 +180,7 @@ export default function GroupsPage() {
     }
   }
 
-  async function onJoin(e: React.FormEvent) {
+  async function onJoin(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!user) return;
     await lookupAndConfirm(joinCode);

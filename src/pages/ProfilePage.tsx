@@ -36,6 +36,7 @@ import {
 } from "@/lib/data";
 import { useLocale } from "@/lib/i18n";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
+import { assertUsernameClean } from "@/lib/username";
 import { COUNTRIES, flagEmoji } from "@/lib/countries";
 import { ACHIEVEMENTS } from "@/lib/achievements";
 import {
@@ -143,7 +144,7 @@ export default function ProfilePage() {
     }
   }
 
-  async function saveName(e: React.FormEvent) {
+  async function saveName(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!user) return;
     const trimmed = nameInput.trim();
@@ -151,6 +152,7 @@ export default function ProfilePage() {
 
     startBusy(async () => {
       try {
+        await assertUsernameClean(trimmed);
         await assertTextAllowed(trimmed);
         // Keep Firebase Auth and Firestore in sync so ensureUserDoc
         // doesn't revert the name on the next app load.

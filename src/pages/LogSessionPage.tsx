@@ -327,7 +327,7 @@ export default function LogSessionPage() {
     if (photoInput.current) photoInput.current.value = "";
   }
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!user || !profile) return;
     if (!coords) {

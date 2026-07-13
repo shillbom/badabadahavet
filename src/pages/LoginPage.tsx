@@ -26,6 +26,7 @@ import {
 } from "@/lib/countries";
 import { reverseGeocodeCountry } from "@/lib/geocode";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
+import { assertUsernameClean } from "@/lib/username";
 import { consumeReturnPath } from "@/lib/utils";
 
 export default function LoginPage() {
@@ -93,7 +94,7 @@ export default function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function submit(e: React.FormEvent) {
+  async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !trimmedEmail.includes("@")) {
@@ -116,7 +117,10 @@ export default function LoginPage() {
     try {
       if (mode === "signup") {
         // Check the name before creating the auth account, so a rejected
-        // name doesn't leave a half-onboarded user behind.
+        // name doesn't leave a half-onboarded user behind. The wordlist
+        // check runs first — instant and offline — before the Perspective
+        // call, which fails open on network errors.
+        await assertUsernameClean(displayName);
         await assertTextAllowed(displayName);
         await signup(trimmedEmail, password, displayName, homeCountry);
         toast.success(t("auth.welcome", { name: displayName.trim() }));
@@ -150,7 +154,7 @@ export default function LoginPage() {
     }
   }
 
-  async function onCompleteOnboarding(e: React.FormEvent) {
+  async function onCompleteOnboarding(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!acceptedTerms) {
       toast.error(t("auth.error.terms_required"));
@@ -160,7 +164,10 @@ export default function LoginPage() {
     try {
       // Only a name the user typed themselves needs checking — the
       // fallback is the Google account name.
-      if (displayName.trim()) await assertTextAllowed(displayName);
+      if (displayName.trim()) {
+        await assertUsernameClean(displayName);
+        await assertTextAllowed(displayName);
+      }
       await completeGoogleOnboarding(displayName, homeCountry);
       toast.success(
         t("auth.welcome", {
