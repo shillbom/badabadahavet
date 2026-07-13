@@ -36,6 +36,10 @@
         }
       },
       {
+        "source": "/api/setPlaceInfo",
+        "function": { "functionId": "setPlaceInfo", "region": "europe-west1" }
+      },
+      {
         "source": "/api/logSession",
         "function": { "functionId": "logSession", "region": "europe-west1" }
       },

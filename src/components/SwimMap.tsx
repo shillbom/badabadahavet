@@ -22,6 +22,7 @@ import {
   MapPin,
   Maximize,
   Minimize,
+  MoreVertical,
   Search,
   X,
 } from "lucide-react";
@@ -290,6 +291,24 @@ export type MapAction = {
   ariaLabel?: string;
 };
 
+/** One row in the ⋯ filter menu (see `menuToggles`): either a plain
+ *  on/off checkbox, or — when `options` is present — a small segmented
+ *  control for tri-state filters like the naturist only/on/off mode. */
+export type MapMenuToggle =
+  | {
+      label: string;
+      icon?: React.ReactNode;
+      checked: boolean;
+      onChange: (next: boolean) => void;
+    }
+  | {
+      label: string;
+      icon?: React.ReactNode;
+      value: string;
+      options: { value: string; label: string }[];
+      onSelect: (value: string) => void;
+    };
+
 export type SwimMapProps = {
   places: PlaceDoc[];
   sessionsByPlace: Map<string, SessionDoc[]>;
@@ -304,6 +323,10 @@ export type SwimMapProps = {
    *  (satellite toggle, etc.). Stacked vertically so the layout stays
    *  consistent regardless of which actions are present. */
   topRightActions?: MapAction[];
+  /** Collapses the top-right controls into a single ⋯ button that opens
+   *  a filter menu: these rows plus a built-in satellite row. When set,
+   *  `topRightActions` and the standalone satellite pill are not shown. */
+  menuToggles?: MapMenuToggle[];
   /** Bumping this triggers a re-fit to all places. */
   fitToken?: number;
   /** When set, clicking an existing place pin offers a "use this spot" action. */
@@ -389,6 +412,7 @@ export default function SwimMap({
   mapRef: externalMapRef,
   viewKey = "default",
   topRightActions,
+  menuToggles,
   focusPlaceId,
   focusToken,
   fullscreenControl,
@@ -838,6 +862,8 @@ export default function SwimMap({
 
       {/* Stacked action buttons — caller-supplied actions on top, the
           built-in satellite + fullscreen toggles at the bottom of the stack.
+          With `menuToggles`, the whole stack collapses into one ⋯ button
+          that opens a filter menu (satellite becomes a row in it).
           In fullscreen the stack drops below the search bar. */}
       <div
         className={cn(
@@ -847,18 +873,35 @@ export default function SwimMap({
             : "top-3",
         )}
       >
-        {topRightActions?.map((a, i) => (
-          <MapActionButton key={i} action={a} />
-        ))}
-        <MapActionButton
-          action={{
-            label: satellite
-              ? t("map.toggle_terrain")
-              : t("map.toggle_satellite"),
-            onClick: () => setSatellite((v) => !v),
-            icon: <Layers className="h-3.5 w-3.5" />,
-          }}
-        />
+        {menuToggles && menuToggles.length > 0 ? (
+          <MapFilterMenu
+            ariaLabel={t("map.filters")}
+            toggles={[
+              ...menuToggles,
+              {
+                label: t("map.toggle_satellite"),
+                checked: satellite,
+                onChange: setSatellite,
+                icon: <Layers className="h-3.5 w-3.5" />,
+              },
+            ]}
+          />
+        ) : (
+          <>
+            {topRightActions?.map((a, i) => (
+              <MapActionButton key={i} action={a} />
+            ))}
+            <MapActionButton
+              action={{
+                label: satellite
+                  ? t("map.toggle_terrain")
+                  : t("map.toggle_satellite"),
+                onClick: () => setSatellite((v) => !v),
+                icon: <Layers className="h-3.5 w-3.5" />,
+              }}
+            />
+          </>
+        )}
       </div>
 
       {/* Round icon buttons — bottom right, Google Maps style: fullscreen
@@ -906,6 +949,88 @@ export default function SwimMap({
           </button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The ⋯ button + dropdown panel of on/off filter rows. An invisible
+ * fixed backdrop closes it on any outside tap (cheaper and more reliable
+ * on the map than document-level listeners fighting Leaflet's handlers).
+ */
+function MapFilterMenu({
+  toggles,
+  ariaLabel,
+}: {
+  toggles: MapMenuToggle[];
+  ariaLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={ariaLabel}
+        title={ariaLabel}
+        aria-expanded={open}
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+      >
+        <MoreVertical className="h-5 w-5" />
+      </button>
+      {open ? (
+        <>
+          <div className="fixed inset-0" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white/95 p-1.5 shadow-lg ring-1 ring-slate-200">
+            {toggles.map((tg, i) =>
+              "options" in tg ? (
+                <div
+                  key={i}
+                  className="rounded-xl px-2.5 py-2 text-sm font-medium text-slate-700"
+                >
+                  <span className="flex items-center gap-2">
+                    {tg.icon}
+                    {tg.label}
+                  </span>
+                  <div className="mt-1.5 flex rounded-full bg-slate-100 p-0.5">
+                    {tg.options.map((o) => (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => tg.onSelect(o.value)}
+                        className={cn(
+                          "flex-1 rounded-full px-2 py-1 text-[11px] font-semibold transition",
+                          tg.value === o.value
+                            ? "bg-white text-wave-800 shadow-sm ring-1 ring-slate-200"
+                            : "text-slate-500 hover:text-slate-700",
+                        )}
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <label
+                  key={i}
+                  className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  <span className="flex items-center gap-2">
+                    {tg.icon}
+                    {tg.label}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={tg.checked}
+                    onChange={(e) => tg.onChange(e.target.checked)}
+                    className="h-4 w-4 flex-none rounded border-slate-300 text-wave-600 focus:ring-wave-400"
+                  />
+                </label>
+              ),
+            )}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

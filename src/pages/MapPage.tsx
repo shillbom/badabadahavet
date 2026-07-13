@@ -32,6 +32,16 @@ export default function MapPage() {
 
   const [fitToken, setFitToken] = useState(0);
   const [showAll, setShowAll] = useState(true);
+  // ⋯ menu naturist filter: "only" = just naturist spots, "on" (default) =
+  // everything, "off" = hide naturist spots.
+  const [nudeMode, setNudeMode] = useState<"only" | "on" | "off">("on");
+
+  const shownPlaces = useMemo(() => {
+    const base = isGuest || showAll ? places : myPlaces;
+    if (nudeMode === "only") return base.filter((p) => p.nude === true);
+    if (nudeMode === "off") return base.filter((p) => p.nude !== true);
+    return base;
+  }, [isGuest, showAll, places, myPlaces, nudeMode]);
 
   // Re-fit whenever the toggle changes so switching to "my places" zooms
   // in to fit them, and switching to "all" re-centres on user position.
@@ -136,23 +146,35 @@ export default function MapPage() {
         <div className="absolute inset-0">
           {mapReady ? (
             <SwimMap
-              places={isGuest || showAll ? places : myPlaces}
+              places={shownPlaces}
               sessionsByPlace={sessionsByPlace}
               userLocation={myLocation}
               fitToken={fitToken}
               fitBoundsToPlaces={!isGuest && !showAll}
               viewKey="main"
               fullscreenControl
-              topRightActions={
-                isGuest
-                  ? undefined
+              menuToggles={[
+                ...(isGuest
+                  ? []
                   : [
                       {
-                        label: showAll ? t("map.show.mine") : t("map.show.all"),
-                        onClick: () => setShowAll((v) => !v),
+                        label: t("map.filter.mine"),
+                        checked: !showAll,
+                        onChange: (mine: boolean) => setShowAll(!mine),
                       },
-                    ]
-              }
+                    ]),
+                {
+                  label: t("map.filter.nude"),
+                  value: nudeMode,
+                  options: [
+                    { value: "only", label: t("map.filter.mode.only") },
+                    { value: "on", label: t("map.filter.mode.on") },
+                    { value: "off", label: t("map.filter.mode.off") },
+                  ],
+                  onSelect: (v: string) =>
+                    setNudeMode(v as "only" | "on" | "off"),
+                },
+              ]}
             />
           ) : (
             <div className="h-full w-full bg-slate-100" />

@@ -77,9 +77,7 @@ export default function SwimListItem({
           {winter ? <span className="ml-1">❄️</span> : null}
           {unique ? <span className="ml-0.5">✨</span> : null}
         </div>
-        {note ? (
-          <p className="mt-0.5 line-clamp-2 text-xs text-slate-600">{note}</p>
-        ) : null}
+        {note ? <p className="mt-0.5 text-xs text-slate-600">{note}</p> : null}
         {children}
       </div>
     </motion.li>

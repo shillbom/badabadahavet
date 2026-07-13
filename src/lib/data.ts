@@ -615,6 +615,46 @@ export async function getPlace(placeId: string) {
   return snap.exists() ? (snap.data() as PlaceDoc) : null;
 }
 
+/**
+ * Minimum total points (summed across every year) before a user may
+ * contribute place info or toggle the naturist flag. UX gate only — the
+ * Cloud Function enforces the same bar server-side. Matches
+ * MIN_INFO_POINTS in functions/index.js — keep in sync.
+ */
+export const MIN_INFO_POINTS = 20;
+
+/** Sum a user's points across every year, for the MIN_INFO_POINTS gate. */
+export function totalPoints(scores: Record<string, number> | undefined) {
+  return Object.values(scores ?? {}).reduce(
+    (sum, v) => sum + (typeof v === "number" ? v : 0),
+    0,
+  );
+}
+
+/**
+ * Add, edit, or clear (info = null) a place's description, optionally
+ * flagging the spot as a naturist bath. Runs through the `setPlaceInfo`
+ * Cloud Function, which enforces who may write (MIN_INFO_POINTS, add
+ * when empty, edit your own, admins anything), moderates the text, and
+ * stamps attribution. Returns the state as stored (trimmed/capped).
+ */
+export async function setPlaceInfo(
+  placeId: string,
+  info: string | null,
+  nude?: boolean,
+) {
+  const callable = cloudFn<
+    { placeId: string; info: string | null; nude?: boolean },
+    { ok: true; info: string | null; nude: boolean }
+  >("setPlaceInfo");
+  const res = await callable({
+    placeId,
+    info,
+    ...(nude !== undefined ? { nude } : {}),
+  });
+  return res.data;
+}
+
 export function watchPlaceSessions(
   placeId: string,
   cb: (sessions: SessionDoc[]) => void,

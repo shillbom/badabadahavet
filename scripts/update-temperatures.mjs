@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 /**
  * Refresh water temperatures for every seeded place whose stored reading
- * has gone stale (pass --all to force every place).
+ * has gone stale (pass --all to force every place). The same run also
+ * syncs each Hav och Vatten place's official description
+ * (`bathInformation` in the badplatsen detail doc — the very same
+ * response the temperature comes from) into `info`/`infoSource`/`infoUrl`
+ * on the place, re-checked monthly per place. User-contributed info
+ * (infoSource === "user") is never touched.
  *
  *   - Places preferring Hav och Vatten (SE) are read from the `badplatsen`
  *     API first. Most baths have no real-time sensor, so when that returns
@@ -34,7 +39,7 @@
  */
 
 import { initializeApp, applicationDefault, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
 
 const WRITE = process.argv.includes("--write");
@@ -50,9 +55,24 @@ const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "badligan";
 const REFRESH_IF_OLDER_THAN_MS = 12 * 60 * 60 * 1000;
 
 // Per-bath detail document. The latest temperature reading is at the
-// root level as `sampleTemperature` (string °C) + `sampleDate` (ms).
+// root level as `sampleTemperature` (string °C) + `sampleDate` (ms); the
+// municipality's free-text description is `bathInformation`.
 const TEMP_URL = (nutsCode) =>
   `https://badplatsen.havochvatten.se/badplatsen/api/detail/${encodeURIComponent(nutsCode)}`;
+
+// The public per-bath page — stored as `infoUrl` so the app can link to
+// the original next to the synced description.
+const HAV_BATH_URL = (nutsCode) =>
+  `https://badplatsen.havochvatten.se/badplatsen/karta/#/bath/${encodeURIComponent(nutsCode)}`;
+
+// Descriptions change rarely; re-check each place's `bathInformation`
+// monthly (`infoSyncedAt` bookkeeping) instead of on every daily run, so
+// most days add zero extra writes. Override with --all.
+const INFO_REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Max stored length for the synced description. Matches
+// PLACE_INFO_MAX_CHARS in functions/index.js — keep in sync.
+const INFO_MAX_CHARS = 1200;
 
 // Open-Meteo's marine model is sea/ocean-only — its grid has no values
 // over inland lakes, so a lake coordinate returns null sea_surface_temperature.
@@ -89,13 +109,44 @@ function initAdmin() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function fetchTemp(nutsCode) {
+// One detail fetch per bath per run — the temperature resolution and the
+// info sync both read the same document, so cache the parsed body.
+const havDetailCache = new Map(); // nutsCode -> body | null (null = failed)
+
+async function fetchHavDetail(nutsCode) {
+  if (havDetailCache.has(nutsCode)) return havDetailCache.get(nutsCode);
+  let body = null;
   try {
     const res = await fetch(TEMP_URL(nutsCode), {
       headers: { Accept: "application/json" },
     });
-    if (!res.ok) return null;
-    const data = await res.json();
+    if (res.ok) body = await res.json();
+  } catch {
+    // body stays null — treated as "couldn't check", never as "empty".
+  }
+  havDetailCache.set(nutsCode, body);
+  return body;
+}
+
+/** Clean `bathInformation` into storable text, or null when there is none. */
+function extractBathInfo(body) {
+  const raw = body?.bathInformation;
+  if (typeof raw !== "string") return null;
+  const text = raw
+    .replace(/<[^>]+>/g, " ") // municipalities occasionally paste HTML
+    .replace(/\r\n?/g, "\n")
+    .replace(/[^\S\n]+/g, " ") // collapse spaces/tabs, keep line breaks
+    .replace(/ ?\n ?/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, INFO_MAX_CHARS);
+  return text || null;
+}
+
+async function fetchTemp(nutsCode) {
+  try {
+    const data = await fetchHavDetail(nutsCode);
+    if (!data) return null;
     // sampleTemperature comes back as a string ("17"); coerce defensively.
     const raw =
       data?.sampleTemperature ??
@@ -346,23 +397,35 @@ async function main() {
     const data = d.data();
     return typeof data.lat === "number" && typeof data.lng === "number";
   });
-  // Skip places that already have a recent reading (see
+  // Temps: skip places that already have a recent reading (see
   // REFRESH_IF_OLDER_THAN_MS) — no upstream fetch, no Firestore write.
   const cutoff = Date.now() - REFRESH_IF_OLDER_THAN_MS;
-  const seeded = ALL
-    ? withCoords
-    : withCoords.filter((d) => {
-        const at = d.data().waterTempAt;
-        return typeof at !== "number" || at < cutoff;
-      });
+  const tempDue = (data) => {
+    const at = data.waterTempAt;
+    return ALL || typeof at !== "number" || at < cutoff;
+  };
+  // Info: only Hav och Vatten places have an official description to
+  // sync, user-contributed info is never overwritten, and each place is
+  // only re-checked monthly (see INFO_REFRESH_MS).
+  const infoCutoff = Date.now() - INFO_REFRESH_MS;
+  const infoDue = (data) =>
+    data.source === "havochvatten.se" &&
+    typeof data.externalId === "string" &&
+    (!data.infoSource || data.infoSource === "havochvatten.se") &&
+    (ALL ||
+      typeof data.infoSyncedAt !== "number" ||
+      data.infoSyncedAt < infoCutoff);
+  const due = withCoords.filter((d) => {
+    const data = d.data();
+    return tempDue(data) || infoDue(data);
+  });
   console.log(
-    `→ ${withCoords.length} places with coordinates, ${seeded.length} due for refresh` +
-      (ALL
-        ? " (--all)"
-        : ` (${withCoords.length - seeded.length} still fresh)`),
+    `→ ${withCoords.length} places with coordinates, ${due.length} due for refresh` +
+      (ALL ? " (--all)" : ` (${withCoords.length - due.length} still fresh)`),
   );
 
   let updated = 0;
+  let infoUpdated = 0;
   let skipped = 0;
   let noTemp = 0;
   let processed = 0;
@@ -371,51 +434,91 @@ async function main() {
 
   const tty = process.stdout.isTTY;
   const writeProgress = () => {
-    const line = `→ ${processed}/${seeded.length} (${updated} updated, ${skipped} unchanged, ${noTemp} no data)`;
+    const line = `→ ${processed}/${due.length} (${updated} temps, ${infoUpdated} info, ${skipped} unchanged, ${noTemp} no data)`;
     if (tty) {
       process.stdout.clearLine?.(0);
       process.stdout.cursorTo?.(0);
       process.stdout.write(line);
-    } else if (processed % 25 === 0 || processed === seeded.length) {
+    } else if (processed % 25 === 0 || processed === due.length) {
       // Non-interactive (CI) — log every 25 to keep the action log useful.
       console.log(line);
     }
   };
 
   console.log("→ starting…");
-  for (const doc of seeded) {
+  for (const doc of due) {
     const data = doc.data();
-    const reading = await resolveReading(data);
-    processed++;
-    if (!reading) {
-      noTemp++;
-      writeProgress();
-      await sleep(REQUEST_DELAY_MS);
-      continue;
-    }
-    // Skip if the stored reading is already the same and recent, and no
-    // tempSource promotion is pending.
-    if (
-      data.waterTemp === reading.temp &&
-      data.waterTempAt === reading.stamp &&
-      data.waterTempProvider === reading.provider &&
-      (!reading.promoteTempSource ||
-        data.tempSource === reading.promoteTempSource)
-    ) {
-      skipped++;
-      writeProgress();
-      await sleep(REQUEST_DELAY_MS);
-      continue;
-    }
-    if (WRITE) {
-      const docUpdates = {
-        waterTemp: reading.temp,
-        waterTempAt: reading.stamp,
-        waterTempProvider: reading.provider,
-      };
-      if (reading.promoteTempSource) {
-        docUpdates.tempSource = reading.promoteTempSource;
+    const docUpdates = {};
+
+    let tempStatus = "not-due";
+    if (tempDue(data)) {
+      const reading = await resolveReading(data);
+      if (!reading) {
+        tempStatus = "no-data";
+      } else {
+        if (
+          data.waterTemp !== reading.temp ||
+          data.waterTempAt !== reading.stamp ||
+          data.waterTempProvider !== reading.provider
+        ) {
+          docUpdates.waterTemp = reading.temp;
+          docUpdates.waterTempAt = reading.stamp;
+          docUpdates.waterTempProvider = reading.provider;
+        }
+        if (
+          reading.promoteTempSource &&
+          data.tempSource !== reading.promoteTempSource
+        ) {
+          docUpdates.tempSource = reading.promoteTempSource;
+        }
+        tempStatus = Object.keys(docUpdates).length ? "updated" : "unchanged";
+        if (tempStatus === "updated" && tty) {
+          // Per-update detail line above the progress bar so the user sees
+          // *something* happening, especially when most calls return no data.
+          process.stdout.write(
+            `\n   ✓ ${data.name} → ${reading.temp.toFixed(1)} °C (${reading.provider})\n`,
+          );
+        }
       }
+    }
+
+    if (infoDue(data)) {
+      // Usually a cache hit — resolveReading already fetched this detail
+      // doc for havochvatten-preferring places.
+      const body = await fetchHavDetail(data.externalId);
+      // A null body means the fetch failed: write nothing (not even the
+      // bookkeeping stamp) so the next run retries.
+      if (body) {
+        docUpdates.infoSyncedAt = Date.now();
+        const info = extractBathInfo(body);
+        const infoUrl = HAV_BATH_URL(data.externalId);
+        if (info && (info !== data.info || data.infoUrl !== infoUrl)) {
+          docUpdates.info = info;
+          docUpdates.infoSource = "havochvatten.se";
+          docUpdates.infoUrl = infoUrl;
+          docUpdates.infoUpdatedAt = Date.now();
+          infoUpdated++;
+        } else if (
+          !info &&
+          data.info &&
+          data.infoSource === "havochvatten.se"
+        ) {
+          // The source dropped its text — drop the synced copy too.
+          docUpdates.info = FieldValue.delete();
+          docUpdates.infoSource = FieldValue.delete();
+          docUpdates.infoUrl = FieldValue.delete();
+          docUpdates.infoUpdatedAt = FieldValue.delete();
+          infoUpdated++;
+        }
+      }
+    }
+
+    processed++;
+    if (tempStatus === "updated") updated++;
+    else if (tempStatus === "no-data") noTemp++;
+    else if (tempStatus === "unchanged") skipped++;
+
+    if (WRITE && Object.keys(docUpdates).length > 0) {
       batch.update(doc.ref, docUpdates);
       inBatch++;
       if (inBatch >= 400) {
@@ -424,23 +527,17 @@ async function main() {
         inBatch = 0;
       }
     }
-    updated++;
     writeProgress();
-    if (tty) {
-      // Per-update detail line above the progress bar so the user sees
-      // *something* happening, especially when most calls return no data.
-      process.stdout.write(
-        `\n   ✓ ${data.name} → ${reading.temp.toFixed(1)} °C (${reading.provider})\n`,
-      );
-    }
     await sleep(REQUEST_DELAY_MS);
   }
   if (WRITE && inBatch > 0) await batch.commit();
   console.log(
-    `\n✓ done — ${updated} updated, ${skipped} unchanged, ${noTemp} without data (of ${seeded.length})`,
+    `\n✓ done — ${updated} temps updated, ${infoUpdated} info synced, ${skipped} unchanged, ${noTemp} without data (of ${due.length})`,
   );
-  if (!WRITE && updated > 0) {
-    console.log(`run again with --write to commit ${updated} updates.`);
+  if (!WRITE && (updated > 0 || infoUpdated > 0)) {
+    console.log(
+      `run again with --write to commit ${updated + infoUpdated} updates.`,
+    );
   }
 }
 
