@@ -417,6 +417,7 @@ function Sheet({
                     <SwimListItem
                       key={`swim-${s.id}`}
                       index={i}
+                      seed={s.id}
                       thumb={
                         s.photoUrl ? (
                           <button
@@ -428,7 +429,7 @@ function Sheet({
                             <Photo
                               src={s.photoUrl}
                               thumb={s.photoThumb}
-                              className="h-14 w-14 flex-none rounded-lg"
+                              className="h-14 w-14 flex-none rounded-lg ring-1 ring-wave-200 ring-inset"
                             />
                           </button>
                         ) : undefined
