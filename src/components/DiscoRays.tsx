@@ -52,6 +52,7 @@ export default function DiscoRays() {
       </span>
       {SPARKLES.map((s, i) => (
         <span
+          // oxlint-disable-next-line react/no-array-index-key
           key={i}
           className={`absolute animate-bob ${s.className}`}
           style={{ animationDelay: `${s.delay}s` }}

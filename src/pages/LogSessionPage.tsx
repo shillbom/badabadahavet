@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -129,13 +129,19 @@ export default function LogSessionPage() {
   // Geolocate once just for sorting search results by distance — works
   // even in "pick" mode where coords aren't auto-set from geolocation.
   // Initialised above with a fallback; here we override with the real position.
+  const updateUserLastState = useEffectEvent(
+    async (pos: GeolocationPosition) => {
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setSearchOrigin(loc);
+      if (user) await updateUserLastLocation(user.uid, loc.lat, loc.lng);
+    },
+  );
+
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setSearchOrigin(loc);
-        if (user) void updateUserLastLocation(user.uid, loc.lat, loc.lng);
+        updateUserLastState(pos);
       },
       () => {},
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },

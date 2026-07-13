@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
@@ -440,13 +440,25 @@ function GroupDetailSheet({
   // store object on each one. Key the member-scoped effects on the
   // membership *content* so unrelated group updates don't tear down the
   // sessions listener or re-fetch every member's profile.
-  const membersKey = group?.members.join("\n");
+  const membersKey = useMemo(() => group?.members.join("\n"), [group?.members]);
 
-  useEffect(() => {
+  const membersChanged = useEffectEvent(() => {
     if (!group) return;
+
+    setLoadingProfiles(true);
+    fetchUsers(group.members).then((users) => {
+      setProfiles(users);
+      setLoadingProfiles(false);
+      return;
+    });
+
     // Current year only — the board compares this season, and the query
     // stays bounded as members' histories grow.
     return watchMemberSessions(group.members, setAllSessions);
+  });
+
+  useEffect(() => {
+    return membersChanged();
   }, [membersKey]);
 
   function shareInviteLink() {
@@ -510,17 +522,7 @@ function GroupDetailSheet({
 
   useEffect(() => {
     if (shown) setNameInput(shown.name);
-  }, [shown?.name]);
-
-  useEffect(() => {
-    if (!group) return;
-    setLoadingProfiles(true);
-    fetchUsers(group.members).then((users) => {
-      setProfiles(users);
-      setLoadingProfiles(false);
-      return;
-    });
-  }, [membersKey]);
+  }, [shown, shown?.name]);
 
   const memberStats = useMemo(() => {
     const members = shown?.members ?? [];

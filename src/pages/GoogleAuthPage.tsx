@@ -37,7 +37,7 @@ export default function GoogleAuthPage() {
       setTarget(consumeReturnPath());
       return;
     });
-  }, []);
+  }, [t]);
 
   if (target) {
     return <Navigate replace to={target} />;

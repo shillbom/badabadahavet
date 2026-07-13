@@ -301,9 +301,9 @@ export default function RecapPage() {
       </div>
 
       <div className="relative z-10 mb-3 flex gap-1">
-        {slides.map((_, i) => (
+        {slides.map((s, i) => (
           <span
-            key={i}
+            key={s.title}
             className={`h-1 flex-1 rounded-full ${
               i <= idx ? "bg-wave-600" : "bg-white/70"
             }`}
