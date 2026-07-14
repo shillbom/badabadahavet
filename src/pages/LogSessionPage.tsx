@@ -234,9 +234,11 @@ export default function LogSessionPage() {
     const q = debouncedSearch.trim().toLowerCase();
     if (!q) return [];
     const origin = coords ?? searchOrigin;
-    const matches = placesWithKey
-      .filter(({ key }) => key.includes(q))
-      .map(({ p }) => p);
+    // One pass over the (potentially large) place list per keystroke.
+    const matches: (typeof places)[number][] = [];
+    for (const { p, key } of placesWithKey) {
+      if (key.includes(q)) matches.push(p);
+    }
     if (origin) {
       matches.sort(
         (a, b) => haversineMeters(origin, a) - haversineMeters(origin, b),

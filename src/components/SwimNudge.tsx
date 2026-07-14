@@ -58,7 +58,7 @@ export default function SwimNudge({
 
     // Someone from one of my groups who swam here — social proof.
     const friendUids = new Set(
-      groups.flatMap((g) => g.members).filter((uid) => uid !== myUid),
+      groups.flatMap((g) => g.members.filter((uid) => uid !== myUid)),
     );
     const friendSwim =
       allSessions

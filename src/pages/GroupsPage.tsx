@@ -599,12 +599,13 @@ function GroupDetailSheet({
     ? (memberStats.get(sortedMembers[0].uid)?.points ?? 0)
     : 0;
   const leaderUids = useMemo(() => {
-    if (topPoints <= 0) return new Set<string>();
-    return new Set(
-      sortedMembers
-        .filter((m) => (memberStats.get(m.uid)?.points ?? 0) === topPoints)
-        .map((m) => m.uid),
-    );
+    const uids = new Set<string>();
+    if (topPoints <= 0) return uids;
+    // One pass instead of filter-then-map over the member list.
+    for (const m of sortedMembers) {
+      if ((memberStats.get(m.uid)?.points ?? 0) === topPoints) uids.add(m.uid);
+    }
+    return uids;
   }, [sortedMembers, memberStats, topPoints]);
   const tiedForLead = leaderUids.size > 1;
 

@@ -49,20 +49,23 @@ export default function LeaderboardPage() {
       scope === "global"
         ? null
         : new Set(groups.find((g) => g.id === scope)?.members ?? []);
-    return roster
-      .filter((u) => !memberFilter || memberFilter.has(u.uid))
-      .map((u) => {
-        // Achievements persisted on the profile drive the border — richer
-        // than the old live computation (all-time, not just this year).
-        const unlocked = new Set(Object.keys(u.achievements ?? {}));
-        return {
-          uid: u.uid,
-          displayName: u.displayName,
-          points: u.scores?.[String(year)] ?? 0,
-          border: resolveBorder(u.selectedBorder, unlocked.size, unlocked),
-          stats: u.statsByYear?.[String(year)] ?? null,
-        };
+    // One pass: skip non-members and build each row inline, instead of
+    // filtering the roster and then mapping the survivors.
+    const out: Row[] = [];
+    for (const u of roster) {
+      if (memberFilter && !memberFilter.has(u.uid)) continue;
+      // Achievements persisted on the profile drive the border — richer
+      // than the old live computation (all-time, not just this year).
+      const unlocked = new Set(Object.keys(u.achievements ?? {}));
+      out.push({
+        uid: u.uid,
+        displayName: u.displayName,
+        points: u.scores?.[String(year)] ?? 0,
+        border: resolveBorder(u.selectedBorder, unlocked.size, unlocked),
+        stats: u.statsByYear?.[String(year)] ?? null,
       });
+    }
+    return out;
   }, [roster, groups, scope, year]);
 
   // The global board only shows the podium (top 5) plus your own row with
