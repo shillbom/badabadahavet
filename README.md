@@ -122,6 +122,7 @@ actually persist (dry-run by default):
 | `npm run seed:eea`            | Import EEA bathing-water spots (e.g. Denmark/Finland) |
 | `npm run seed:naturist`       | One-shot: flag/create naturist spots from naturism.se |
 | `npm run seed:naturkartan`    | Import swim spots from Naturkartan (naturkartan.se)   |
+| `npm run seed:osm`            | Import swim spots from OpenStreetMap (Overpass, free) |
 | `npm run update:temperatures` | Refresh water temps + official spot descriptions      |
 | `npm run backfill:scores`     | Recompute every user's per-year score                 |
 | `npm run backfill:thumbnails` | Regenerate photo LQIP placeholders                    |
