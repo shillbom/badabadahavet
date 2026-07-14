@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "unicorn", "oxc", "import", "promise"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "env": { "browser": true, "es2023": true },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn",
+
+    "import/no-unassigned-import": "off",
+    "eslint/no-underscore-dangle": "off",
+    "eslint/no-await-in-loop": "off",
+    "unicorn/prefer-add-event-listener": "off"
+  },
+  "ignorePatterns": ["dist", "dev-dist", "**/node_modules"],
+  "overrides": [
+    {
+      "files": ["**/*.test.{ts,tsx,js}"],
+      "rules": {
+        "unicorn/consistent-function-scoping": "off"
+      }
+    },
+    {
+      "files": ["src/components/fx/**"],
+      "rules": {
+        "unicorn/no-array-fill-with-reference-type": "off"
+      }
+    }
+  ]
+}

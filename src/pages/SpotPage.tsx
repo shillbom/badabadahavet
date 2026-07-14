@@ -103,6 +103,7 @@ export function SpotView({
       if (cancelled) return;
       setPlace(p);
       setLoading(false);
+      return;
     });
     const unsub = watchPlaceSessions(placeId, (s) => setSessions(s));
     setLiveTemp(undefined);

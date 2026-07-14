@@ -58,7 +58,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
   let totalPoints = 0;
   let winterSwims = 0;
   const placeCounts = new Map<string, { name: string; count: number }>();
-  const monthPoints = new Array(12).fill(0) as number[];
+  const monthPoints = Array.from({ length: 12 }, () => 0);
   const weeksWithSwim = new Set<number>();
   const abroadCountries = new Set<string>();
   let minLat = Infinity;
@@ -93,7 +93,7 @@ export function computeMyStats(sessions: SessionDoc[]): MyStats {
     if (s.lng > maxLng) maxLng = s.lng;
   }
 
-  const sortedDesc = [...sessions].sort((a, b) => b.date - a.date);
+  const sortedDesc = [...sessions].toSorted((a, b) => b.date - a.date);
   const lastDate = sortedDesc[0].date;
 
   // Difference in *calendar days* (round, not floor) so "yesterday at 14:00"

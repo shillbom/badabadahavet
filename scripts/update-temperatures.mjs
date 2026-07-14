@@ -235,8 +235,9 @@ const MAX_SMHI_STATION_DISTANCE_M = 40_000;
 let smhiParameterId; // undefined = not yet resolved, null = not found
 let smhiStations = null; // cached for the life of this run
 
+const toRad = (x) => (x * Math.PI) / 180;
+
 function haversineMeters(a, b) {
-  const toRad = (x) => (x * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);

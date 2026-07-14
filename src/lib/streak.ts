@@ -98,7 +98,7 @@ export function computeStreak(dates: number[], now = Date.now()): StreakInfo {
 
 function computeStreakReal(dates: number[], now = Date.now()): StreakInfo {
   const dayTypes = new Map<number, StreakDayType>();
-  const days = [...new Set(dates.map(dayStartMs))].sort((a, b) => a - b);
+  const days = [...new Set(dates.map(dayStartMs))].toSorted((a, b) => a - b);
   const today = dayStartMs(now);
 
   if (days.length === 0) {

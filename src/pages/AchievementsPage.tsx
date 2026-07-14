@@ -34,7 +34,7 @@ export default function AchievementsPage() {
   );
 
   const items = useMemo(() => {
-    return [...ACHIEVEMENTS].sort((a, b) => {
+    return [...ACHIEVEMENTS].toSorted((a, b) => {
       const ua = unlockedAchievements.has(a.id);
       const ub = unlockedAchievements.has(b.id);
       if (ua !== ub) return ua ? -1 : 1;

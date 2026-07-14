@@ -439,6 +439,7 @@ export const useStore = create<State>((set, get) => {
             set({ locationPermission: s.state });
             if (s.state !== "denied") fetchLocation();
             s.addEventListener("change", onPermissionChange);
+            return;
           })
           .catch(() => {
             set({ locationPermission: "unsupported" });

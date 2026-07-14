@@ -446,7 +446,7 @@ export default function SwimMap({
   const [inViewCount, setInViewCount] = useState<number | null>(null);
   const clusteringRef = useRef(false);
   const baseTheme = MAP_THEMES[0];
-  const satelliteTheme = MAP_THEMES.find((t) => t.id === "satellite")!;
+  const satelliteTheme = MAP_THEMES.find((st) => st.id === "satellite")!;
   const theme = satellite ? satelliteTheme : baseTheme;
   const fallbackCenter: LatLngExpression = useMemo(() => {
     if (userLocation) return [userLocation.lat, userLocation.lng];
@@ -485,7 +485,10 @@ export default function SwimMap({
     }
     const byName = (a: PlaceWithTemp, b: PlaceWithTemp) =>
       a.name.localeCompare(b.name);
-    return [...starts.sort(byName), ...contains.sort(byName)].slice(0, 8);
+    return [...starts.toSorted(byName), ...contains.toSorted(byName)].slice(
+      0,
+      8,
+    );
   }, [query, places]);
 
   const pickSearchResult = useCallback((p: PlaceWithTemp) => {
@@ -882,8 +885,8 @@ export default function SwimMap({
           />
         ) : (
           <>
-            {topRightActions?.map((a, i) => (
-              <MapActionButton key={i} action={a} />
+            {topRightActions?.map((a) => (
+              <MapActionButton key={a.label} action={a} />
             ))}
             <MapActionButton
               action={{
@@ -976,10 +979,10 @@ function MapFilterMenu({
         <>
           <div className="fixed inset-0" onClick={() => setOpen(false)} />
           <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white/95 p-1.5 shadow-lg ring-1 ring-slate-200">
-            {toggles.map((tg, i) =>
+            {toggles.map((tg) =>
               "options" in tg ? (
                 <div
-                  key={i}
+                  key={tg.label}
                   className="rounded-xl px-2.5 py-2 text-sm font-medium text-slate-700"
                 >
                   <span className="flex items-center gap-2">
@@ -1006,7 +1009,7 @@ function MapFilterMenu({
                 </div>
               ) : (
                 <label
-                  key={i}
+                  key={tg.label}
                   className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
                   <span className="flex items-center gap-2">
@@ -1301,7 +1304,7 @@ function PlacePopup({
 }) {
   const t = useT();
   const sorted = useMemo(
-    () => [...sessions].sort((a, b) => b.date - a.date),
+    () => [...sessions].toSorted((a, b) => b.date - a.date),
     [sessions],
   );
   const photoSessions = sorted.filter((s) => s.photoUrl);

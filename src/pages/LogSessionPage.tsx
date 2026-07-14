@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -129,13 +129,19 @@ export default function LogSessionPage() {
   // Geolocate once just for sorting search results by distance — works
   // even in "pick" mode where coords aren't auto-set from geolocation.
   // Initialised above with a fallback; here we override with the real position.
+  const updateUserLastState = useEffectEvent(
+    async (pos: GeolocationPosition) => {
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setSearchOrigin(loc);
+      if (user) await updateUserLastLocation(user.uid, loc.lat, loc.lng);
+    },
+  );
+
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setSearchOrigin(loc);
-        if (user) void updateUserLastLocation(user.uid, loc.lat, loc.lng);
+        updateUserLastState(pos);
       },
       () => {},
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
@@ -162,6 +168,7 @@ export default function LogSessionPage() {
     const ctrl = new AbortController();
     reverseGeocodeCountry(coords.lat, coords.lng, ctrl.signal).then((c) => {
       if (!ctrl.signal.aborted) setCountry(c);
+      return;
     });
     return () => ctrl.abort();
   }, [coords]);
@@ -801,7 +808,8 @@ function formatDistance(m: number): string {
   return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
 }
 
+const pad = (n: number) => n.toString().padStart(2, "0");
+
 function toLocalInput(d: Date) {
-  const pad = (n: number) => n.toString().padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

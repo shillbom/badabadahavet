@@ -97,7 +97,7 @@ function topEmojis(s: SessionDoc): string[] {
   const r = s.reactions ?? {};
   return Object.keys(r)
     .filter((e) => reactorUids(r[e]).length > 0)
-    .sort((a, b) => reactorUids(r[b]).length - reactorUids(r[a]).length);
+    .toSorted((a, b) => reactorUids(r[b]).length - reactorUids(r[a]).length);
 }
 
 /**
@@ -154,7 +154,7 @@ export function computeWhileAwayDigest(
     }
   }
 
-  const swimItems = [...bySwimmer.values()].sort(
+  const swimItems = [...bySwimmer.values()].toSorted(
     (a, b) => b.count - a.count || b.latest.createdAt - a.latest.createdAt,
   );
 

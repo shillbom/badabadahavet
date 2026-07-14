@@ -104,6 +104,7 @@ export function AnimatedNumber({
     <span className={`inline-flex ${className ?? ""}`}>
       {chars.map((char, i) => (
         <DigitSlot
+          // oxlint-disable-next-line react/no-array-index-key
           key={chars.length - 1 - i}
           char={char}
           dir={dirRef.current}

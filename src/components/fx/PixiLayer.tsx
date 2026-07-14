@@ -78,6 +78,7 @@ export default function PixiLayer({
       a.canvas.classList.add("absolute", "inset-0", "h-full", "w-full");
       host.appendChild(a.canvas);
       cleanup = build(PIXI, a, JSON.parse(optionsKey));
+      return;
     });
 
     return () => {

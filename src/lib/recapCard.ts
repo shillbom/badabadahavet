@@ -50,6 +50,12 @@ export async function shareRecapCard(
   return "downloaded";
 }
 
+// Canvas font shorthands for the recap card (module-scoped: they capture nothing).
+const display = (size: number) =>
+  `900 ${size}px "Caveat Brush", "Bricolage Grotesque", sans-serif`;
+const sans = (size: number, weight = 600) =>
+  `${weight} ${size}px "Bricolage Grotesque", system-ui, sans-serif`;
+
 /** Draw the card and return it as a PNG blob (exported for previewing). */
 export async function renderRecapCard(
   data: RecapCardData,
@@ -67,11 +73,6 @@ export async function renderRecapCard(
   canvas.height = H;
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
-
-  const display = (size: number) =>
-    `900 ${size}px "Caveat Brush", "Bricolage Grotesque", sans-serif`;
-  const sans = (size: number, weight = 600) =>
-    `${weight} ${size}px "Bricolage Grotesque", system-ui, sans-serif`;
 
   // ── Background: the app's wave-blue sky ──────────────────────────────
   const bg = ctx.createLinearGradient(0, 0, 0, H);

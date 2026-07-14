@@ -288,6 +288,7 @@ function Calendar({
           </div>
         ))}
         {cells.map((day, i) => {
+          // oxlint-disable-next-line react/no-array-index-key
           if (day === null) return <div key={`pad-${i}`} />;
           const state = dayState(day, streak, today, firstDay);
           return (

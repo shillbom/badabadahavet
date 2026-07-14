@@ -198,9 +198,10 @@ function dedupKey(p) {
   return `${p.name.toLowerCase()}|${p.lat.toFixed(4)}|${p.lng.toFixed(4)}`;
 }
 
+const toRad = (d) => (d * Math.PI) / 180;
+
 function haversineMeters(a, b) {
   const R = 6_371_000;
-  const toRad = (d) => (d * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLng = toRad(b.lng - a.lng);
   const lat1 = toRad(a.lat);
@@ -247,6 +248,24 @@ function makeSpatialIndex() {
       return best ? { place: best, meters: bestD } : null;
     },
   };
+}
+
+// The props every EEA place should carry. Used both for new docs and
+// to backfill/update existing ones on a rerun.
+function desiredProps(p) {
+  return {
+    tempSource: "open-meteo",
+    ...(p.country ? { country: p.country } : {}),
+    ...(p.externalId ? { externalId: p.externalId } : {}),
+  };
+}
+// Return only the fields that differ from the existing doc.
+function changedProps(existing, want) {
+  const diff = {};
+  for (const [k, v] of Object.entries(want)) {
+    if (existing[k] !== v) diff[k] = v;
+  }
+  return diff;
 }
 
 async function main() {
@@ -329,24 +348,6 @@ async function main() {
     );
   }
 
-  // The props every EEA place should carry. Used both for new docs and
-  // to backfill/update existing ones on a rerun.
-  function desiredProps(p) {
-    return {
-      tempSource: "open-meteo",
-      ...(p.country ? { country: p.country } : {}),
-      ...(p.externalId ? { externalId: p.externalId } : {}),
-    };
-  }
-  // Return only the fields that differ from the existing doc.
-  function changedProps(existing, want) {
-    const diff = {};
-    for (const [k, v] of Object.entries(want)) {
-      if (existing[k] !== v) diff[k] = v;
-    }
-    return diff;
-  }
-
   const fresh = [];
   const updates = []; // { id, name, props } for existing EEA docs
   let skippedNearMaster = 0;
@@ -406,7 +407,7 @@ async function main() {
       const counts = new Map();
       for (const p of fresh)
         counts.set(p.country, (counts.get(p.country) ?? 0) + 1);
-      for (const [c, n] of [...counts.entries()].sort())
+      for (const [c, n] of [...counts.entries()].toSorted())
         console.log(`  ${c}: ${n}`);
     }
     if (updates.length) {

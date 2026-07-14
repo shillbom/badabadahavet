@@ -35,8 +35,9 @@ export default function GoogleAuthPage() {
       // Navigate to the preserved deep link (or "/") regardless —
       // onAuthStateChanged handles routing if the user isn't authed yet.
       setTarget(consumeReturnPath());
+      return;
     });
-  }, []);
+  }, [t]);
 
   if (target) {
     return <Navigate replace to={target} />;
