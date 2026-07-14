@@ -49,6 +49,7 @@ import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";
 import { useAuth } from "@/auth/AuthContext";
+import { useIsAdmin } from "@/lib/adminMode";
 import { useT } from "@/lib/i18n";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
@@ -74,7 +75,7 @@ export function SpotView({
 }) {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const isAdmin = profile?.isAdmin === true;
+  const isAdmin = useIsAdmin();
   const t = useT();
   const [place, setPlace] = useState<PlaceDoc | null>(null);
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
@@ -676,7 +677,7 @@ function SpotInfoCard({
   const textRef = useRef<HTMLParagraphElement | null>(null);
 
   const info = place.info;
-  const isAdmin = profile?.isAdmin === true;
+  const isAdmin = useIsAdmin();
   // Contributing (info or the naturist flag) requires an established
   // account — MIN_INFO_POINTS total. UX gate; the function re-checks.
   const mayContribute =

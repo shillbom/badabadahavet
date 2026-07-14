@@ -3,6 +3,7 @@ import { Navigate } from "react-router";
 import { motion } from "framer-motion";
 import { Ban, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
+import { useIsAdmin } from "@/lib/adminMode";
 import { useT } from "@/lib/i18n";
 import { fetchAllUsers, fetchBannedUsers, banUser } from "@/lib/data";
 import { sumScores } from "@/lib/scoring";
@@ -12,6 +13,7 @@ import type { BannedUser, UserDoc } from "@/lib/types";
 
 export default function AdminUsersPage() {
   const { user, profile } = useAuth();
+  const isAdmin = useIsAdmin();
   const t = useT();
 
   const [users, setUsers] = useState<UserDoc[] | null>(null);
@@ -20,7 +22,7 @@ export default function AdminUsersPage() {
   const [busyUid, setBusyUid] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!profile?.isAdmin) return;
+    if (!isAdmin) return;
     let alive = true;
     void (async () => {
       const [u, b] = await Promise.all([fetchAllUsers(), fetchBannedUsers()]);
@@ -31,10 +33,11 @@ export default function AdminUsersPage() {
     return () => {
       alive = false;
     };
-  }, [profile?.isAdmin]);
+  }, [isAdmin]);
 
-  // Only admins may see this page; everyone else is bounced home.
-  if (profile && !profile.isAdmin) return <Navigate to="/" replace />;
+  // Only admins with admin mode on may see this page; everyone else (including
+  // admins browsing as normal users) is bounced home once the profile loads.
+  if (profile && !isAdmin) return <Navigate to="/" replace />;
 
   async function onBan(target: UserDoc) {
     setBusyUid(target.uid);

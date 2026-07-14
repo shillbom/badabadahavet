@@ -35,6 +35,7 @@ import {
   updateUserLocale,
 } from "@/lib/data";
 import { useLocale } from "@/lib/i18n";
+import { useAdminMode, useIsRealAdmin } from "@/lib/adminMode";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { assertUsernameClean } from "@/lib/username";
 import { COUNTRIES, flagEmoji } from "@/lib/countries";
@@ -90,6 +91,10 @@ export default function ProfilePage() {
   const [deleting, deleteTransition] = useTransition();
   const locale = useLocale((s) => s.locale);
   const setLocale = useLocale((s) => s.setLocale);
+  const isRealAdmin = useIsRealAdmin();
+  const adminMode = useAdminMode((s) => s.adminMode);
+  const setAdminMode = useAdminMode((s) => s.setAdminMode);
+  const isAdmin = isRealAdmin && adminMode;
   const achievementCount = unlockedAchievements.size;
   const myBorder = resolveBorder(
     profile?.selectedBorder,
@@ -465,7 +470,41 @@ export default function ProfilePage() {
 
       {/* About + sign out */}
       <div className="mt-8 space-y-2">
-        {profile?.isAdmin ? (
+        {/* Admin mode is opt-in: real admins browse as normal users until they
+            flip this on, so the extra powers stay out of the way by default. */}
+        {isRealAdmin ? (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2">
+            <span className="flex items-center gap-2 text-sm font-semibold text-amber-700">
+              <ShieldCheck className="h-4 w-4" />
+              {t("admin.mode")}
+            </span>
+            <div
+              className="flex rounded-full bg-white/80 p-0.5 text-[11px] font-bold tracking-wide uppercase shadow-sm ring-1 ring-amber-200"
+              role="group"
+              aria-label={t("admin.mode")}
+            >
+              <button
+                type="button"
+                onClick={() => setAdminMode(false)}
+                data-active={!adminMode}
+                className="rounded-full px-2.5 py-1 text-slate-500 transition data-[active=true]:bg-amber-500 data-[active=true]:text-white"
+                aria-pressed={!adminMode}
+              >
+                {t("admin.mode.off")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAdminMode(true)}
+                data-active={adminMode}
+                className="rounded-full px-2.5 py-1 text-slate-500 transition data-[active=true]:bg-amber-500 data-[active=true]:text-white"
+                aria-pressed={adminMode}
+              >
+                {t("admin.mode.on")}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {isAdmin ? (
           <Link
             to="/admin/users"
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
