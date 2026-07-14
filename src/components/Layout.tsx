@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import {
   Map as MapIcon,
   Trophy,
@@ -15,9 +15,9 @@ import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import { useIsAdmin } from "@/lib/adminMode";
-import { openRecap } from "@/components/SinceLastVisit";
+import { openRecap } from "@/components/recapTrigger";
 import { cn, rememberReturnPath } from "@/lib/utils";
-import { buttonClasses } from "@/components/ui/Button";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useT } from "@/lib/i18n";
 import SwimNudge from "@/components/SwimNudge";
 import DiscoRays from "@/components/DiscoRays";
@@ -99,7 +99,7 @@ export default function Layout() {
               onClick={rememberReturnPath}
               className="flex items-center gap-2"
             >
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ type: "spring", stiffness: 220, damping: 22 }}
@@ -114,11 +114,11 @@ export default function Layout() {
                     {t("layout.guest.subtitle")}
                   </div>
                 </div>
-              </motion.div>
+              </m.div>
             </Link>
           ) : (
             <Link to="/profile" className="flex items-center gap-2">
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ type: "spring", stiffness: 220, damping: 22 }}
@@ -143,7 +143,7 @@ export default function Layout() {
                     {groupSubtitle}
                   </div>
                 </div>
-              </motion.div>
+              </m.div>
             </Link>
           )}
           {isGuest ? (
@@ -201,7 +201,7 @@ export default function Layout() {
         {/* Per-page entrance animations live in each page; we no longer
             wrap the Outlet in AnimatePresence because under StrictMode
             mid-flight exits could leave the next page at opacity 0. */}
-        <motion.div
+        <m.div
           key={location.pathname}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -217,7 +217,7 @@ export default function Layout() {
           >
             <Outlet />
           </Suspense>
-        </motion.div>
+        </m.div>
       </main>
 
       <AnimatePresence>
@@ -226,7 +226,7 @@ export default function Layout() {
             key="fab-shell"
             className="pointer-events-none fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center md:bottom-10"
           >
-            <motion.button
+            <m.button
               initial={{ y: 80, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 80, opacity: 0 }}
@@ -242,14 +242,14 @@ export default function Layout() {
               aria-label={t("layout.log_a_swim")}
             >
               <Plus className="relative h-6 w-6" />
-            </motion.button>
+            </m.button>
           </div>
         ) : null}
       </AnimatePresence>
 
       <AnimatePresence>
         {!hideChrome ? (
-          <motion.nav
+          <m.nav
             key="nav"
             initial={{ y: 80 }}
             animate={{ y: 0 }}
@@ -282,7 +282,7 @@ export default function Layout() {
                 icon={<UsersRound className="h-5 w-5" />}
               />
             ) : null}
-          </motion.nav>
+          </m.nav>
         ) : null}
       </AnimatePresence>
 
@@ -322,18 +322,18 @@ function NavTab({
       {({ isActive }) => (
         <>
           {isActive ? (
-            <motion.span
+            <m.span
               layoutId="nav-active-pill"
               className="absolute inset-0 -z-10 rounded-2xl bg-wave-100/80 ring-1 ring-wave-200"
               transition={{ type: "spring", stiffness: 320, damping: 30 }}
             />
           ) : null}
-          <motion.span
+          <m.span
             animate={isActive ? { y: -1, scale: 1.05 } : { y: 0, scale: 1 }}
             transition={{ type: "spring", stiffness: 360, damping: 24 }}
           >
             {icon}
-          </motion.span>
+          </m.span>
           <span>{label}</span>
         </>
       )}

@@ -1,60 +1,15 @@
-import { create } from "zustand";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { useEffect } from "react";
-import type { Achievement } from "@/lib/achievements";
-import type { StreakTier } from "@/lib/streak";
 import { Sparkles } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import PixiLayer from "@/components/fx/PixiLayer";
 import { burstFx } from "@/components/fx/celebrationFx";
-
-type Splash =
-  | {
-      kind: "swim";
-      points: number;
-      isNewSpot: boolean;
-      isWinter: boolean;
-    }
-  | {
-      kind: "achievement";
-      achievement: Achievement;
-    }
-  | {
-      kind: "streak";
-      tier: Exclude<StreakTier, "plain">;
-      days: number;
-    };
-
-type State = {
-  queue: Splash[];
-  show: (s: Splash) => void;
-  pop: () => void;
-};
-
-export const useCelebration = create<State>((set) => ({
-  queue: [],
-  show: (s) => set((st) => ({ queue: [...st.queue, s] })),
-  pop: () => set((st) => ({ queue: st.queue.slice(1) })),
-}));
-
-export const celebrate = {
-  swim: (points: number, isNewSpot: boolean, isWinter: boolean) =>
-    useCelebration
-      .getState()
-      .show({ kind: "swim", points, isNewSpot, isWinter }),
-  achievement: (achievement: Achievement) =>
-    useCelebration.getState().show({ kind: "achievement", achievement }),
-  streak: (tier: Exclude<StreakTier, "plain">, days: number) =>
-    useCelebration.getState().show({ kind: "streak", tier, days }),
-};
-
-// Dev-only: trigger splashes from the browser console to eyeball the
-// burst effects, e.g. `celebrate.streak("disco", 55)`. Compiled out of
-// production builds.
-if (import.meta.env.DEV && typeof window !== "undefined") {
-  (window as unknown as { celebrate: typeof celebrate }).celebrate = celebrate;
-}
+import {
+  useCelebration,
+  type CelebrationSplash as Splash,
+} from "@/components/celebrationStore";
+import type { StreakTier } from "@/lib/streak";
 
 export function CelebrationOverlay() {
   const queue = useCelebration((s) => s.queue);
@@ -71,7 +26,7 @@ export function CelebrationOverlay() {
   return (
     <AnimatePresence>
       {current ? (
-        <motion.div
+        <m.div
           key={`${current.kind}-${queue.length}`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -91,7 +46,7 @@ export function CelebrationOverlay() {
             options={{ variant: burstVariant(current) }}
             maxFPS={60}
           />
-        </motion.div>
+        </m.div>
       ) : null}
     </AnimatePresence>
   );
@@ -115,7 +70,7 @@ function burstVariant(s: Splash): string {
 function SwimSplash({ data }: { data: Extract<Splash, { kind: "swim" }> }) {
   const t = useT();
   return (
-    <motion.div
+    <m.div
       initial={{ scale: 0.6, opacity: 0, y: 20 }}
       animate={{ scale: 1, opacity: 1, y: 0 }}
       exit={{ scale: 0.6, opacity: 0, y: -20 }}
@@ -124,7 +79,7 @@ function SwimSplash({ data }: { data: Extract<Splash, { kind: "swim" }> }) {
     >
       {/* expanding rings */}
       {[0, 1, 2].map((i) => (
-        <motion.span
+        <m.span
           key={i}
           initial={{ scale: 0.6, opacity: 0.5 }}
           animate={{ scale: 3.5, opacity: 0 }}
@@ -135,14 +90,14 @@ function SwimSplash({ data }: { data: Extract<Splash, { kind: "swim" }> }) {
       <div className="relative flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-br from-wave-300 to-wave-700 text-6xl shadow-2xl">
         💧
       </div>
-      <motion.div
+      <m.div
         initial={{ y: 8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.18 }}
         className="mt-3 rounded-full bg-white/95 px-5 py-2 font-display text-2xl font-black text-wave-800 shadow-lg"
       >
         {t("celebration.swim.points", { n: data.points })}
-      </motion.div>
+      </m.div>
       <div className="mt-2 flex gap-1.5">
         {data.isNewSpot ? (
           <span className="chip">
@@ -155,14 +110,14 @@ function SwimSplash({ data }: { data: Extract<Splash, { kind: "swim" }> }) {
           </span>
         ) : null}
       </div>
-    </motion.div>
+    </m.div>
   );
 }
 
 function StreakSplash({ data }: { data: Extract<Splash, { kind: "streak" }> }) {
   const t = useT();
   return (
-    <motion.div
+    <m.div
       initial={{ scale: 0.6, opacity: 0, y: 20 }}
       animate={{ scale: 1, opacity: 1, y: 0 }}
       exit={{ scale: 0.6, opacity: 0, y: -20 }}
@@ -171,7 +126,7 @@ function StreakSplash({ data }: { data: Extract<Splash, { kind: "streak" }> }) {
     >
       {/* expanding rings, tinted per tier */}
       {[0, 1, 2].map((i) => (
-        <motion.span
+        <m.span
           key={i}
           initial={{ scale: 0.6, opacity: 0.5 }}
           animate={{ scale: 3.5, opacity: 0 }}
@@ -184,7 +139,7 @@ function StreakSplash({ data }: { data: Extract<Splash, { kind: "streak" }> }) {
           )}
         />
       ))}
-      <motion.div
+      <m.div
         animate={
           data.tier === "disco"
             ? { rotate: [0, -6, 6, 0], scale: [1, 1.06, 1] }
@@ -204,24 +159,24 @@ function StreakSplash({ data }: { data: Extract<Splash, { kind: "streak" }> }) {
         )}
       >
         {TIER_EMOJI[data.tier]}
-      </motion.div>
-      <motion.div
+      </m.div>
+      <m.div
         initial={{ y: 8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.18 }}
         className="mt-3 rounded-full bg-white/95 px-5 py-2 font-display text-2xl font-black text-wave-800 shadow-lg"
       >
         {t("celebration.streak.days", { n: data.days })}
-      </motion.div>
-      <motion.div
+      </m.div>
+      <m.div
         initial={{ y: 8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3 }}
         className="mt-2 rounded-full bg-white/80 px-4 py-1 text-sm font-semibold text-slate-700 shadow"
       >
         {t(`celebration.streak.${data.tier}`)}
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }
 
@@ -232,7 +187,7 @@ function AchievementSplash({
 }) {
   const t = useT();
   return (
-    <motion.div
+    <m.div
       initial={{ scale: 0.6, opacity: 0, rotate: -8 }}
       animate={{ scale: 1, opacity: 1, rotate: 0 }}
       exit={{ scale: 0.6, opacity: 0, rotate: 6 }}
@@ -243,7 +198,7 @@ function AchievementSplash({
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-500 px-3 py-1 text-[10px] font-bold tracking-widest text-white uppercase shadow">
           {t("achievements.unlocked_label")}
         </div>
-        <motion.div
+        <m.div
           initial={{ y: 14, scale: 0.7, rotate: -6 }}
           animate={{ y: 0, scale: 1, rotate: 0 }}
           transition={{
@@ -255,7 +210,7 @@ function AchievementSplash({
           className="mt-2 flex h-24 w-24 items-center justify-center rounded-full bg-white text-5xl shadow-inner ring-4 ring-amber-300/70"
         >
           {data.achievement.emoji}
-        </motion.div>
+        </m.div>
         <div className="mt-3 text-center">
           <div className="font-display text-xl font-black text-wave-900">
             {t(`achievement.${data.achievement.id}.name`)}
@@ -268,6 +223,6 @@ function AchievementSplash({
           {"★".repeat(data.achievement.tier)}
         </div>
       </div>
-    </motion.div>
+    </m.div>
   );
 }

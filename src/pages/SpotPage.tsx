@@ -51,10 +51,11 @@ import SwimListItem from "@/components/SwimListItem";
 import { useAuth } from "@/auth/AuthContext";
 import { useIsAdmin } from "@/lib/adminMode";
 import { useT } from "@/lib/i18n";
-import { Button, buttonClasses } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { Textarea } from "@/components/ui/Input";
 import Stat from "@/components/ui/Stat";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toastStore";
 
 /**
  * The spot detail UI (map, stats, photos, recent dips). Extracted from the

@@ -15,18 +15,6 @@ export const COUNTRIES: { code: string; name: string }[] = [
   { code: "OTHER", name: "Övrigt / Other" },
 ];
 
-/** Countries cold enough for the B/C/D winter brackets to apply. */
-export const COLD_CLIMATE_COUNTRIES = new Set([
-  "SE",
-  "NO",
-  "DK",
-  "FI",
-  "IS",
-  "EE",
-  "LV",
-  "LT",
-]);
-
 /** Convert a 2-letter country code to its flag emoji (regional indicators). */
 export function flagEmoji(code: string): string {
   if (code === "OTHER") return "🌍";

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   ChevronLeft,
@@ -14,8 +14,9 @@ import { startOfYear, endOfYear } from "@/lib/scoring";
 import { computeMyStats } from "@/lib/stats";
 import { ACHIEVEMENTS_BY_ID, evaluateAchievements } from "@/lib/achievements";
 import { monthShort, useT } from "@/lib/i18n";
-import { Button, buttonClasses } from "@/components/ui/Button";
-import { toast } from "@/components/ui/Toast";
+import { Button } from "@/components/ui/Button";
+import { buttonClasses } from "@/components/ui/buttonStyles";
+import { toast } from "@/components/ui/toastStore";
 import { shareRecapCard } from "@/lib/recapCard";
 
 const slideVariants = {
@@ -316,7 +317,7 @@ export default function RecapPage() {
 
       <div className="relative z-10 mt-4 flex h-[60vh] items-center justify-center">
         <AnimatePresence mode="wait" custom={dir}>
-          <motion.div
+          <m.div
             key={idx}
             custom={dir}
             variants={slideVariants}
@@ -339,12 +340,12 @@ export default function RecapPage() {
             className="w-full max-w-sm cursor-grab active:cursor-grabbing"
           >
             <SlideCard slide={slide} />
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       </div>
 
       <div className="relative z-10 mt-4 flex justify-between">
-        <motion.button
+        <m.button
           whileTap={{ scale: 0.92 }}
           disabled={idx === 0}
           onClick={() => advance(-1)}
@@ -352,7 +353,7 @@ export default function RecapPage() {
           aria-label={t("common.previous")}
         >
           <ChevronLeft className="h-5 w-5" />
-        </motion.button>
+        </m.button>
         {isLast ? (
           <div className="flex items-center gap-2">
             <Button
@@ -364,24 +365,24 @@ export default function RecapPage() {
             >
               {t("recap.share.button", { year })}
             </Button>
-            <motion.div whileTap={{ scale: 0.96 }}>
+            <m.div whileTap={{ scale: 0.96 }}>
               <Link
                 to="/"
                 className={buttonClasses("secondary", "lg", "text-sm")}
               >
                 {t("recap.back_to_map")}
               </Link>
-            </motion.div>
+            </m.div>
           </div>
         ) : (
-          <motion.button
+          <m.button
             whileTap={{ scale: 0.92 }}
             onClick={() => advance(1)}
             className={buttonClasses("primary", "icon", "h-11 w-11")}
             aria-label={t("common.next")}
           >
             <ChevronRight className="h-5 w-5" />
-          </motion.button>
+          </m.button>
         )}
       </div>
     </div>
@@ -409,7 +410,7 @@ type Slide =
 function SlideCard({ slide }: { slide: Slide }) {
   const inner = (
     <div className="glass relative flex h-[60vh] max-h-[600px] flex-col items-center justify-center gap-3 bg-gradient-to-br from-white via-wave-50 to-amber-50 p-8 text-center">
-      <motion.div
+      <m.div
         initial={{ scale: 0.6, rotate: -10 }}
         animate={{ scale: 1, rotate: 0 }}
         transition={{
@@ -421,7 +422,7 @@ function SlideCard({ slide }: { slide: Slide }) {
         className="text-7xl drop-shadow"
       >
         {slide.accent}
-      </motion.div>
+      </m.div>
       <div className="text-[11px] font-semibold tracking-widest text-wave-700 uppercase">
         {slide.title}
       </div>
@@ -429,14 +430,14 @@ function SlideCard({ slide }: { slide: Slide }) {
       {slide.kind !== "achievements" ? (
         <>
           {slide.big ? (
-            <motion.div
+            <m.div
               initial={{ y: 10, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.18 }}
               className="font-display text-6xl font-black text-wave-900"
             >
               {slide.big}
-            </motion.div>
+            </m.div>
           ) : null}
           {slide.bigLabel ? (
             <div className="font-display text-base font-bold text-slate-600">
@@ -481,7 +482,7 @@ function AchievementsSlide({
           const a = ACHIEVEMENTS_BY_ID[id];
           if (!a) return null;
           return (
-            <motion.div
+            <m.div
               key={id}
               initial={{ scale: 0.5, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -490,7 +491,7 @@ function AchievementsSlide({
               title={t(`achievement.${id}.name`)}
             >
               {a.emoji}
-            </motion.div>
+            </m.div>
           );
         })}
       </div>
@@ -509,8 +510,9 @@ function AchievementsSlide({
   );
 }
 
+const CONFETTI_EMOJIS = ["🌊", "💧", "❄️", "✨", "⭐", "🐬"];
+
 function ConfettiBackdrop() {
-  const emojis = ["🌊", "💧", "❄️", "✨", "⭐", "🐬"];
   // Memoize so positions/timing don't re-randomize on every slide navigation.
   const pieces = useMemo(
     () =>
@@ -525,7 +527,7 @@ function ConfettiBackdrop() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
       {pieces.map(({ key, left, delay, duration }) => (
-        <motion.span
+        <m.span
           key={key}
           initial={{ y: -40, opacity: 0 }}
           animate={{ y: "100dvh", opacity: [0, 1, 0.7, 0] }}
@@ -538,8 +540,8 @@ function ConfettiBackdrop() {
           className="absolute text-lg select-none"
           style={{ left: `${left}%` }}
         >
-          {emojis[key % emojis.length]}
-        </motion.span>
+          {CONFETTI_EMOJIS[key % CONFETTI_EMOJIS.length]}
+        </m.span>
       ))}
     </div>
   );

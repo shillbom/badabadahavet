@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { X } from "lucide-react";
 import type { SessionDoc } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
@@ -28,7 +28,7 @@ export default function Lightbox({
   return createPortal(
     <AnimatePresence>
       {s ? (
-        <motion.div
+        <m.div
           key={s.id}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -44,7 +44,7 @@ export default function Lightbox({
           >
             <X className="h-4 w-4" />
           </button>
-          <motion.div
+          <m.div
             initial={{ scale: 0.92, y: 8 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.92, y: 8 }}
@@ -61,8 +61,8 @@ export default function Lightbox({
               {s.displayName} · {formatDate(s.date)}
               {s.note ? ` · ${s.note}` : ""}
             </div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       ) : null}
     </AnimatePresence>,
     document.body,

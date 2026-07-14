@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Ban, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useIsAdmin } from "@/lib/adminMode";
 import { useT } from "@/lib/i18n";
 import { fetchAllUsers, fetchBannedUsers, banUser } from "@/lib/data";
 import { sumScores } from "@/lib/scoring";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toastStore";
 import BackButton from "@/components/ui/BackButton";
 import type { BannedUser, UserDoc } from "@/lib/types";
 
@@ -169,7 +169,7 @@ export default function AdminUsersPage() {
                 {t("admin.users.banned_empty")}
               </p>
             ) : (
-              <motion.ul
+              <m.ul
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="space-y-2"
@@ -192,7 +192,7 @@ export default function AdminUsersPage() {
                     </div>
                   </li>
                 ))}
-              </motion.ul>
+              </m.ul>
             )}
           </div>
         </>

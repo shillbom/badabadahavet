@@ -10,6 +10,7 @@ import MarkerClusterGroup from "react-leaflet-cluster";
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -32,7 +33,7 @@ import { watchPlaceSessions } from "@/lib/data";
 import { pinRingFor } from "@/lib/borders";
 import type { PlaceWithTemp, SessionDoc } from "@/lib/types";
 import { formatDate, cn } from "@/lib/utils";
-import { buttonClasses } from "@/components/ui/Button";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useT } from "@/lib/i18n";
 
 // Fix default marker icon paths for bundlers (Leaflet's default icons are broken under Vite).
@@ -539,7 +540,9 @@ export default function SwimMap({
     return m;
   }, [places]);
   const tempByPosRef = useRef(tempByPos);
-  tempByPosRef.current = tempByPos;
+  useEffect(() => {
+    tempByPosRef.current = tempByPos;
+  }, [tempByPos]);
 
   // Position → last-swim timestamp, so a cluster can tint itself by the
   // most-recently-swum place beneath it (same ref trick as temps).
@@ -552,7 +555,9 @@ export default function SwimMap({
     return m;
   }, [places]);
   const lastSwimByPosRef = useRef(lastSwimByPos);
-  lastSwimByPosRef.current = lastSwimByPos;
+  useEffect(() => {
+    lastSwimByPosRef.current = lastSwimByPos;
+  }, [lastSwimByPos]);
 
   const createClusterIcon = useCallback(
     (cluster: {
@@ -625,7 +630,9 @@ export default function SwimMap({
   } else {
     shouldCluster = clusteringRef.current;
   }
-  clusteringRef.current = shouldCluster;
+  useEffect(() => {
+    clusteringRef.current = shouldCluster;
+  }, [shouldCluster]);
 
   return (
     <div
@@ -1099,19 +1106,20 @@ function ViewportPinCount({
   onCount: (n: number) => void;
 }) {
   const map = useMap();
+  const reportCount = useEffectEvent(onCount);
   useEffect(() => {
     const measure = () => {
       const bounds = map.getBounds();
       let n = 0;
       for (const p of places) if (bounds.contains([p.lat, p.lng])) n++;
-      onCount(n);
+      reportCount(n);
     };
     measure();
     map.on("moveend zoomend", measure);
     return () => {
       map.off("moveend zoomend", measure);
     };
-  }, [map, places, onCount]);
+  }, [map, places]);
   return null;
 }
 
@@ -1416,13 +1424,14 @@ function ClickToPick({
   onPick: (lat: number, lng: number) => void;
 }) {
   const map = useMap();
+  const pick = useEffectEvent(onPick);
   useEffect(() => {
     const handler = (e: L.LeafletMouseEvent) =>
-      onPick(e.latlng.lat, e.latlng.lng);
+      pick(e.latlng.lat, e.latlng.lng);
     map.on("click", handler);
     return () => {
       map.off("click", handler);
     };
-  }, [map, onPick]);
+  }, [map]);
   return null;
 }

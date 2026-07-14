@@ -1,5 +1,5 @@
 import type { ReactNode, Ref } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Calendar } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
 import { waterEmojiFor } from "@/lib/waterEmoji";
@@ -50,7 +50,7 @@ export default function SwimListItem({
   children?: ReactNode;
 }) {
   return (
-    <motion.li
+    <m.li
       ref={ref}
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
@@ -87,6 +87,6 @@ export default function SwimListItem({
         {note ? <p className="mt-0.5 text-xs text-slate-600">{note}</p> : null}
         {children}
       </div>
-    </motion.li>
+    </m.li>
   );
 }

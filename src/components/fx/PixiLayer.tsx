@@ -25,7 +25,7 @@ export type PixiFx = (
 let pixiMod: Promise<typeof import("pixi.js")> | undefined;
 const loadPixi = () => (pixiMod ??= import("pixi.js"));
 
-export const prefersReducedMotion = () =>
+const prefersReducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export default function PixiLayer({

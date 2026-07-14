@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import {
   MapPin,
   Crosshair,
@@ -15,8 +15,8 @@ import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
-import { toast } from "@/components/ui/Toast";
-import { celebrate } from "@/components/Celebration";
+import { toast } from "@/components/ui/toastStore";
+import { celebrate } from "@/components/celebrationStore";
 import {
   createSession,
   findOrCreatePlace,
@@ -89,11 +89,11 @@ export default function LogSessionPage() {
       ? { lat: preselectedPlace.lat, lng: preselectedPlace.lng }
       : null,
   );
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const photoFileRef = useRef<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
-  const [country, setCountry] = useState<string | null>(null);
+  const countryRef = useRef<string | null>(null);
   const [pickedPlaceId, setPickedPlaceId] = useState<string | null>(
     preselectedPlaceId,
   );
@@ -164,12 +164,12 @@ export default function LogSessionPage() {
   // the swim is in. Falls back silently — scoring handles a null country.
   useEffect(() => {
     if (!coords) {
-      setCountry(null);
+      countryRef.current = null;
       return;
     }
     const ctrl = new AbortController();
     reverseGeocodeCountry(coords.lat, coords.lng, ctrl.signal).then((c) => {
-      if (!ctrl.signal.aborted) setCountry(c);
+      if (!ctrl.signal.aborted) countryRef.current = c;
       return;
     });
     return () => ctrl.abort();
@@ -327,12 +327,12 @@ export default function LogSessionPage() {
       if (photoInput.current) photoInput.current.value = "";
       return;
     }
-    setPhotoFile(f);
+    photoFileRef.current = f;
     setPhotoPreview(URL.createObjectURL(f));
   }
 
   function clearPhoto() {
-    setPhotoFile(null);
+    photoFileRef.current = null;
     if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhotoPreview(null);
     if (photoInput.current) photoInput.current.value = "";
@@ -392,8 +392,8 @@ export default function LogSessionPage() {
         lng: coords.lng,
         date: ts,
         note,
-        photoFile,
-        country,
+        photoFile: photoFileRef.current,
+        country: countryRef.current,
         border: myBorder.id,
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
@@ -495,7 +495,7 @@ export default function LogSessionPage() {
       </p>
 
       <AnimatePresence mode="wait">
-        <motion.div
+        <m.div
           key={mode}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -801,15 +801,15 @@ export default function LogSessionPage() {
           <Button type="submit" loading={busy} size="lg" className="w-full">
             {t("log.save")} <Sparkles className="h-4 w-4" />
           </Button>
-        </motion.div>
+        </m.div>
       </AnimatePresence>
     </form>
   );
 }
 
-function formatDistance(m: number): string {
-  if (m < 1000) return `${Math.round(m)} m`;
-  return `${(m / 1000).toFixed(m < 10000 ? 1 : 0)} km`;
+function formatDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)} m`;
+  return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
 }
 
 const pad = (n: number) => n.toString().padStart(2, "0");

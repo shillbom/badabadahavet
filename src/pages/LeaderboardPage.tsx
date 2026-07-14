@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, useInView } from "framer-motion";
+import { m, useInView } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
@@ -149,13 +149,13 @@ export default function LeaderboardPage() {
           </>
         ) : null}
         {rows.length === 0 ? (
-          <motion.li
+          <m.li
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500"
           >
             {t("leaderboard.empty")}
-          </motion.li>
+          </m.li>
         ) : null}
       </ol>
 
@@ -200,7 +200,7 @@ function BoardRow({
     // No `layout`/AnimatePresence here on purpose: they force framer-motion
     // to measure every row on any roster change, which scales badly — the
     // board can hold up to LEADERBOARD_LIMIT rows.
-    <motion.li
+    <m.li
       ref={ref}
       initial={{ opacity: 0, y: 8 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
@@ -303,7 +303,7 @@ function BoardRow({
         value={inView ? r.points : 0}
         className="font-display text-2xl font-black text-wave-700"
       />
-    </motion.li>
+    </m.li>
   );
 }
 

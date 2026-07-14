@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
@@ -23,7 +23,7 @@ export default function UpdatePrompt({
     <div className="pointer-events-none fixed inset-x-0 top-[max(env(safe-area-inset-top),0.5rem)] z-[1950] flex flex-col items-center px-3">
       <AnimatePresence>
         {show ? (
-          <motion.div
+          <m.div
             initial={{ opacity: 0, y: -16, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -16, scale: 0.95 }}
@@ -46,7 +46,7 @@ export default function UpdatePrompt({
             >
               <X className="h-4 w-4" />
             </button>
-          </motion.div>
+          </m.div>
         ) : null}
       </AnimatePresence>
     </div>

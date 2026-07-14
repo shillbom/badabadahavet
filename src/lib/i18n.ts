@@ -46,12 +46,6 @@ function format(template: string, vars?: Vars): string {
   );
 }
 
-export function t(key: string, vars?: Vars): string {
-  const locale = useLocale.getState().locale;
-  const str = MESSAGES[locale][key] ?? MESSAGES.en[key] ?? key;
-  return format(str, vars);
-}
-
 export function useT(): (key: string, vars?: Vars) => string {
   const locale = useLocale((s) => s.locale);
   return (key, vars) =>
@@ -125,12 +119,6 @@ export function getTimeGreeting(name: string, seed: number): string {
   const variants = GREETINGS[locale][slot];
   const template = variants[seed % variants.length];
   return template.replace("{name}", name);
-}
-
-export function plural(n: number, sv: [string, string], en: [string, string]) {
-  const locale = useLocale.getState().locale;
-  const pair = locale === "sv" ? sv : en;
-  return n === 1 ? pair[0] : pair[1];
 }
 
 export function monthShort(idx: number): string {

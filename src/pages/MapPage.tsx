@@ -1,5 +1,5 @@
 import { lazy, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { MapPin, Trophy } from "lucide-react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { sumScores } from "@/lib/scoring";
@@ -65,12 +65,12 @@ export default function MapPage() {
     : myStats.totalPoints;
 
   // Stable random seed picked once per mount — prevents re-roll on every render.
-  const greetingSeed = useRef(Math.floor(Math.random() * 1000));
+  const [greetingSeed] = useState(() => Math.floor(Math.random() * 1000));
   // Re-derive greeting when locale or profile name changes.
   const locale = useLocale((s) => s.locale);
   const greetingName = profile?.displayName ?? t("layout.swimmer");
   const greeting = useMemo(
-    () => getTimeGreeting(greetingName, greetingSeed.current),
+    () => getTimeGreeting(greetingName, greetingSeed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [greetingName, locale],
   );
@@ -87,7 +87,7 @@ export default function MapPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+6rem)]">
       {isGuest ? (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="glass flex items-center justify-between gap-3 p-3 lg:mx-auto lg:w-full lg:max-w-2xl"
@@ -100,9 +100,9 @@ export default function MapPage() {
               {t("map.guest.subtitle")}
             </div>
           </div>
-        </motion.div>
+        </m.div>
       ) : (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="lg:mx-auto lg:w-full lg:max-w-2xl"
@@ -111,7 +111,7 @@ export default function MapPage() {
             {greeting}
           </h2>
           <p className="text-sm text-slate-500">{subtitle}</p>
-        </motion.div>
+        </m.div>
       )}
 
       {!isGuest ? (

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { REACTION_EMOJIS, reactorUids, toggleReaction } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
@@ -58,7 +58,7 @@ export default function ReactionBar({
         const reactors = reactorUids(reactions[emoji]);
         const mine = !!myUid && reactors.includes(myUid);
         return (
-          <motion.button
+          <m.button
             key={emoji}
             whileTap={{ scale: 0.85 }}
             disabled={!myUid || pending === emoji}
@@ -73,14 +73,14 @@ export default function ReactionBar({
           >
             <span>{emoji}</span>
             <span className="font-medium tabular-nums">{reactors.length}</span>
-          </motion.button>
+          </m.button>
         );
       })}
 
       {myUid ? (
         <div ref={wrapRef} className="flex items-center">
           {showPicker ? (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.12 }}
@@ -104,7 +104,7 @@ export default function ReactionBar({
                   </button>
                 );
               })}
-            </motion.div>
+            </m.div>
           ) : (
             <button
               type="button"
