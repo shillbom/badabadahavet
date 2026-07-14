@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { m, AnimatePresence } from "framer-motion";
 import {
   Globe,
@@ -47,7 +47,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const setLocale = useLocale((s) => s.setLocale);
-  const [homeCountry, setHomeCountryState] = useState<string>(() =>
+  const [homeCountry, dispatchHomeCountry] = useReducer(
+    (_current: string, next: string) => next,
     pickerCodeFor(detectBrowserCountry()),
   );
   const homeCountryTouchedRef = useRef(false);
@@ -55,7 +56,7 @@ export default function LoginPage() {
   const [termsOpen, setTermsOpen] = useState(false);
 
   function setHomeCountry(code: string, fromUser: boolean) {
-    setHomeCountryState(code);
+    dispatchHomeCountry(code);
     if (fromUser) homeCountryTouchedRef.current = true;
     // Auto-pair the locale: SE → Swedish, anything else → English.
     setLocale(code === "SE" ? "sv" : "en");

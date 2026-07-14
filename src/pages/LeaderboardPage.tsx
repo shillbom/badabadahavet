@@ -11,6 +11,7 @@ import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import { cn } from "@/lib/utils";
+import { useIsAdmin } from "@/lib/adminMode";
 
 type Row = {
   uid: string;
@@ -25,6 +26,8 @@ type Row = {
 export default function LeaderboardPage() {
   const groups = useStore((s) => s.groups);
   const { user } = useAuth();
+  const isAdmin = useIsAdmin();
+
   const t = useT();
 
   const year = new Date().getFullYear();
@@ -86,12 +89,15 @@ export default function LeaderboardPage() {
   // single-uid query — instead of preloading the whole scope.
   const isGroupScope = scope !== "global";
   const places = useStore((s) => s.placesWithTemps);
-  const [selectedMember, setSelectedMember] = useState<UserDoc | null>(null);
+  const [memberSelection, setMemberSelection] = useState<{
+    member: UserDoc | null;
+    key: number;
+  }>({ member: null, key: 0 });
+  const selectedMember = memberSelection.member;
   const [memberSessions, setMemberSessions] = useState<SessionDoc[]>([]);
   const selectedUid = selectedMember?.uid;
   useEffect(() => {
     if (!selectedUid) return;
-    setMemberSessions([]);
     return watchMemberSessions([selectedUid], setMemberSessions);
   }, [selectedUid]);
 
@@ -128,11 +134,14 @@ export default function LeaderboardPage() {
             rank={i}
             isMe={user?.uid === r.uid}
             onSelect={
-              isGroupScope
-                ? () =>
-                    setSelectedMember(
-                      roster.find((u) => u.uid === r.uid) ?? null,
-                    )
+              isGroupScope || isAdmin
+                ? () => {
+                    setMemberSessions([]);
+                    setMemberSelection((current) => ({
+                      member: roster.find((u) => u.uid === r.uid) ?? null,
+                      key: current.key + 1,
+                    }));
+                  }
                 : undefined
             }
           />
@@ -160,10 +169,13 @@ export default function LeaderboardPage() {
       </ol>
 
       <MemberSwimsSheet
+        key={memberSelection.key}
         member={selectedMember}
         sessions={memberSessions}
         places={places}
-        onClose={() => setSelectedMember(null)}
+        onClose={() =>
+          setMemberSelection((current) => ({ ...current, member: null }))
+        }
       />
     </div>
   );

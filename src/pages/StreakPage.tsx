@@ -170,9 +170,9 @@ export default function StreakPage() {
         <AnimatePresence initial={false}>
           {rulesOpen ? (
             <m.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
+              initial={{ scaleX: 0, opacity: 0 }}
+              animate={{ scaleX: 1, opacity: 1 }}
+              exit={{ scaleX: 0, opacity: 0 }}
               className="overflow-hidden bg-white/50"
             >
               <div className="space-y-2 px-4 pb-4 text-xs text-slate-600">

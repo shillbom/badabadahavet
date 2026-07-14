@@ -78,7 +78,13 @@ export function SpotView({
   const { user, profile } = useAuth();
   const isAdmin = useIsAdmin();
   const t = useT();
-  const [place, setPlace] = useState<PlaceDoc | null>(null);
+  const [{ place, loading }, setPlaceState] = useState<{
+    place: PlaceDoc | null;
+    loading: boolean;
+  }>({ place: null, loading: true });
+  const setPlace = (next: PlaceDoc) => {
+    setPlaceState((current) => ({ ...current, place: next }));
+  };
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
   // The live per-place reading (placeTemps/{id}) — fresher than the daily
   // summary once an on-demand refresh has landed. undefined = the snapshot
@@ -87,7 +93,6 @@ export function SpotView({
   const [liveTemp, setLiveTemp] = useState<PlaceTempDoc | null | undefined>(
     undefined,
   );
-  const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
   const focusedSessionId = searchParams.get("session");
   // Track which sessions have been highlighted once so we don't replay
@@ -103,11 +108,10 @@ export function SpotView({
     let cancelled = false;
     getPlace(placeId).then((p) => {
       if (cancelled) return;
-      setPlace(p);
-      setLoading(false);
+      setPlaceState({ place: p, loading: false });
       return;
     });
-    const unsub = watchPlaceSessions(placeId, (s) => setSessions(s));
+    const unsub = watchPlaceSessions(placeId, setSessions);
     setLiveTemp(undefined);
     const unsubTemp = watchPlaceTemp(placeId, setLiveTemp);
     return () => {

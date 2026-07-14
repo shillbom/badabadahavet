@@ -1,4 +1,11 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
 import {
@@ -25,7 +32,7 @@ import {
 import { checkImageFile, ImageProcessingError } from "@/lib/image";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { reverseGeocodeCountry } from "@/lib/geocode";
-import { haversineMeters } from "@/lib/utils";
+import { getPosition, haversineMeters } from "@/lib/utils";
 import {
   PLACE_RADIUS_METERS,
   isWinterMonth,
@@ -43,6 +50,24 @@ import BackButton from "@/components/ui/BackButton";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 
 type Mode = "now" | "pick";
+
+type LogLocationState = {
+  mode: Mode;
+  name: string;
+  date: string;
+  coords: { lat: number; lng: number } | null;
+  search: string;
+  pickedPlaceId: string | null;
+  fixDeadline: boolean;
+  locating: boolean;
+};
+
+function logLocationReducer(
+  state: LogLocationState,
+  patch: Partial<LogLocationState>,
+): LogLocationState {
+  return { ...state, ...patch };
+}
 
 // A spot pin marks one point on what can be a large beach — be lax about
 // how far away the swimmer can stand and still count as "at" the spot.
@@ -80,23 +105,26 @@ export default function LogSessionPage() {
     ? (places.find((p) => p.id === preselectedPlaceId) ?? null)
     : null;
 
-  const [mode, setMode] = useState<Mode>(preselectedPlaceId ? "pick" : "now");
-  const [name, setName] = useState(preselectedPlace?.name ?? "");
-  const [note, setNote] = useState("");
-  const [date, setDate] = useState(() => toLocalInput(new Date()));
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
-    preselectedPlace
+  const [
+    { mode, name, date, coords, search, pickedPlaceId, fixDeadline, locating },
+    updateLocation,
+  ] = useReducer(logLocationReducer, {
+    mode: preselectedPlaceId ? "pick" : "now",
+    name: preselectedPlace?.name ?? "",
+    date: toLocalInput(new Date()),
+    coords: preselectedPlace
       ? { lat: preselectedPlace.lat, lng: preselectedPlace.lng }
       : null,
-  );
+    search: "",
+    pickedPlaceId: preselectedPlaceId,
+    fixDeadline: false,
+    locating: false,
+  });
+  const [note, setNote] = useState("");
   const photoFileRef = useRef<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [search, setSearch] = useState("");
   const countryRef = useRef<string | null>(null);
-  const [pickedPlaceId, setPickedPlaceId] = useState<string | null>(
-    preselectedPlaceId,
-  );
   const [searchOrigin, setSearchOrigin] = useState<{
     lat: number;
     lng: number;
@@ -113,10 +141,8 @@ export default function LogSessionPage() {
   const fixAccuracyRef = useRef<number | null>(null);
   // Flips when a now-mode entry has waited NOW_FIX_DEADLINE_MS without a
   // trustworthy fix, forcing the auto-attach decision with what we have.
-  const [fixDeadline, setFixDeadline] = useState(false);
   // True from now-mode entry until the auto-attach decision (or a
   // geolocation failure) — drives the non-blocking "waiting for GPS" hint.
-  const [locating, setLocating] = useState(false);
   // Mirror so the position-watch callback (async) sees the current pick
   // without re-subscribing. Updated from an effect, not during render.
   const pickedPlaceIdRef = useRef(pickedPlaceId);
@@ -131,23 +157,16 @@ export default function LogSessionPage() {
   // Geolocate once just for sorting search results by distance — works
   // even in "pick" mode where coords aren't auto-set from geolocation.
   // Initialised above with a fallback; here we override with the real position.
-  const updateUserLastState = useEffectEvent(
-    async (pos: GeolocationPosition) => {
-      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setSearchOrigin(loc);
-      if (user) await updateUserLastLocation(user.uid, loc.lat, loc.lng);
-    },
-  );
+  const updateUserLastState = useEffectEvent(async () => {
+    const pos = await getPosition();
+    if (!pos) return;
+    const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    setSearchOrigin(loc);
+    if (user) await updateUserLastLocation(user.uid, loc.lat, loc.lng);
+  });
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        updateUserLastState(pos);
-      },
-      () => {},
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
-    );
+    updateUserLastState();
   }, []);
 
   // Once we know the user's location, fly the map there at a close zoom
@@ -194,10 +213,12 @@ export default function LogSessionPage() {
     }
     if (best) {
       autoPickedNowRef.current = true;
-      setLocating(false);
-      setCoords({ lat: best.p.lat, lng: best.p.lng });
-      setName(best.p.name);
-      setPickedPlaceId(best.p.id);
+      updateLocation({
+        locating: false,
+        coords: { lat: best.p.lat, lng: best.p.lng },
+        name: best.p.name,
+        pickedPlaceId: best.p.id,
+      });
       return;
     }
     // Nothing in range. Hold off on the fallback until the fix is precise
@@ -210,12 +231,12 @@ export default function LogSessionPage() {
     )
       return;
     autoPickedNowRef.current = true;
-    setLocating(false);
+    updateLocation({ locating: false });
     if (places.length > 0 && !intentionalNowRef.current) {
       // No known place nearby — switch to pick-on-map so the user can
       // drop a pin at their actual location. Skip when the user explicitly
       // chose "now" mode so their intentional choice is respected.
-      setMode("pick");
+      updateLocation({ mode: "pick" });
     }
   }, [mode, coords, places, pickedPlaceId, fixDeadline]);
 
@@ -262,19 +283,21 @@ export default function LogSessionPage() {
 
   useEffect(() => {
     if (mode !== "now") return;
-    setPickedPlaceId(null);
-    setName("");
-    setSearch("");
+    updateLocation({
+      pickedPlaceId: null,
+      name: "",
+      search: "",
+      fixDeadline: false,
+      date: toLocalInput(new Date()),
+      locating: true,
+    });
     autoPickedNowRef.current = false;
     fixAccuracyRef.current = null;
-    setFixDeadline(false);
-    setDate(toLocalInput(new Date()));
     if (!navigator.geolocation) {
       toast.error(t("log.geo.unavailable"));
-      setMode("pick");
+      updateLocation({ mode: "pick", locating: false });
       return;
     }
-    setLocating(true);
     // Watch rather than getCurrentPosition: the one-shot returns the first
     // fix the OS can produce, which on a cold GPS is a coarse cell/Wi-Fi
     // position. Watching lets coords sharpen until the auto-attach effect
@@ -286,26 +309,28 @@ export default function LogSessionPage() {
         // then mint a near-duplicate on submit).
         if (autoPickedNowRef.current || pickedPlaceIdRef.current) return;
         fixAccuracyRef.current = pos.coords.accuracy;
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        updateLocation({
+          coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+        });
       },
       () => {
         // A watch can emit transient errors after a good fix — only bail
         // when we never got a position at all.
         if (fixAccuracyRef.current !== null) return;
-        setLocating(false);
+        updateLocation({ locating: false });
         toast.error(t("log.geo.failed"));
-        setMode("pick");
+        updateLocation({ mode: "pick" });
       },
       { enableHighAccuracy: true, timeout: 8000 },
     );
     const deadline = setTimeout(
-      () => setFixDeadline(true),
+      () => updateLocation({ fixDeadline: true }),
       NOW_FIX_DEADLINE_MS,
     );
     return () => {
       navigator.geolocation.clearWatch(watchId);
       clearTimeout(deadline);
-      setLocating(false);
+      updateLocation({ locating: false });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
@@ -468,7 +493,7 @@ export default function LogSessionPage() {
         value={mode}
         onChange={(next) => {
           intentionalNowRef.current = next === "now";
-          setMode(next);
+          updateLocation({ mode: next });
         }}
         options={[
           {
@@ -508,7 +533,7 @@ export default function LogSessionPage() {
               <Input
                 placeholder={t("log.search.placeholder")}
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => updateLocation({ search: e.target.value })}
                 className="pl-9 shadow-sm"
               />
               {searchMatches.length > 0 ? (
@@ -521,10 +546,12 @@ export default function LogSessionPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            setCoords({ lat: p.lat, lng: p.lng });
-                            setName(p.name);
-                            setPickedPlaceId(p.id);
-                            setSearch("");
+                            updateLocation({
+                              coords: { lat: p.lat, lng: p.lng },
+                              name: p.name,
+                              pickedPlaceId: p.id,
+                              search: "",
+                            });
                             swimMapRef.current?.flyTo([p.lat, p.lng], 14, {
                               duration: 0.8,
                             });
@@ -590,21 +617,27 @@ export default function LogSessionPage() {
                           }
                         }
                         if (snap) {
-                          setCoords({ lat: snap.lat, lng: snap.lng });
-                          setName(snap.name);
-                          setPickedPlaceId(snap.id);
+                          updateLocation({
+                            coords: { lat: snap.lat, lng: snap.lng },
+                            name: snap.name,
+                            pickedPlaceId: snap.id,
+                          });
                         } else {
-                          setCoords({ lat, lng });
-                          setName("");
-                          setPickedPlaceId(null);
+                          updateLocation({
+                            coords: { lat, lng },
+                            name: "",
+                            pickedPlaceId: null,
+                          });
                         }
                       }
                     : undefined
                 }
                 onPickExisting={(p) => {
-                  setCoords({ lat: p.lat, lng: p.lng });
-                  setName(p.name);
-                  setPickedPlaceId(p.id);
+                  updateLocation({
+                    coords: { lat: p.lat, lng: p.lng },
+                    name: p.name,
+                    pickedPlaceId: p.id,
+                  });
                   swimMapRef.current?.flyTo([p.lat, p.lng], 14, {
                     duration: 0.8,
                   });
@@ -681,7 +714,7 @@ export default function LogSessionPage() {
                 id="name"
                 placeholder={suggestion ?? t("log.field.spot_name.placeholder")}
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => updateLocation({ name: e.target.value })}
                 disabled={!!pickedPlaceId}
                 readOnly={!!pickedPlaceId}
                 className={pickedPlaceId ? "bg-slate-100 pr-9" : undefined}
@@ -690,8 +723,7 @@ export default function LogSessionPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setPickedPlaceId(null);
-                    setName("");
+                    updateLocation({ pickedPlaceId: null, name: "" });
                   }}
                   className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full bg-white p-1 text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50"
                   aria-label={t("log.field.spot_name.unlock")}
@@ -715,7 +747,7 @@ export default function LogSessionPage() {
               type="datetime-local"
               lang={inputLang}
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => updateLocation({ date: e.target.value })}
               disabled={mode === "now"}
               readOnly={mode === "now"}
               className={

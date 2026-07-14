@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
 import {
@@ -33,6 +33,31 @@ const slideVariants = {
   }),
 };
 
+type RecapNavigation = {
+  year: number;
+  idx: number;
+  dir: 1 | -1;
+};
+
+type RecapNavigationAction =
+  | { type: "changeYear"; delta: 1 | -1 }
+  | { type: "advance"; delta: 1 | -1; lastIndex: number };
+
+function recapNavigationReducer(
+  state: RecapNavigation,
+  action: RecapNavigationAction,
+): RecapNavigation {
+  if (action.type === "changeYear") {
+    return { year: state.year + action.delta, idx: 0, dir: action.delta };
+  }
+
+  return {
+    ...state,
+    idx: Math.max(0, Math.min(action.lastIndex, state.idx + action.delta)),
+    dir: action.delta,
+  };
+}
+
 export default function RecapPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -44,7 +69,10 @@ export default function RecapPage() {
   useAllSessionsFeed();
 
   const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
+  const [{ year, idx, dir }, navigateRecap] = useReducer(
+    recapNavigationReducer,
+    { year: currentYear, idx: 0, dir: 1 },
+  );
 
   const availableYears = useMemo(() => {
     const years = new Set<number>();
@@ -188,8 +216,6 @@ export default function RecapPage() {
     ];
   }, [stats, year, yearSessions, unlockedYear, t]);
 
-  const [idx, setIdx] = useState(0);
-  const [dir, setDir] = useState<1 | -1>(1);
   const [sharing, setSharing] = useState(false);
 
   async function onShare() {
@@ -255,16 +281,11 @@ export default function RecapPage() {
     }
   }
 
-  // Reset to first slide when browsing a different year
-  useEffect(() => {
-    setIdx(0);
-  }, [year]);
   const slide = slides[idx];
   const isLast = idx === slides.length - 1;
 
   const advance = (delta: 1 | -1) => {
-    setDir(delta);
-    setIdx((i) => Math.max(0, Math.min(slides.length - 1, i + delta)));
+    navigateRecap({ type: "advance", delta, lastIndex: slides.length - 1 });
   };
 
   return (
@@ -285,7 +306,7 @@ export default function RecapPage() {
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
-            onClick={() => setYear((y) => y - 1)}
+            onClick={() => navigateRecap({ type: "changeYear", delta: -1 })}
             disabled={!canGoPrev}
             className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
             aria-label={t("common.previous")}
@@ -294,7 +315,7 @@ export default function RecapPage() {
           </button>
           <button
             type="button"
-            onClick={() => setYear((y) => y + 1)}
+            onClick={() => navigateRecap({ type: "changeYear", delta: 1 })}
             disabled={!canGoNext}
             className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
             aria-label={t("common.next")}
@@ -330,11 +351,9 @@ export default function RecapPage() {
             dragConstraints={{ left: 0, right: 0 }}
             onDragEnd={(_, info) => {
               if (info.offset.x < -60 && idx < slides.length - 1) {
-                setDir(1);
-                setIdx((i) => i + 1);
+                advance(1);
               } else if (info.offset.x > 60 && idx > 0) {
-                setDir(-1);
-                setIdx((i) => i - 1);
+                advance(-1);
               }
             }}
             className="w-full max-w-sm cursor-grab active:cursor-grabbing"

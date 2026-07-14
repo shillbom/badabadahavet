@@ -19,10 +19,6 @@ import { FullSplash } from "@/components/Splash";
 import { setBootReady } from "@/lib/bootSignal";
 import { rememberReturnPath } from "@/lib/utils";
 
-// A new version found this soon after the app opens is treated as "first
-// load" and applied automatically. Anything later is an in-session update
-// and only prompts, so we never reload out from under an active user.
-const STARTUP_GRACE_MS = 10_000;
 // How often a long-lived (kept-open) session re-checks for a new deploy.
 const UPDATE_CHECK_MS = 60 * 60 * 1000; // hourly
 
@@ -72,12 +68,8 @@ export default function App() {
     navigate("/login", { replace: true });
   }, [authError, navigate, t]);
 
-  // Service worker update handling. On first load we apply a waiting update
-  // automatically so the user always lands on the latest version; if a new
-  // version is published while they're using the app, we show a reload
-  // prompt instead of yanking the page out from under them.
-  const [appOpenedAt] = useState(Date.now);
-  const autoApplied = useRef(false);
+  // Service worker updates always wait for explicit user confirmation so a
+  // reload can never interrupt an in-progress swim log.
   const [updateReady, setUpdateReady] = useState(false);
   const [swRegistration, setSwRegistration] =
     useState<ServiceWorkerRegistration | null>(null);
@@ -86,13 +78,7 @@ export default function App() {
       setSwRegistration(registration ?? null);
     },
     onNeedRefresh() {
-      const atStartup = Date.now() - appOpenedAt < STARTUP_GRACE_MS;
-      if (atStartup && !autoApplied.current) {
-        autoApplied.current = true;
-        void updateServiceWorker(true); // reloads to the fresh version
-      } else {
-        setUpdateReady(true);
-      }
+      setUpdateReady(true);
     },
   });
   useEffect(() => {

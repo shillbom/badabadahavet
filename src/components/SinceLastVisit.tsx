@@ -169,8 +169,9 @@ export default function SinceLastVisit() {
   const recapToken = useRecapTrigger((s) => s.token);
 
   const [activity, setActivity] = useState<Activity | null>(null);
-  // A manual month recap was requested but the feed isn't ready yet.
-  const [monthPending, setMonthPending] = useState(false);
+  const handledRecapTokenRef = useRef(0);
+  const monthPending =
+    recapToken !== 0 && recapToken !== handledRecapTokenRef.current;
   const doneRef = useRef(false);
   // State mirror of doneRef, so the feed acquisition below can react to it.
   const [digestDone, setDigestDone] = useState(false);
@@ -239,15 +240,10 @@ export default function SinceLastVisit() {
   // Computed only once the feed is live (the acquisition above starts it),
   // so the recap isn't built from an empty snapshot.
   useEffect(() => {
-    if (recapToken === 0) return;
-    setMonthPending(true);
-  }, [recapToken]);
-
-  useEffect(() => {
     if (!monthPending || !feedReady) return;
-    setMonthPending(false);
+    handledRecapTokenRef.current = recapToken;
     setActivity(recapToShow("month"));
-  }, [monthPending, feedReady]);
+  }, [monthPending, feedReady, recapToken]);
 
   return (
     <Sheet

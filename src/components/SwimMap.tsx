@@ -428,14 +428,20 @@ export default function SwimMap({
   // into a content node that persists after the popup closes, so a hook in
   // the content component would keep listeners alive for every popup ever
   // opened. Leaflet only shows one popup at a time → at most one listener.
-  const [openPopupPlaceId, setOpenPopupPlaceId] = useState<string | null>(null);
-  const [livePopupSessions, setLivePopupSessions] = useState<
-    SessionDoc[] | null
-  >(null);
+  const [{ placeId: openPopupPlaceId, sessions: livePopupSessions }, setPopup] =
+    useState<{
+      placeId: string | null;
+      sessions: SessionDoc[] | null;
+    }>({ placeId: null, sessions: null });
   useEffect(() => {
     if (!openPopupPlaceId) return;
-    setLivePopupSessions(null);
-    return watchPlaceSessions(openPopupPlaceId, setLivePopupSessions);
+    return watchPlaceSessions(openPopupPlaceId, (sessions) => {
+      setPopup((current) =>
+        current.placeId === openPopupPlaceId
+          ? { ...current, sessions }
+          : current,
+      );
+    });
   }, [openPopupPlaceId]);
   // Feed data fills the popup instantly; the live snapshot replaces it.
   const popupSessionsFor = (placeId: string): SessionDoc[] =>
@@ -733,9 +739,13 @@ export default function SwimMap({
                       onPickExisting(p);
                     }
                   },
-                  popupopen: () => setOpenPopupPlaceId(p.id),
+                  popupopen: () => setPopup({ placeId: p.id, sessions: null }),
                   popupclose: () =>
-                    setOpenPopupPlaceId((cur) => (cur === p.id ? null : cur)),
+                    setPopup((current) =>
+                      current.placeId === p.id
+                        ? { placeId: null, sessions: null }
+                        : current,
+                    ),
                 }}
               >
                 {/* Only show popup when not in logging mode — clicking a
@@ -773,9 +783,13 @@ export default function SwimMap({
                     onPickExisting(p);
                   }
                 },
-                popupopen: () => setOpenPopupPlaceId(p.id),
+                popupopen: () => setPopup({ placeId: p.id, sessions: null }),
                 popupclose: () =>
-                  setOpenPopupPlaceId((cur) => (cur === p.id ? null : cur)),
+                  setPopup((current) =>
+                    current.placeId === p.id
+                      ? { placeId: null, sessions: null }
+                      : current,
+                  ),
               }}
             >
               {!isPickable ? (

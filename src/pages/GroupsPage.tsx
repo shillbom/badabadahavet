@@ -99,7 +99,8 @@ export default function GroupsPage() {
   const [groupName, setGroupName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [openGroup, setOpenGroup] = useState<GroupDoc | null>(null);
+  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  const openGroup = groups.find((group) => group.id === openGroupId) ?? null;
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Pending join confirmation: the group preview returned by lookupGroupByCode.
@@ -247,19 +248,11 @@ export default function GroupsPage() {
     try {
       await leaveGroup({ groupId, uid: user.uid });
       toast.success(t("groups.left", { name }));
-      if (openGroup?.id === groupId) setOpenGroup(null);
+      if (openGroupId === groupId) setOpenGroupId(null);
     } catch {
       toast.error(t("groups.leave.error.generic"));
     }
   }
-
-  // Keep openGroup in sync with live store updates (e.g. after a kick).
-  useEffect(() => {
-    if (!openGroup) return;
-    const live = groups.find((g) => g.id === openGroup.id);
-    if (!live) setOpenGroup(null);
-    else if (live !== openGroup) setOpenGroup(live);
-  }, [groups, openGroup]);
 
   return (
     <div className="px-4 pt-2">
@@ -320,7 +313,7 @@ export default function GroupsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4, scale: 0.97 }}
                 className="glass flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-white/60"
-                onClick={() => setOpenGroup(g)}
+                onClick={() => setOpenGroupId(g.id)}
               >
                 <EmojiAvatar emoji={g.emoji ?? "👥"} />
                 <div className="min-w-0 flex-1">
@@ -381,7 +374,7 @@ export default function GroupsPage() {
         group={openGroup}
         myUid={user?.uid ?? ""}
         places={places}
-        onClose={() => setOpenGroup(null)}
+        onClose={() => setOpenGroupId(null)}
         onLeave={() => {
           if (openGroup) onLeave(openGroup.id, openGroup.name);
         }}
@@ -467,23 +460,21 @@ function GroupDetailSheet({
   // sessions listener or re-fetch every member's profile.
   const membersKey = useMemo(() => group?.members.join("\n"), [group?.members]);
 
-  const membersChanged = useEffectEvent(() => {
+  const membersChanged = useEffectEvent(async () => {
     if (!group) return;
 
-    setLoadingProfiles(true);
-    fetchUsers(group.members).then((users) => {
-      setProfiles(users);
-      setLoadingProfiles(false);
-      return;
-    });
-
-    // Current year only — the board compares this season, and the query
-    // stays bounded as members' histories grow.
-    return watchMemberSessions(group.members, setAllSessions);
+    setProfilesState((current) => ({ ...current, loading: true }));
+    const users = await fetchUsers(group.members);
+    setProfilesState({ profiles: users, loading: false });
   });
 
   useEffect(() => {
-    return membersChanged();
+    if (!group) return;
+
+    membersChanged();
+
+    return watchMemberSessions(group.members, setAllSessions);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [membersKey]);
 
   function shareInviteLink() {
@@ -505,9 +496,15 @@ function GroupDetailSheet({
     }
   }
   const isLeader = shown?.createdBy === myUid;
-  const [profiles, setProfiles] = useState<UserDoc[]>([]);
-  const [loadingProfiles, setLoadingProfiles] = useState(true);
-  const [selectedMember, setSelectedMember] = useState<UserDoc | null>(null);
+  const [{ profiles, loading: loadingProfiles }, setProfilesState] = useState<{
+    profiles: UserDoc[];
+    loading: boolean;
+  }>({ profiles: [], loading: true });
+  const [memberSelection, setMemberSelection] = useState<{
+    member: UserDoc | null;
+    key: number;
+  }>({ member: null, key: 0 });
+  const selectedMember = memberSelection.member;
 
   // Rename state
   const [editingName, setEditingName] = useState(false);
@@ -861,7 +858,12 @@ function GroupDetailSheet({
                     >
                       <button
                         type="button"
-                        onClick={() => setSelectedMember(member)}
+                        onClick={() =>
+                          setMemberSelection((current) => ({
+                            member,
+                            key: current.key + 1,
+                          }))
+                        }
                         className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       >
                         <EmojiAvatar emoji={member.emoji} size="sm">
@@ -965,10 +967,13 @@ function GroupDetailSheet({
 
       {/* Member-detail map overlay (stacks above the group sheet) */}
       <MemberSwimsSheet
+        key={memberSelection.key}
         member={selectedMember}
         sessions={allSessions}
         places={places}
-        onClose={() => setSelectedMember(null)}
+        onClose={() =>
+          setMemberSelection((current) => ({ ...current, member: null }))
+        }
       />
     </>
   );

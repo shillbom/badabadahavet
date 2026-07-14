@@ -4,10 +4,9 @@ import { Button } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
 
 /**
- * A persistent banner shown when a new app version becomes available while
- * the user is actively using the app. Unlike the auto-update on first load,
- * this never reloads on its own — the user decides when, so an in-progress
- * swim log is never interrupted.
+ * A persistent banner shown whenever a new app version becomes available.
+ * It never reloads on its own — the user decides when, so an in-progress swim
+ * log is never interrupted.
  */
 export default function UpdatePrompt({
   show,
