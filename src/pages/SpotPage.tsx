@@ -12,6 +12,8 @@ import {
   Plus,
   Share2,
   Thermometer,
+  Droplets,
+  AlertTriangle,
   Pencil,
   Trash2,
   ImageOff,
@@ -39,9 +41,19 @@ import type {
   PlaceWithTemp,
   SessionDoc,
   TempReading,
+  WaterQuality,
 } from "@/lib/types";
 import { formatDate, rememberReturnPath, shareOrCopy } from "@/lib/utils";
 import { freshestReading } from "@/lib/temps";
+import {
+  algaeSeverity,
+  classSeverity,
+  hasDisplayableQuality,
+  isSampleFresh,
+  sampleSeverity,
+  visibleAdvisories,
+  type QualitySeverity,
+} from "@/lib/waterQuality";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import { useStore } from "@/store/sessions";
 import SwimMap from "@/components/SwimMap";
@@ -456,6 +468,8 @@ export function SpotView({
 
       <WaterTempCard reading={reading} t={t} />
 
+      <WaterQualityCard quality={place.waterQuality} t={t} />
+
       {place.nude ? (
         <div className="mt-3">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50/80 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
@@ -648,6 +662,127 @@ function WaterTempCard({
     </div>
   );
 }
+
+const QUALITY_PILL: Record<QualitySeverity, string> = {
+  ok: "bg-teal-50 text-teal-800 ring-teal-200",
+  warn: "bg-amber-50 text-amber-800 ring-amber-200",
+  bad: "bg-rose-50 text-rose-800 ring-rose-200",
+  muted: "bg-slate-50 text-slate-600 ring-slate-200",
+};
+
+/**
+ * Official water-quality checks synced from Hav och Vatten (algae bloom,
+ * latest lab-sample verdict, active bathing advisories, EU classification).
+ * Renders nothing unless there is something current worth showing — HaV
+ * samples are seasonal, so stale readings are gated out (see lib/waterQuality)
+ * and everything sample-based is dated so the reader can judge freshness.
+ */
+function WaterQualityCard({
+  quality,
+  t,
+}: {
+  quality: WaterQuality | undefined;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  if (!quality || !hasDisplayableQuality(quality)) return null;
+
+  const advisories = visibleAdvisories(quality);
+  const sampleFresh = isSampleFresh(quality.sampleAt);
+  const showAlgae = sampleFresh && (quality.algae === 3 || quality.algae === 4);
+  const showSample =
+    sampleFresh &&
+    typeof quality.sampleValue === "number" &&
+    quality.sampleValue >= 1 &&
+    quality.sampleValue <= 3;
+  const showClass =
+    typeof quality.classification === "number" &&
+    quality.classification >= 1 &&
+    quality.classification <= 4;
+
+  return (
+    <div className="mt-3 rounded-2xl bg-white/70 p-3 ring-1 ring-slate-200">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-wave-900">
+        <Droplets className="h-4 w-4 text-wave-600" />
+        {t("spot.quality.title")}
+      </div>
+
+      {advisories.map((a) => (
+        <div
+          key={`${a.type}-${a.at}`}
+          className="mb-2 flex items-start gap-2 rounded-xl bg-rose-50 px-2.5 py-2 ring-1 ring-rose-200"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-rose-600" />
+          <div className="min-w-0 text-xs text-rose-900">
+            <div className="font-semibold">
+              {t("quality.advisory.title")} · {t(advisoryTypeKey(a.type))}
+            </div>
+            {a.text ? <div className="mt-0.5">{a.text}</div> : null}
+            <div className="mt-0.5 text-[11px] text-rose-700/80">
+              {t("quality.advisory.since", { date: formatDate(a.at) })}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {showAlgae || showSample ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {showAlgae ? (
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${QUALITY_PILL[algaeSeverity(quality.algae)]}`}
+            >
+              {t(`quality.algae.${quality.algae}`)}
+            </span>
+          ) : null}
+          {showSample ? (
+            <span
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${QUALITY_PILL[sampleSeverity(quality.sampleValue)]}`}
+            >
+              {t(`quality.sample.${quality.sampleValue}`)}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {sampleFresh && quality.sampleAt && (showAlgae || showSample) ? (
+        <div className="mt-1.5 text-[11px] text-slate-500">
+          {t("spot.quality.sampled", { date: formatDate(quality.sampleAt) })}
+        </div>
+      ) : null}
+
+      {showClass ? (
+        <div className="mt-2 text-[11px] text-slate-500">
+          {t("quality.class.label", {
+            year: quality.classificationYear ?? "",
+          })}
+          {": "}
+          <span
+            className={
+              classSeverity(quality.classification) === "bad"
+                ? "font-medium text-rose-700"
+                : classSeverity(quality.classification) === "warn"
+                  ? "font-medium text-amber-700"
+                  : "text-slate-600"
+            }
+          >
+            {t(`quality.class.${quality.classification}`)}
+          </span>
+        </div>
+      ) : null}
+
+      <div className="mt-2 text-[11px] text-slate-400">
+        {t("spot.quality.source")}
+      </div>
+    </div>
+  );
+}
+
+// Advisory type codes we have a specific label for (see i18n); anything else
+// falls back to the generic "Advisory" string.
+const KNOWN_ADVISORY_TYPES = new Set([1, 99]);
+const advisoryTypeKey = (type: number) =>
+  KNOWN_ADVISORY_TYPES.has(type)
+    ? `quality.advisory.type.${type}`
+    : "quality.advisory.type.default";
 
 /** Everything `setPlaceInfo(id, null)` removes server-side, mirrored locally. */
 function withoutInfo(place: PlaceDoc): PlaceDoc {
