@@ -3,11 +3,12 @@ import { motion } from "framer-motion";
 import { Link, useSearchParams } from "react-router";
 import { ChevronRight, MapPin, Snowflake, Sparkles } from "lucide-react";
 import { useStore } from "@/store/sessions";
-import { formatDateTime } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 import { computeStreak } from "@/lib/streak";
 import { dayStartMs } from "@/lib/date";
 import Photo from "@/components/Photo";
+import SwimPhoto from "@/components/SwimPhoto";
+import SwimListItem from "@/components/SwimListItem";
 import type { SessionDoc } from "@/lib/types";
 
 function streakSessions(sessions: SessionDoc[]): SessionDoc[] {
@@ -167,39 +168,52 @@ export default function HistoryPage() {
       ) : (
         <ul className="space-y-2">
           {filtered.map((s, i) => (
-            <HistoryRow
+            <SwimListItem
               key={s.id}
               index={i}
-              to={`/spot/${s.placeId}`}
-              photoUrl={s.photoUrl}
-              photoThumb={s.photoThumb}
-              photoRounded
-              emoji="🌊"
-              title={s.placeName}
-              meta={formatDateTime(s.date)}
-              points={s.points}
-              note={s.note}
-              chips={
-                <>
-                  {s.isUniqueForUser ? (
-                    <span className="chip">
-                      <Sparkles className="h-3 w-3" />{" "}
-                      {t("history.chip.new_spot")}
-                    </span>
-                  ) : null}
-                  {s.isWinter ? (
-                    <span className="chip bg-sky-100 text-sky-800 ring-sky-200">
-                      <Snowflake className="h-3 w-3" />{" "}
-                      {t("history.chip.winter")}
-                    </span>
-                  ) : null}
-                  <span className="chip">
-                    <MapPin className="h-3 w-3" />
-                    {s.lat.toFixed(3)}, {s.lng.toFixed(3)}
-                  </span>
-                </>
+              seed={s.id}
+              thumb={
+                s.photoUrl ? (
+                  <SwimPhoto
+                    session={s}
+                    className="h-14 w-14 flex-none rounded-lg ring-1 ring-wave-200 ring-inset"
+                  />
+                ) : undefined
               }
-            />
+              title={
+                <Link
+                  to={`/spot/${s.placeId}`}
+                  className="flex items-center gap-1 font-display text-base font-bold text-wave-900"
+                >
+                  <span className="truncate">{s.placeName}</span>
+                  <ChevronRight className="h-3.5 w-3.5 flex-none text-slate-400" />
+                </Link>
+              }
+              points={s.points}
+              date={s.date}
+              note={s.note}
+            >
+              {/* Winter/unique stay as labelled chips here (not the compact
+                  inline ❄️/✨ markers) so the history page keeps its richer
+                  per-swim context, plus the coordinates chip. */}
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {s.isUniqueForUser ? (
+                  <span className="chip">
+                    <Sparkles className="h-3 w-3" />{" "}
+                    {t("history.chip.new_spot")}
+                  </span>
+                ) : null}
+                {s.isWinter ? (
+                  <span className="chip bg-sky-100 text-sky-800 ring-sky-200">
+                    <Snowflake className="h-3 w-3" /> {t("history.chip.winter")}
+                  </span>
+                ) : null}
+                <span className="chip">
+                  <MapPin className="h-3 w-3" />
+                  {s.lat.toFixed(3)}, {s.lng.toFixed(3)}
+                </span>
+              </div>
+            </SwimListItem>
           ))}
         </ul>
       )}
@@ -207,33 +221,25 @@ export default function HistoryPage() {
   );
 }
 
-/** One tappable history row: photo/emoji square, name + meta, and for swim
- *  rows a points badge, note, and chips. Shared by the spots and swims views. */
+/** One tappable spot row in the "spots" history view: a flush square cover
+ *  photo (or a water-tinted placeholder), the place name, and the swim count.
+ *  Swims use {@link SwimListItem} instead — this row is place-shaped. */
 function HistoryRow({
   index,
   to,
   photoUrl,
   photoThumb,
-  photoRounded,
   emoji,
   title,
   meta,
-  points,
-  note,
-  chips,
 }: {
   index: number;
   to: string;
   photoUrl?: string;
   photoThumb?: string;
-  /** Swim photos float with a margin + rounded corners; spot photos sit flush. */
-  photoRounded?: boolean;
   emoji: string;
   title: string;
   meta: string;
-  points?: number;
-  note?: string | null;
-  chips?: React.ReactNode;
 }) {
   return (
     <motion.li
@@ -247,40 +253,19 @@ function HistoryRow({
           <Photo
             src={photoUrl}
             thumb={photoThumb}
-            className={
-              photoRounded
-                ? "m-2 h-20 w-20 flex-none rounded-lg"
-                : "h-20 w-20 flex-none"
-            }
+            className="h-20 w-20 flex-none"
           />
         ) : (
-          <div className="flex h-20 w-20 flex-none items-center justify-center bg-wave-100 text-3xl">
-            {emoji}
+          <div className="flex h-20 w-20 flex-none items-center justify-center bg-gradient-to-br from-wave-50 to-wave-200 text-3xl">
+            <span className="drop-shadow-sm">{emoji}</span>
           </div>
         )}
         <div className="min-w-0 flex-1 p-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="flex items-center gap-1 truncate font-display text-base font-bold text-wave-900">
-                {title}
-                <ChevronRight className="h-3.5 w-3.5 flex-none text-slate-400" />
-              </div>
-              <div className="text-[11px] text-slate-500">{meta}</div>
-            </div>
-            {points != null ? (
-              <div className="flex flex-col items-end">
-                <div className="font-display text-lg font-black text-wave-700">
-                  +{points}
-                </div>
-              </div>
-            ) : null}
+          <div className="flex items-center gap-1 font-display text-base font-bold text-wave-900">
+            <span className="truncate">{title}</span>
+            <ChevronRight className="h-3.5 w-3.5 flex-none text-slate-400" />
           </div>
-          {note ? (
-            <p className="mt-1 line-clamp-2 text-xs text-slate-600">{note}</p>
-          ) : null}
-          {chips ? (
-            <div className="mt-1.5 flex flex-wrap gap-1.5">{chips}</div>
-          ) : null}
+          <div className="text-[11px] text-slate-500">{meta}</div>
         </div>
       </Link>
     </motion.li>
