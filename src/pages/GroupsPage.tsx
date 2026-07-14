@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import {
   Copy,
   LogOut,
@@ -19,7 +19,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import { Input, Label } from "@/components/ui/Input";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toastStore";
 import {
   createGroup,
   joinGroupByCode,
@@ -39,6 +39,29 @@ import { cn } from "@/lib/utils";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import EmojiAvatar from "@/components/EmojiAvatar";
 import BottomSheet from "@/components/BottomSheet";
+
+const GROUP_EMOJIS = [
+  "👥",
+  "🌊",
+  "🏊",
+  "🦭",
+  "🐬",
+  "❄️",
+  "🔥",
+  "⚡",
+  "🏆",
+  "🌴",
+  "🐋",
+  "🦑",
+  "🐟",
+  "🦀",
+  "🍀",
+  "💪",
+  "🎯",
+  "🚀",
+  "🎉",
+  "🧊",
+];
 
 /** Short "last swim" recency label + colour, for the competitive at-a-glance. */
 function recency(
@@ -76,7 +99,8 @@ export default function GroupsPage() {
   const [groupName, setGroupName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [openGroup, setOpenGroup] = useState<GroupDoc | null>(null);
+  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  const openGroup = groups.find((group) => group.id === openGroupId) ?? null;
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Pending join confirmation: the group preview returned by lookupGroupByCode.
@@ -224,19 +248,11 @@ export default function GroupsPage() {
     try {
       await leaveGroup({ groupId, uid: user.uid });
       toast.success(t("groups.left", { name }));
-      if (openGroup?.id === groupId) setOpenGroup(null);
+      if (openGroupId === groupId) setOpenGroupId(null);
     } catch {
       toast.error(t("groups.leave.error.generic"));
     }
   }
-
-  // Keep openGroup in sync with live store updates (e.g. after a kick).
-  useEffect(() => {
-    if (!openGroup) return;
-    const live = groups.find((g) => g.id === openGroup.id);
-    if (!live) setOpenGroup(null);
-    else if (live !== openGroup) setOpenGroup(live);
-  }, [groups, openGroup]);
 
   return (
     <div className="px-4 pt-2">
@@ -244,11 +260,7 @@ export default function GroupsPage() {
         {t("groups.title")}
       </h2>
 
-      <motion.form
-        onSubmit={onCreate}
-        layout
-        className="glass mb-3 space-y-3 p-4"
-      >
+      <m.form onSubmit={onCreate} layout className="glass mb-3 space-y-3 p-4">
         <Label>{t("groups.create.label")}</Label>
         <div className="flex gap-2">
           <Input
@@ -260,13 +272,9 @@ export default function GroupsPage() {
             <Plus className="h-4 w-4" />
           </Button>
         </div>
-      </motion.form>
+      </m.form>
 
-      <motion.form
-        onSubmit={onJoin}
-        layout
-        className="glass mb-5 space-y-3 p-4"
-      >
+      <m.form onSubmit={onJoin} layout className="glass mb-5 space-y-3 p-4">
         <Label>{t("groups.join.label")}</Label>
         <div className="flex gap-2">
           <Input
@@ -280,7 +288,7 @@ export default function GroupsPage() {
             <Merge className="h-4 w-4" />
           </Button>
         </div>
-      </motion.form>
+      </m.form>
 
       <div className="mb-2 flex items-baseline justify-between">
         <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
@@ -298,14 +306,14 @@ export default function GroupsPage() {
         <ul className="space-y-2">
           <AnimatePresence initial={false}>
             {groups.map((g) => (
-              <motion.li
+              <m.li
                 key={g.id}
                 layout
                 initial={{ opacity: 0, y: 4 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4, scale: 0.97 }}
                 className="glass flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-white/60"
-                onClick={() => setOpenGroup(g)}
+                onClick={() => setOpenGroupId(g.id)}
               >
                 <EmojiAvatar emoji={g.emoji ?? "👥"} />
                 <div className="min-w-0 flex-1">
@@ -356,7 +364,7 @@ export default function GroupsPage() {
                 >
                   <LogOut className="h-3.5 w-3.5" />
                 </button>
-              </motion.li>
+              </m.li>
             ))}
           </AnimatePresence>
         </ul>
@@ -366,7 +374,7 @@ export default function GroupsPage() {
         group={openGroup}
         myUid={user?.uid ?? ""}
         places={places}
-        onClose={() => setOpenGroup(null)}
+        onClose={() => setOpenGroupId(null)}
         onLeave={() => {
           if (openGroup) onLeave(openGroup.id, openGroup.name);
         }}
@@ -452,23 +460,21 @@ function GroupDetailSheet({
   // sessions listener or re-fetch every member's profile.
   const membersKey = useMemo(() => group?.members.join("\n"), [group?.members]);
 
-  const membersChanged = useEffectEvent(() => {
+  const membersChanged = useEffectEvent(async () => {
     if (!group) return;
 
-    setLoadingProfiles(true);
-    fetchUsers(group.members).then((users) => {
-      setProfiles(users);
-      setLoadingProfiles(false);
-      return;
-    });
-
-    // Current year only — the board compares this season, and the query
-    // stays bounded as members' histories grow.
-    return watchMemberSessions(group.members, setAllSessions);
+    setProfilesState((current) => ({ ...current, loading: true }));
+    const users = await fetchUsers(group.members);
+    setProfilesState({ profiles: users, loading: false });
   });
 
   useEffect(() => {
-    return membersChanged();
+    if (!group) return;
+
+    membersChanged();
+
+    return watchMemberSessions(group.members, setAllSessions);
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [membersKey]);
 
   function shareInviteLink() {
@@ -490,9 +496,15 @@ function GroupDetailSheet({
     }
   }
   const isLeader = shown?.createdBy === myUid;
-  const [profiles, setProfiles] = useState<UserDoc[]>([]);
-  const [loadingProfiles, setLoadingProfiles] = useState(true);
-  const [selectedMember, setSelectedMember] = useState<UserDoc | null>(null);
+  const [{ profiles, loading: loadingProfiles }, setProfilesState] = useState<{
+    profiles: UserDoc[];
+    loading: boolean;
+  }>({ profiles: [], loading: true });
+  const [memberSelection, setMemberSelection] = useState<{
+    member: UserDoc | null;
+    key: number;
+  }>({ member: null, key: 0 });
+  const selectedMember = memberSelection.member;
 
   // Rename state
   const [editingName, setEditingName] = useState(false);
@@ -506,29 +518,6 @@ function GroupDetailSheet({
     top: number;
     left: number;
   } | null>(null);
-
-  const GROUP_EMOJIS = [
-    "👥",
-    "🌊",
-    "🏊",
-    "🦭",
-    "🐬",
-    "❄️",
-    "🔥",
-    "⚡",
-    "🏆",
-    "🌴",
-    "🐋",
-    "🦑",
-    "🐟",
-    "🦀",
-    "🍀",
-    "💪",
-    "🎯",
-    "🚀",
-    "🎉",
-    "🧊",
-  ];
 
   useEffect(() => {
     if (shown) setNameInput(shown.name);
@@ -612,8 +601,9 @@ function GroupDetailSheet({
     const uids = new Set<string>();
     if (topPoints <= 0) return uids;
     // One pass instead of filter-then-map over the member list.
-    for (const m of sortedMembers) {
-      if ((memberStats.get(m.uid)?.points ?? 0) === topPoints) uids.add(m.uid);
+    for (const member of sortedMembers) {
+      if ((memberStats.get(member.uid)?.points ?? 0) === topPoints)
+        uids.add(member.uid);
     }
     return uids;
   }, [sortedMembers, memberStats, topPoints]);
@@ -710,7 +700,7 @@ function GroupDetailSheet({
                     onClick={() => setEmojiPickerOpen(false)}
                     className="fixed inset-0 z-[1300] cursor-default bg-transparent"
                   />
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0, scale: 0.9, y: -4 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: -4 }}
@@ -747,7 +737,7 @@ function GroupDetailSheet({
                         );
                       })}
                     </div>
-                  </motion.div>
+                  </m.div>
                 </>
               )}
             </AnimatePresence>,
@@ -864,82 +854,85 @@ function GroupDetailSheet({
                   return (
                     <li
                       key={member.uid}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedMember(member)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setSelectedMember(member);
-                        }
-                      }}
                       className="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/70 px-3 py-2.5 ring-1 ring-white/60 transition hover:bg-white/90 active:scale-[0.99]"
                     >
-                      <EmojiAvatar emoji={member.emoji} size="sm">
-                        {sortBy === "points" && leaderUids.has(member.uid) && (
-                          <motion.span
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{
-                              type: "spring",
-                              stiffness: 500,
-                              damping: 20,
-                            }}
-                            className="absolute -top-1 -right-1 text-[10px]"
-                            title={
-                              tiedForLead
-                                ? t("groups.detail.tied")
-                                : t("groups.detail.lead")
-                            }
-                          >
-                            {tiedForLead ? "🪢" : "🥇"}
-                          </motion.span>
-                        )}
-                      </EmojiAvatar>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-wave-900">
-                          {member.displayName}
-                          {isMe && (
-                            <span className="text-[10px] text-wave-500">
-                              {t("common.you")}
-                            </span>
-                          )}
-                          {member.uid === shown.createdBy && (
-                            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-700 uppercase">
-                              {t("groups.founder")}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                          <span className="font-semibold text-wave-700">
-                            {stats.points} {t("groups.detail.points")}
-                          </span>
-                          <span>·</span>
-                          <span className="flex items-center gap-0.5">
-                            <Waves className="h-2.5 w-2.5" /> {stats.swims}{" "}
-                            {t("groups.detail.swims")}
-                          </span>
-                          <span>·</span>
-                          <span
-                            className={cn(
-                              "flex items-center gap-0.5",
-                              stats.streak > 0 &&
-                                "font-semibold text-orange-600",
-                            )}
-                          >
-                            🔥 {stats.streak}
-                          </span>
-                        </div>
-                      </div>
-                      <span
-                        className={cn(
-                          "flex-none rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap",
-                          last.cls,
-                        )}
-                        title={t("groups.last.tooltip")}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setMemberSelection((current) => ({
+                            member,
+                            key: current.key + 1,
+                          }))
+                        }
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       >
-                        {last.label}
-                      </span>
+                        <EmojiAvatar emoji={member.emoji} size="sm">
+                          {sortBy === "points" &&
+                            leaderUids.has(member.uid) && (
+                              <m.span
+                                initial={{ scale: 0.95, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{
+                                  type: "spring",
+                                  stiffness: 500,
+                                  damping: 20,
+                                }}
+                                className="absolute -top-1 -right-1 text-[10px]"
+                                title={
+                                  tiedForLead
+                                    ? t("groups.detail.tied")
+                                    : t("groups.detail.lead")
+                                }
+                              >
+                                {tiedForLead ? "🪢" : "🥇"}
+                              </m.span>
+                            )}
+                        </EmojiAvatar>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 truncate text-sm font-semibold text-wave-900">
+                            {member.displayName}
+                            {isMe && (
+                              <span className="text-[10px] text-wave-500">
+                                {t("common.you")}
+                              </span>
+                            )}
+                            {member.uid === shown.createdBy && (
+                              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-amber-700 uppercase">
+                                {t("groups.founder")}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                            <span className="font-semibold text-wave-700">
+                              {stats.points} {t("groups.detail.points")}
+                            </span>
+                            <span>·</span>
+                            <span className="flex items-center gap-0.5">
+                              <Waves className="h-2.5 w-2.5" /> {stats.swims}{" "}
+                              {t("groups.detail.swims")}
+                            </span>
+                            <span>·</span>
+                            <span
+                              className={cn(
+                                "flex items-center gap-0.5",
+                                stats.streak > 0 &&
+                                  "font-semibold text-orange-600",
+                              )}
+                            >
+                              🔥 {stats.streak}
+                            </span>
+                          </div>
+                        </div>
+                        <span
+                          className={cn(
+                            "flex-none rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap",
+                            last.cls,
+                          )}
+                          title={t("groups.last.tooltip")}
+                        >
+                          {last.label}
+                        </span>
+                      </button>
                       {isLeader && !isMe ? (
                         <button
                           type="button"
@@ -974,10 +967,13 @@ function GroupDetailSheet({
 
       {/* Member-detail map overlay (stacks above the group sheet) */}
       <MemberSwimsSheet
+        key={memberSelection.key}
         member={selectedMember}
         sessions={allSessions}
         places={places}
-        onClose={() => setSelectedMember(null)}
+        onClose={() =>
+          setMemberSelection((current) => ({ ...current, member: null }))
+        }
       />
     </>
   );

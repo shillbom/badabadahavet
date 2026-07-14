@@ -3,7 +3,7 @@ import { Navigate } from "react-router";
 import { getRedirectResult } from "firebase/auth";
 import { auth } from "@/firebase";
 import { FullSplash } from "@/components/Splash";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toastStore";
 import { useT } from "@/lib/i18n";
 import { consumeReturnPath } from "@/lib/utils";
 

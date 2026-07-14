@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import {
   Check,
   ChevronDown,
@@ -91,7 +91,7 @@ export default function StreakPage() {
       </div>
 
       {/* Hero card — big count, last-10-days row, buoy balance + rules. */}
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         className="glass overflow-hidden"
@@ -169,10 +169,10 @@ export default function StreakPage() {
         </button>
         <AnimatePresence initial={false}>
           {rulesOpen ? (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
+            <m.div
+              initial={{ scaleX: 0, opacity: 0 }}
+              animate={{ scaleX: 1, opacity: 1 }}
+              exit={{ scaleX: 0, opacity: 0 }}
               className="overflow-hidden bg-white/50"
             >
               <div className="space-y-2 px-4 pb-4 text-xs text-slate-600">
@@ -184,10 +184,10 @@ export default function StreakPage() {
                 <p>3. {t("streak.rules.3")}</p>
                 <p>4. {t("streak.rules.4")}</p>
               </div>
-            </motion.div>
+            </m.div>
           ) : null}
         </AnimatePresence>
-      </motion.div>
+      </m.div>
 
       {/* Quick stats. */}
       <div className="mt-3 grid grid-cols-2 gap-2">
@@ -254,7 +254,7 @@ function Calendar({
   }, [view]);
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       className="glass mt-3 p-4"
@@ -333,6 +333,6 @@ function Calendar({
           {t("streak.legend.today")}
         </span>
       </div>
-    </motion.div>
+    </m.div>
   );
 }

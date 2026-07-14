@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef } from "react";
 import { List as ListIcon, Map as MapIcon, MapPin } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
@@ -10,6 +10,37 @@ import BottomSheet from "@/components/BottomSheet";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import EmojiAvatar from "@/components/EmojiAvatar";
 import type { PlaceWithTemp, SessionDoc, UserDoc } from "@/lib/types";
+
+type Props = {
+  member: UserDoc | null;
+  sessions: SessionDoc[];
+  places: PlaceWithTemp[];
+  onClose: () => void;
+  /** Backdrop z-index; the sheet sits at zBase + 100. */
+  zBase?: number;
+};
+
+type SheetState = {
+  view: "map" | "list";
+  focus: { id: string; token: number } | null;
+};
+
+type SheetAction =
+  | { type: "set-view"; view: SheetState["view"] }
+  | { type: "show-place"; placeId: string; token: number };
+
+function sheetReducer(state: SheetState, action: SheetAction): SheetState {
+  if (action.type === "show-place") {
+    return {
+      view: "map",
+      focus: { id: action.placeId, token: action.token },
+    };
+  }
+  return {
+    view: action.view,
+    focus: action.view === "map" ? null : state.focus,
+  };
+}
 
 /**
  * Bottom-sheet showing one swimmer's swims with a map / list switcher.
@@ -26,41 +57,45 @@ export default function MemberSwimsSheet({
   places,
   onClose,
   zBase = 1300,
-}: {
-  member: UserDoc | null;
-  sessions: SessionDoc[];
-  places: PlaceWithTemp[];
-  onClose: () => void;
-  /** Backdrop z-index; the sheet sits at zBase + 100. */
-  zBase?: number;
-}) {
-  const t = useT();
-  const { user } = useAuth();
-  const [view, setView] = useState<"map" | "list">("map");
-  // A place to reveal on the map (tapped from the list). The token re-fires
-  // the focus even when the same place is tapped twice.
-  const [focus, setFocus] = useState<{ id: string; token: number } | null>(
-    null,
-  );
-
-  // Keep the closing frame populated while the sheet slides away. Written
-  // from an effect (after commit) rather than during render, which must be pure.
+}: Props) {
+  // Keep the closing frame populated while the sheet slides away.
   const lastMemberRef = useRef<UserDoc | null>(null);
   useEffect(() => {
     if (member) lastMemberRef.current = member;
   }, [member]);
   const shown = member ?? lastMemberRef.current;
 
-  // Fresh member → start over on the map view without a stale focus.
-  useEffect(() => {
-    if (!member) return;
-    setView("map");
-    setFocus(null);
-  }, [member?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <MemberSwimsSheetContent
+      key={shown?.uid ?? "empty"}
+      member={shown}
+      open={member !== null}
+      sessions={sessions}
+      places={places}
+      onClose={onClose}
+      zBase={zBase}
+    />
+  );
+}
+
+function MemberSwimsSheetContent({
+  member,
+  open,
+  sessions,
+  places,
+  onClose,
+  zBase,
+}: Omit<Props, "member"> & { member: UserDoc | null; open: boolean }) {
+  const t = useT();
+  const { user } = useAuth();
+  const [{ view, focus }, dispatch] = useReducer(sheetReducer, {
+    view: "map",
+    focus: null,
+  });
+  const shown = member;
 
   function showOnMap(placeId: string) {
-    setFocus({ id: placeId, token: Date.now() });
-    setView("map");
+    dispatch({ type: "show-place", placeId, token: Date.now() });
   }
 
   const memberSessions = useMemo(
@@ -115,7 +150,7 @@ export default function MemberSwimsSheet({
   ) : null;
 
   return (
-    <BottomSheet open={!!member} onClose={onClose} zBase={zBase} title={title}>
+    <BottomSheet open={open} onClose={onClose} zBase={zBase} title={title}>
       {memberPlaces.length === 0 ? (
         <div className="px-3 pb-[max(env(safe-area-inset-bottom),1rem)]">
           <div className="flex h-[60dvh] items-center justify-center rounded-2xl bg-white/60 text-sm text-slate-500">
@@ -129,10 +164,7 @@ export default function MemberSwimsSheet({
             <SegmentedControl
               size="sm"
               value={view}
-              onChange={(next) => {
-                if (next === "map") setFocus(null);
-                setView(next);
-              }}
+              onChange={(next) => dispatch({ type: "set-view", view: next })}
               options={[
                 {
                   value: "map",

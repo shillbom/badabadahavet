@@ -1,5 +1,5 @@
-import { lazy, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { lazy, useMemo, useReducer, useState } from "react";
+import { m } from "framer-motion";
 import { MapPin, Trophy } from "lucide-react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { sumScores } from "@/lib/scoring";
@@ -30,8 +30,16 @@ export default function MapPage() {
   // Fall back to Firestore lastLocation while GPS hasn't resolved yet
   const myLocation = currentLocation ?? profile?.lastLocation ?? null;
 
-  const [fitToken, setFitToken] = useState(0);
-  const [showAll, setShowAll] = useState(true);
+  const [{ fitToken, showAll }, dispatchMapView] = useReducer(
+    (
+      state: { fitToken: number; showAll: boolean },
+      action: { type: "refit" } | { type: "showAll"; value: boolean },
+    ) =>
+      action.type === "refit"
+        ? { ...state, fitToken: state.fitToken + 1 }
+        : { showAll: action.value, fitToken: state.fitToken + 1 },
+    { fitToken: 0, showAll: true },
+  );
   // ⋯ menu naturist filter: "only" = just naturist spots, "on" (default) =
   // everything, "off" = hide naturist spots.
   const [nudeMode, setNudeMode] = useState<"only" | "on" | "off">("on");
@@ -43,14 +51,9 @@ export default function MapPage() {
     return base;
   }, [isGuest, showAll, places, myPlaces, nudeMode]);
 
-  // Re-fit whenever the toggle changes so switching to "my places" zooms
-  // in to fit them, and switching to "all" re-centres on user position.
-  const prevShowAll = useRef(showAll);
-  useEffect(() => {
-    if (showAll === prevShowAll.current) return;
-    prevShowAll.current = showAll;
-    setFitToken((n) => n + 1);
-  }, [showAll]);
+  function changeShowAll(next: boolean) {
+    dispatchMapView({ type: "showAll", value: next });
+  }
 
   // Hold the map until we have a real position when permission is already granted
   // (prevents Stockholm → real-location ping-pong on first load)
@@ -65,12 +68,12 @@ export default function MapPage() {
     : myStats.totalPoints;
 
   // Stable random seed picked once per mount — prevents re-roll on every render.
-  const greetingSeed = useRef(Math.floor(Math.random() * 1000));
+  const [greetingSeed] = useState(() => Math.floor(Math.random() * 1000));
   // Re-derive greeting when locale or profile name changes.
   const locale = useLocale((s) => s.locale);
   const greetingName = profile?.displayName ?? t("layout.swimmer");
   const greeting = useMemo(
-    () => getTimeGreeting(greetingName, greetingSeed.current),
+    () => getTimeGreeting(greetingName, greetingSeed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [greetingName, locale],
   );
@@ -87,7 +90,7 @@ export default function MapPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+6rem)]">
       {isGuest ? (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="glass flex items-center justify-between gap-3 p-3 lg:mx-auto lg:w-full lg:max-w-2xl"
@@ -100,9 +103,9 @@ export default function MapPage() {
               {t("map.guest.subtitle")}
             </div>
           </div>
-        </motion.div>
+        </m.div>
       ) : (
-        <motion.div
+        <m.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           className="lg:mx-auto lg:w-full lg:max-w-2xl"
@@ -111,7 +114,7 @@ export default function MapPage() {
             {greeting}
           </h2>
           <p className="text-sm text-slate-500">{subtitle}</p>
-        </motion.div>
+        </m.div>
       )}
 
       {!isGuest ? (
@@ -127,9 +130,9 @@ export default function MapPage() {
           />
           <Stat
             onClick={() =>
-              // Switch to "my places" mode (the showAll effect re-fits the
-              // bounds). If already there, just re-fit.
-              showAll ? setShowAll(false) : setFitToken((n) => n + 1)
+              showAll
+                ? changeShowAll(false)
+                : dispatchMapView({ type: "refit" })
             }
             size="lg"
             animate
@@ -160,7 +163,7 @@ export default function MapPage() {
                       {
                         label: t("map.filter.mine"),
                         checked: !showAll,
-                        onChange: (mine: boolean) => setShowAll(!mine),
+                        onChange: (mine: boolean) => changeShowAll(!mine),
                       },
                     ]),
                 {

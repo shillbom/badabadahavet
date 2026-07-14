@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { motion, AnimatePresence, useDragControls } from "framer-motion";
+import { m, AnimatePresence, useDragControls } from "framer-motion";
 import { X } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -46,7 +46,7 @@ export default function BottomSheet({
     <AnimatePresence>
       {open ? (
         <>
-          <motion.div
+          <m.div
             key="bs-backdrop"
             // Decorative click-away layer; keyboard users close via the X
             // button, so hide it from assistive tech rather than making a
@@ -59,7 +59,7 @@ export default function BottomSheet({
             style={{ zIndex: zBase }}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm"
           />
-          <motion.div
+          <m.div
             key="bs-sheet"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
@@ -127,7 +127,7 @@ export default function BottomSheet({
                 {children}
               </>
             )}
-          </motion.div>
+          </m.div>
         </>
       ) : null}
     </AnimatePresence>

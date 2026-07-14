@@ -51,10 +51,11 @@ import SwimListItem from "@/components/SwimListItem";
 import { useAuth } from "@/auth/AuthContext";
 import { useIsAdmin } from "@/lib/adminMode";
 import { useT } from "@/lib/i18n";
-import { Button, buttonClasses } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { Textarea } from "@/components/ui/Input";
 import Stat from "@/components/ui/Stat";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toastStore";
 
 /**
  * The spot detail UI (map, stats, photos, recent dips). Extracted from the
@@ -77,7 +78,13 @@ export function SpotView({
   const { user, profile } = useAuth();
   const isAdmin = useIsAdmin();
   const t = useT();
-  const [place, setPlace] = useState<PlaceDoc | null>(null);
+  const [{ place, loading }, setPlaceState] = useState<{
+    place: PlaceDoc | null;
+    loading: boolean;
+  }>({ place: null, loading: true });
+  const setPlace = (next: PlaceDoc) => {
+    setPlaceState((current) => ({ ...current, place: next }));
+  };
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
   // The live per-place reading (placeTemps/{id}) — fresher than the daily
   // summary once an on-demand refresh has landed. undefined = the snapshot
@@ -86,7 +93,6 @@ export function SpotView({
   const [liveTemp, setLiveTemp] = useState<PlaceTempDoc | null | undefined>(
     undefined,
   );
-  const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
   const focusedSessionId = searchParams.get("session");
   // Track which sessions have been highlighted once so we don't replay
@@ -102,11 +108,10 @@ export function SpotView({
     let cancelled = false;
     getPlace(placeId).then((p) => {
       if (cancelled) return;
-      setPlace(p);
-      setLoading(false);
+      setPlaceState({ place: p, loading: false });
       return;
     });
-    const unsub = watchPlaceSessions(placeId, (s) => setSessions(s));
+    const unsub = watchPlaceSessions(placeId, setSessions);
     setLiveTemp(undefined);
     const unsubTemp = watchPlaceTemp(placeId, setLiveTemp);
     return () => {

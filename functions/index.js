@@ -863,27 +863,29 @@ export const logSession = onCall(
 
     const result = await db.runTransaction(async (tx) => {
       // ── reads (all before any writes) ──
-      const userSnap = await tx.get(userRef);
+      const [userSnap, dupSnap, yearSnap, placeSnap] = await Promise.all([
+        tx.get(userRef),
+        tx.get(
+          sessionsCol
+            .where("uid", "==", uid)
+            .where("placeId", "==", placeId)
+            .limit(1),
+        ),
+        tx.get(
+          sessionsCol
+            .where("uid", "==", uid)
+            .where("date", ">=", yStart)
+            .where("date", "<", yEnd)
+            // orderBy matches the existing (uid, date DESC) composite index;
+            // without it Firestore demands a separate (uid, date ASC) index.
+            .orderBy("date", "desc"),
+        ),
+        tx.get(placeRef),
+      ]);
       if (!userSnap.exists) {
         throw new HttpsError("failed-precondition", "No profile yet.");
       }
       const user = userSnap.data();
-      const dupSnap = await tx.get(
-        sessionsCol
-          .where("uid", "==", uid)
-          .where("placeId", "==", placeId)
-          .limit(1),
-      );
-      const yearSnap = await tx.get(
-        sessionsCol
-          .where("uid", "==", uid)
-          .where("date", ">=", yStart)
-          .where("date", "<", yEnd)
-          // orderBy matches the existing (uid, date DESC) composite index;
-          // without it Firestore demands a separate (uid, date ASC) index.
-          .orderBy("date", "desc"),
-      );
-      const placeSnap = await tx.get(placeRef);
 
       // ── compute ──
       const isUniqueForUser = dupSnap.empty;
@@ -1116,17 +1118,17 @@ async function purgeUserData(uid) {
     .collection("groups")
     .where("members", "array-contains", uid)
     .get();
-  for (const g of groups.docs) {
-    const data = g.data();
-    const remaining = (data.members ?? []).filter((m) => m !== uid);
-    if (remaining.length === 0) {
-      await g.ref.delete();
-    } else if (data.createdBy === uid) {
-      await g.ref.update({ members: remaining, createdBy: remaining[0] });
-    } else {
-      await g.ref.update({ members: FieldValue.arrayRemove(uid) });
-    }
-  }
+  await Promise.all(
+    groups.docs.map((g) => {
+      const data = g.data();
+      const remaining = (data.members ?? []).filter((m) => m !== uid);
+      if (remaining.length === 0) return g.ref.delete();
+      if (data.createdBy === uid) {
+        return g.ref.update({ members: remaining, createdBy: remaining[0] });
+      }
+      return g.ref.update({ members: FieldValue.arrayRemove(uid) });
+    }),
+  );
 
   await db.collection("users").doc(uid).delete();
 

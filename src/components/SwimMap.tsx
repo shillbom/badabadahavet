@@ -10,6 +10,7 @@ import MarkerClusterGroup from "react-leaflet-cluster";
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -32,7 +33,7 @@ import { watchPlaceSessions } from "@/lib/data";
 import { pinRingFor } from "@/lib/borders";
 import type { PlaceWithTemp, SessionDoc } from "@/lib/types";
 import { formatDate, cn } from "@/lib/utils";
-import { buttonClasses } from "@/components/ui/Button";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useT } from "@/lib/i18n";
 
 // Fix default marker icon paths for bundlers (Leaflet's default icons are broken under Vite).
@@ -427,14 +428,20 @@ export default function SwimMap({
   // into a content node that persists after the popup closes, so a hook in
   // the content component would keep listeners alive for every popup ever
   // opened. Leaflet only shows one popup at a time → at most one listener.
-  const [openPopupPlaceId, setOpenPopupPlaceId] = useState<string | null>(null);
-  const [livePopupSessions, setLivePopupSessions] = useState<
-    SessionDoc[] | null
-  >(null);
+  const [{ placeId: openPopupPlaceId, sessions: livePopupSessions }, setPopup] =
+    useState<{
+      placeId: string | null;
+      sessions: SessionDoc[] | null;
+    }>({ placeId: null, sessions: null });
   useEffect(() => {
     if (!openPopupPlaceId) return;
-    setLivePopupSessions(null);
-    return watchPlaceSessions(openPopupPlaceId, setLivePopupSessions);
+    return watchPlaceSessions(openPopupPlaceId, (sessions) => {
+      setPopup((current) =>
+        current.placeId === openPopupPlaceId
+          ? { ...current, sessions }
+          : current,
+      );
+    });
   }, [openPopupPlaceId]);
   // Feed data fills the popup instantly; the live snapshot replaces it.
   const popupSessionsFor = (placeId: string): SessionDoc[] =>
@@ -539,7 +546,9 @@ export default function SwimMap({
     return m;
   }, [places]);
   const tempByPosRef = useRef(tempByPos);
-  tempByPosRef.current = tempByPos;
+  useEffect(() => {
+    tempByPosRef.current = tempByPos;
+  }, [tempByPos]);
 
   // Position → last-swim timestamp, so a cluster can tint itself by the
   // most-recently-swum place beneath it (same ref trick as temps).
@@ -552,7 +561,9 @@ export default function SwimMap({
     return m;
   }, [places]);
   const lastSwimByPosRef = useRef(lastSwimByPos);
-  lastSwimByPosRef.current = lastSwimByPos;
+  useEffect(() => {
+    lastSwimByPosRef.current = lastSwimByPos;
+  }, [lastSwimByPos]);
 
   const createClusterIcon = useCallback(
     (cluster: {
@@ -625,7 +636,9 @@ export default function SwimMap({
   } else {
     shouldCluster = clusteringRef.current;
   }
-  clusteringRef.current = shouldCluster;
+  useEffect(() => {
+    clusteringRef.current = shouldCluster;
+  }, [shouldCluster]);
 
   return (
     <div
@@ -726,9 +739,13 @@ export default function SwimMap({
                       onPickExisting(p);
                     }
                   },
-                  popupopen: () => setOpenPopupPlaceId(p.id),
+                  popupopen: () => setPopup({ placeId: p.id, sessions: null }),
                   popupclose: () =>
-                    setOpenPopupPlaceId((cur) => (cur === p.id ? null : cur)),
+                    setPopup((current) =>
+                      current.placeId === p.id
+                        ? { placeId: null, sessions: null }
+                        : current,
+                    ),
                 }}
               >
                 {/* Only show popup when not in logging mode — clicking a
@@ -766,9 +783,13 @@ export default function SwimMap({
                     onPickExisting(p);
                   }
                 },
-                popupopen: () => setOpenPopupPlaceId(p.id),
+                popupopen: () => setPopup({ placeId: p.id, sessions: null }),
                 popupclose: () =>
-                  setOpenPopupPlaceId((cur) => (cur === p.id ? null : cur)),
+                  setPopup((current) =>
+                    current.placeId === p.id
+                      ? { placeId: null, sessions: null }
+                      : current,
+                  ),
               }}
             >
               {!isPickable ? (
@@ -1099,19 +1120,20 @@ function ViewportPinCount({
   onCount: (n: number) => void;
 }) {
   const map = useMap();
+  const reportCount = useEffectEvent(onCount);
   useEffect(() => {
     const measure = () => {
       const bounds = map.getBounds();
       let n = 0;
       for (const p of places) if (bounds.contains([p.lat, p.lng])) n++;
-      onCount(n);
+      reportCount(n);
     };
     measure();
     map.on("moveend zoomend", measure);
     return () => {
       map.off("moveend zoomend", measure);
     };
-  }, [map, places, onCount]);
+  }, [map, places]);
   return null;
 }
 
@@ -1416,13 +1438,14 @@ function ClickToPick({
   onPick: (lat: number, lng: number) => void;
 }) {
   const map = useMap();
+  const pick = useEffectEvent(onPick);
   useEffect(() => {
     const handler = (e: L.LeafletMouseEvent) =>
-      onPick(e.latlng.lat, e.latlng.lng);
+      pick(e.latlng.lat, e.latlng.lng);
     map.on("click", handler);
     return () => {
       map.off("click", handler);
     };
-  }, [map, onPick]);
+  }, [map]);
   return null;
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import {
   Check,
   ChevronRight,
@@ -15,7 +15,7 @@ import { useStore } from "@/store/sessions";
 import { addToSwim, removeFromSwim } from "@/lib/data";
 import { useT } from "@/lib/i18n";
 import { formatDate } from "@/lib/utils";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toastStore";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import SegmentedControl from "@/components/ui/SegmentedControl";
@@ -32,19 +32,19 @@ export default function ToswimPage() {
   const [search, setSearch] = useState("");
 
   const placesById = useMemo(() => {
-    const m = new Map<string, PlaceDoc>();
-    for (const p of places) m.set(p.id, p);
-    return m;
+    const byId = new Map<string, PlaceDoc>();
+    for (const p of places) byId.set(p.id, p);
+    return byId;
   }, [places]);
 
   // First swim date per place — undefined means I haven't swum there yet.
   const firstSwimAt = useMemo(() => {
-    const m = new Map<string, number>();
+    const byPlace = new Map<string, number>();
     for (const s of mySessions) {
-      const cur = m.get(s.placeId);
-      if (cur === undefined || s.date < cur) m.set(s.placeId, s.date);
+      const cur = byPlace.get(s.placeId);
+      if (cur === undefined || s.date < cur) byPlace.set(s.placeId, s.date);
     }
-    return m;
+    return byPlace;
   }, [mySessions]);
 
   const entries = useMemo(() => {
@@ -189,7 +189,7 @@ export default function ToswimPage() {
       ) : (
         <ul className="space-y-2">
           {visible.map((e, i) => (
-            <motion.li
+            <m.li
               key={e.placeId}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
@@ -265,7 +265,7 @@ export default function ToswimPage() {
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
-            </motion.li>
+            </m.li>
           ))}
         </ul>
       )}

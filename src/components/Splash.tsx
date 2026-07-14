@@ -8,7 +8,7 @@
  * lazy boundaries exist to avoid. CSS animates it for free. Styles live in
  * src/index.css (`.app-splash*`).
  */
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { getBootReady, subscribeBootReady } from "@/lib/bootSignal";
 
 function SplashArt() {
@@ -50,17 +50,17 @@ const MIN_VISIBLE_MS = 1100;
 export function BootSplash() {
   const ready = useSyncExternalStore(subscribeBootReady, getBootReady);
   const [phase, setPhase] = useState<"intro" | "leaving" | "gone">("intro");
-  const startedAt = useRef(Date.now());
+  const [startedAt] = useState(Date.now);
 
   useEffect(() => {
     if (!ready) return;
-    const wait = Math.max(0, MIN_VISIBLE_MS - (Date.now() - startedAt.current));
+    const wait = Math.max(0, MIN_VISIBLE_MS - (Date.now() - startedAt));
     const timer = window.setTimeout(
       () => setPhase((p) => (p === "intro" ? "leaving" : p)),
       wait,
     );
     return () => window.clearTimeout(timer);
-  }, [ready]);
+  }, [ready, startedAt]);
 
   if (phase === "gone") return null;
 

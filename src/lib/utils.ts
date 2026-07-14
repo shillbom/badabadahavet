@@ -138,3 +138,18 @@ export async function shareOrCopy(opts: {
   }
   return "failed";
 }
+
+export async function getPosition(): Promise<GeolocationPosition | null> {
+  return new Promise<GeolocationPosition | null>((resolve) => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve(pos);
+      },
+      () => {
+        resolve(null);
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
+    );
+  });
+}

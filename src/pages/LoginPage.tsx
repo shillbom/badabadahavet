@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useReducer, useRef, useState } from "react";
+import { m, AnimatePresence } from "framer-motion";
 import {
   Globe,
   Info,
@@ -15,7 +15,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import { Input, Label } from "@/components/ui/Input";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toastStore";
 import { useLocale, useT } from "@/lib/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import {
@@ -47,16 +47,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const setLocale = useLocale((s) => s.setLocale);
-  const [homeCountry, setHomeCountryState] = useState<string>(() =>
+  const [homeCountry, dispatchHomeCountry] = useReducer(
+    (_current: string, next: string) => next,
     pickerCodeFor(detectBrowserCountry()),
   );
-  const [homeCountryTouched, setHomeCountryTouched] = useState(false);
+  const homeCountryTouchedRef = useRef(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
 
   function setHomeCountry(code: string, fromUser: boolean) {
-    setHomeCountryState(code);
-    if (fromUser) setHomeCountryTouched(true);
+    dispatchHomeCountry(code);
+    if (fromUser) homeCountryTouchedRef.current = true;
     // Auto-pair the locale: SE → Swedish, anything else → English.
     setLocale(code === "SE" ? "sv" : "en");
   }
@@ -81,7 +82,7 @@ export default function LoginPage() {
           pos.coords.latitude,
           pos.coords.longitude,
         );
-        if (cancelled || homeCountryTouched) return;
+        if (cancelled || homeCountryTouchedRef.current) return;
         const code = pickerCodeFor(real);
         setHomeCountry(code, false);
       },
@@ -218,7 +219,7 @@ export default function LoginPage() {
           </button>
           <LanguageSwitcher />
         </div>
-        <motion.div
+        <m.div
           initial={{ y: 16, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: "spring", stiffness: 220, damping: 22 }}
@@ -237,9 +238,9 @@ export default function LoginPage() {
           <p className="mt-1 text-sm text-wave-700">
             {t("auth.google.onboarding.title")}
           </p>
-        </motion.div>
+        </m.div>
 
-        <motion.form
+        <m.form
           onSubmit={onCompleteOnboarding}
           initial={{ y: 24, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -321,7 +322,7 @@ export default function LoginPage() {
             {t("auth.google.onboarding.submit")}
             <Sparkles className="h-4 w-4" />
           </Button>
-        </motion.form>
+        </m.form>
 
         <AnimatePresence>
           {termsOpen ? (
@@ -353,7 +354,7 @@ export default function LoginPage() {
         </button>
         <LanguageSwitcher />
       </div>
-      <motion.div
+      <m.div
         initial={{ y: 16, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 220, damping: 22 }}
@@ -370,9 +371,9 @@ export default function LoginPage() {
           {t("app.name")}
         </h1>
         <p className="mt-1 text-sm text-wave-700">{t("app.tagline")}</p>
-      </motion.div>
+      </m.div>
 
-      <motion.form
+      <m.form
         onSubmit={submit}
         initial={{ y: 24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -554,7 +555,7 @@ export default function LoginPage() {
         >
           {t("auth.browse_as_guest")}
         </button>
-      </motion.form>
+      </m.form>
 
       <AnimatePresence>
         {termsOpen ? (
@@ -592,7 +593,7 @@ function TermsModal({
   onClose: () => void;
 }) {
   return (
-    <motion.div
+    <m.div
       key="terms-backdrop"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -600,7 +601,7 @@ function TermsModal({
       onClick={onClose}
       className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 px-4 backdrop-blur-sm"
     >
-      <motion.div
+      <m.div
         key="terms-modal"
         initial={{ y: 16, opacity: 0, scale: 0.97 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -640,8 +641,8 @@ function TermsModal({
             {t("terms.accept")}
           </Button>
         </div>
-      </motion.div>
-    </motion.div>
+      </m.div>
+    </m.div>
   );
 }
 

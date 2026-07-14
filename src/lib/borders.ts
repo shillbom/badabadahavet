@@ -161,14 +161,6 @@ export function isBorderUnlocked(
     : unlocked.has(b.unlock.achievementId);
 }
 
-/** Borders the user is allowed to pick, in catalog order. */
-export function unlockedBorders(
-  achievementCount: number,
-  unlocked: Set<string>,
-): Border[] {
-  return BORDERS.filter((b) => isBorderUnlocked(b, achievementCount, unlocked));
-}
-
 /** Highest count-tier the user has reached (the auto default / "rank"). */
 export function tierForCount(achievementCount: number): Border {
   let best = NONE_BORDER;

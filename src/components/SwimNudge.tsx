@@ -6,7 +6,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
 import { haversineMeters } from "@/lib/utils";
 import BottomSheet from "@/components/BottomSheet";
-import { buttonClasses } from "@/components/ui/Button";
+import { buttonClasses } from "@/components/ui/buttonStyles";
 
 /**
  * "Where should I swim?" — recommends the closest place the user has never

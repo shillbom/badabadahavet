@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, useInView } from "framer-motion";
+import { m, useInView } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
@@ -11,6 +11,7 @@ import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import { cn } from "@/lib/utils";
+import { useIsAdmin } from "@/lib/adminMode";
 
 type Row = {
   uid: string;
@@ -25,6 +26,8 @@ type Row = {
 export default function LeaderboardPage() {
   const groups = useStore((s) => s.groups);
   const { user } = useAuth();
+  const isAdmin = useIsAdmin();
+
   const t = useT();
 
   const year = new Date().getFullYear();
@@ -86,12 +89,15 @@ export default function LeaderboardPage() {
   // single-uid query — instead of preloading the whole scope.
   const isGroupScope = scope !== "global";
   const places = useStore((s) => s.placesWithTemps);
-  const [selectedMember, setSelectedMember] = useState<UserDoc | null>(null);
+  const [memberSelection, setMemberSelection] = useState<{
+    member: UserDoc | null;
+    key: number;
+  }>({ member: null, key: 0 });
+  const selectedMember = memberSelection.member;
   const [memberSessions, setMemberSessions] = useState<SessionDoc[]>([]);
   const selectedUid = selectedMember?.uid;
   useEffect(() => {
     if (!selectedUid) return;
-    setMemberSessions([]);
     return watchMemberSessions([selectedUid], setMemberSessions);
   }, [selectedUid]);
 
@@ -128,11 +134,14 @@ export default function LeaderboardPage() {
             rank={i}
             isMe={user?.uid === r.uid}
             onSelect={
-              isGroupScope
-                ? () =>
-                    setSelectedMember(
-                      roster.find((u) => u.uid === r.uid) ?? null,
-                    )
+              isGroupScope || isAdmin
+                ? () => {
+                    setMemberSessions([]);
+                    setMemberSelection((current) => ({
+                      member: roster.find((u) => u.uid === r.uid) ?? null,
+                      key: current.key + 1,
+                    }));
+                  }
                 : undefined
             }
           />
@@ -149,21 +158,24 @@ export default function LeaderboardPage() {
           </>
         ) : null}
         {rows.length === 0 ? (
-          <motion.li
+          <m.li
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500"
           >
             {t("leaderboard.empty")}
-          </motion.li>
+          </m.li>
         ) : null}
       </ol>
 
       <MemberSwimsSheet
+        key={memberSelection.key}
         member={selectedMember}
         sessions={memberSessions}
         places={places}
-        onClose={() => setSelectedMember(null)}
+        onClose={() =>
+          setMemberSelection((current) => ({ ...current, member: null }))
+        }
       />
     </div>
   );
@@ -200,7 +212,7 @@ function BoardRow({
     // No `layout`/AnimatePresence here on purpose: they force framer-motion
     // to measure every row on any roster change, which scales badly — the
     // board can hold up to LEADERBOARD_LIMIT rows.
-    <motion.li
+    <m.li
       ref={ref}
       initial={{ opacity: 0, y: 8 }}
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
@@ -303,7 +315,7 @@ function BoardRow({
         value={inView ? r.points : 0}
         className="font-display text-2xl font-black text-wave-700"
       />
-    </motion.li>
+    </m.li>
   );
 }
 

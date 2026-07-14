@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Link, useSearchParams } from "react-router";
 import { ChevronRight, MapPin, Snowflake, Sparkles } from "lucide-react";
 import { useStore } from "@/store/sessions";
@@ -30,7 +30,7 @@ export default function HistoryPage() {
 
   const spots = useMemo(() => {
     if (view !== "spots") return [];
-    const m = new Map<
+    const spotsByPlace = new Map<
       string,
       {
         placeId: string;
@@ -42,7 +42,7 @@ export default function HistoryPage() {
       }
     >();
     for (const s of sessions) {
-      const cur = m.get(s.placeId);
+      const cur = spotsByPlace.get(s.placeId);
       if (cur) {
         cur.count += 1;
         if (s.date > cur.lastDate) {
@@ -53,7 +53,7 @@ export default function HistoryPage() {
           }
         }
       } else {
-        m.set(s.placeId, {
+        spotsByPlace.set(s.placeId, {
           placeId: s.placeId,
           placeName: s.placeName,
           count: 1,
@@ -63,7 +63,7 @@ export default function HistoryPage() {
         });
       }
     }
-    return [...m.values()].toSorted(
+    return [...spotsByPlace.values()].toSorted(
       (a, b) => b.count - a.count || b.lastDate - a.lastDate,
     );
   }, [sessions, view]);
@@ -78,14 +78,14 @@ export default function HistoryPage() {
   if (sessions.length === 0) {
     return (
       <div className="px-6 pt-16 text-center">
-        <motion.div
+        <m.div
           initial={{ scale: 0.6, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 220, damping: 18 }}
           className="relative mx-auto mb-4 h-20 w-20"
         >
           {[0, 1].map((i) => (
-            <motion.span
+            <m.span
               key={i}
               initial={{ scale: 0.6, opacity: 0.5 }}
               animate={{ scale: 1.6, opacity: 0 }}
@@ -98,30 +98,30 @@ export default function HistoryPage() {
               className="absolute inset-0 rounded-full border-2 border-wave-300"
             />
           ))}
-          <motion.div
+          <m.div
             animate={{ y: [0, -4, 0] }}
             transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
             className="absolute inset-0 flex items-center justify-center rounded-full bg-wave-100 text-3xl"
           >
             🐬
-          </motion.div>
-        </motion.div>
-        <motion.p
+          </m.div>
+        </m.div>
+        <m.p
           initial={{ y: 6, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1 }}
           className="font-display text-xl font-bold text-wave-900"
         >
           {t("history.empty.title")}
-        </motion.p>
-        <motion.p
+        </m.p>
+        <m.p
           initial={{ y: 6, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.18 }}
           className="mt-1 text-sm text-slate-500"
         >
           {t("history.empty.helper")}
-        </motion.p>
+        </m.p>
       </div>
     );
   }
@@ -242,7 +242,7 @@ function HistoryRow({
   meta: string;
 }) {
   return (
-    <motion.li
+    <m.li
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index, 8) * 0.03 }}
@@ -268,6 +268,6 @@ function HistoryRow({
           <div className="text-[11px] text-slate-500">{meta}</div>
         </div>
       </Link>
-    </motion.li>
+    </m.li>
   );
 }

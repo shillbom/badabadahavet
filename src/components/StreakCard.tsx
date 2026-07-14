@@ -1,4 +1,4 @@
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Link } from "react-router";
 import { Flame } from "lucide-react";
 import { useT } from "@/lib/i18n";
@@ -33,7 +33,7 @@ export default function StreakCard({ streak }: { streak: StreakInfo }) {
       : undefined;
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 280, damping: 24 }}
@@ -138,6 +138,6 @@ export default function StreakCard({ streak }: { streak: StreakInfo }) {
           </div>
         ) : null}
       </Link>
-    </motion.div>
+    </m.div>
   );
 }

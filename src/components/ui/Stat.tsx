@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Link } from "react-router";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
@@ -55,7 +55,7 @@ export default function Stat({
   const cardClass =
     "glass flex h-full flex-col items-start gap-0.5 px-3 py-2.5";
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 280, damping: 24 }}
@@ -78,6 +78,6 @@ export default function Stat({
       ) : (
         <div className={cardClass}>{inner}</div>
       )}
-    </motion.div>
+    </m.div>
   );
 }

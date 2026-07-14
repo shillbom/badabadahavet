@@ -1,6 +1,6 @@
 import { useState, useTransition } from "react";
 import { Link, useNavigate } from "react-router";
-import { motion, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence } from "framer-motion";
 import {
   Award,
   CalendarHeart,
@@ -54,7 +54,7 @@ import { Button } from "@/components/ui/Button";
 import Stat from "@/components/ui/Stat";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { Input } from "@/components/ui/Input";
-import { toast } from "@/components/ui/Toast";
+import { toast } from "@/components/ui/toastStore";
 import BackButton from "@/components/ui/BackButton";
 
 const EMOJI_POOL = [
@@ -219,7 +219,7 @@ export default function ProfilePage() {
 
         <AnimatePresence>
           {emojiOpen && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.95, y: -4 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -4 }}
@@ -241,7 +241,7 @@ export default function ProfilePage() {
                   {e}
                 </button>
               ))}
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
 

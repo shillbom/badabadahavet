@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { create } from "zustand";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { reactorUids, reactionAddedAt, fetchUsers } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
@@ -11,6 +10,7 @@ import SpotSheet from "@/components/SpotSheet";
 import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";
 import EmojiAvatar from "@/components/EmojiAvatar";
+import { useRecapTrigger } from "@/components/recapTrigger";
 
 // How long to wait for Firestore snapshots to settle before computing the
 // recap. The timer resets on every data change, so this is "quiet time"
@@ -23,18 +23,6 @@ const MONTH_MS = 30 * 86_400_000;
 // Caps so a long absence can't produce an unwieldy sheet.
 const MAX_FRIEND_SWIMS = 25;
 const MAX_REACTION_ITEMS = 15;
-
-// Imperative "open the recap now" trigger, mirroring the celebrate() pattern.
-// Bumping the token makes the (always-mounted) sheet open a fresh month recap.
-const useRecapTrigger = create<{ token: number; open: () => void }>((set) => ({
-  token: 0,
-  open: () => set((s) => ({ token: s.token + 1 })),
-}));
-
-/** Force the "past month" recap sheet open (e.g. from the map button). */
-export function openRecap() {
-  useRecapTrigger.getState().open();
-}
 
 // A single entry in the merged recap feed: either a friend's new swim or a
 // batch of new reactions on one of my swims. `ts` is when the thing happened
@@ -181,8 +169,9 @@ export default function SinceLastVisit() {
   const recapToken = useRecapTrigger((s) => s.token);
 
   const [activity, setActivity] = useState<Activity | null>(null);
-  // A manual month recap was requested but the feed isn't ready yet.
-  const [monthPending, setMonthPending] = useState(false);
+  const handledRecapTokenRef = useRef(0);
+  const monthPending =
+    recapToken !== 0 && recapToken !== handledRecapTokenRef.current;
   const doneRef = useRef(false);
   // State mirror of doneRef, so the feed acquisition below can react to it.
   const [digestDone, setDigestDone] = useState(false);
@@ -251,15 +240,10 @@ export default function SinceLastVisit() {
   // Computed only once the feed is live (the acquisition above starts it),
   // so the recap isn't built from an empty snapshot.
   useEffect(() => {
-    if (recapToken === 0) return;
-    setMonthPending(true);
-  }, [recapToken]);
-
-  useEffect(() => {
     if (!monthPending || !feedReady) return;
-    setMonthPending(false);
+    handledRecapTokenRef.current = recapToken;
     setActivity(recapToShow("month"));
-  }, [monthPending, feedReady]);
+  }, [monthPending, feedReady, recapToken]);
 
   return (
     <Sheet

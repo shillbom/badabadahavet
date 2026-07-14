@@ -1,14 +1,8 @@
 /**
- * Thin compatibility shim so existing call sites (useAuth, AuthProvider)
- * keep working unchanged. All logic now lives in src/store/sessions.ts.
+ * Thin compatibility shim for existing useAuth call sites.
+ * All logic now lives in src/store/sessions.ts.
  */
-import type { ReactNode } from "react";
 import { useStore } from "@/store/sessions";
-
-/** Drop-in replacement — renders children directly, no context needed. */
-export function AuthProvider({ children }: { children: ReactNode }) {
-  return <>{children}</>;
-}
 
 /** Same shape as before; reads from the Zustand store. */
 export function useAuth() {

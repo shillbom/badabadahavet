@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
 type Props = {
@@ -29,39 +29,41 @@ function DigitSlot({
   const [displayed, setDisplayed] = useState(isDigit ? "0" : char);
 
   useEffect(() => {
-    if (!isDigit) {
-      setDisplayed(char);
-      return;
-    }
-    const from = currentRef.current;
-    const steps = Math.abs(target - from);
-    if (steps === 0) return;
-
-    const stepDuration = duration / steps;
-    stepDurationRef.current = stepDuration;
-    const step = target > from ? 1 : -1;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
 
-    for (let i = 1; i <= steps; i++) {
-      const val = from + i * step;
-      timeouts.push(
-        setTimeout(
-          () => {
-            currentRef.current = val;
-            setDisplayed(String(val));
-          },
-          i * stepDuration * 1000,
-        ),
-      );
+    if (!isDigit) {
+      setDisplayed(char);
+    } else {
+      const from = currentRef.current;
+      const steps = Math.abs(target - from);
+
+      if (steps > 0) {
+        const stepDuration = duration / steps;
+        stepDurationRef.current = stepDuration;
+        const step = target > from ? 1 : -1;
+
+        for (let i = 1; i <= steps; i++) {
+          const val = from + i * step;
+          timeouts.push(
+            window.setTimeout(
+              () => {
+                currentRef.current = val;
+                setDisplayed(String(val));
+              },
+              i * stepDuration * 1000,
+            ),
+          );
+        }
+      }
     }
 
-    return () => timeouts.forEach(clearTimeout);
+    return () => timeouts.forEach(window.clearTimeout);
   }, [char]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <span className="relative inline-block overflow-hidden">
       <AnimatePresence mode="popLayout" initial={false}>
-        <motion.span
+        <m.span
           key={displayed}
           initial={{ y: dir > 0 ? 8 : -8, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -73,7 +75,7 @@ function DigitSlot({
           className="inline-block"
         >
           {displayed}
-        </motion.span>
+        </m.span>
       </AnimatePresence>
     </span>
   );

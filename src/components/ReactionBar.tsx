@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { REACTION_EMOJIS, reactorUids, toggleReaction } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
@@ -21,7 +21,6 @@ export default function ReactionBar({
   myUid?: string;
 }) {
   const [showPicker, setShowPicker] = useState(false);
-  const [pending, setPending] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const t = useT();
 
@@ -40,71 +39,39 @@ export default function ReactionBar({
     (e) => reactorUids(reactions[e]).length > 0,
   );
 
-  async function onToggle(emoji: string) {
-    if (!myUid || pending) return;
-    setPending(emoji);
-    try {
-      const hasReacted = reactorUids(reactions[emoji]).includes(myUid);
-      await toggleReaction(session.id, emoji, myUid, hasReacted);
-    } finally {
-      setPending(null);
-      setShowPicker(false);
-    }
-  }
-
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1">
-      {activeEmojis.map((emoji) => {
-        const reactors = reactorUids(reactions[emoji]);
-        const mine = !!myUid && reactors.includes(myUid);
-        return (
-          <motion.button
-            key={emoji}
-            whileTap={{ scale: 0.85 }}
-            disabled={!myUid || pending === emoji}
-            onClick={() => onToggle(emoji)}
-            aria-label={t("reactions.toggle", { emoji })}
-            aria-pressed={mine}
-            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ring-1 transition-colors ${
-              mine
-                ? "bg-wave-100 text-wave-800 ring-wave-400"
-                : "bg-white/70 text-slate-600 ring-slate-200 hover:bg-slate-50"
-            } ${pending === emoji ? "opacity-60" : ""}`}
-          >
-            <span>{emoji}</span>
-            <span className="font-medium tabular-nums">{reactors.length}</span>
-          </motion.button>
-        );
-      })}
+      {activeEmojis.map((emoji) => (
+        <ReactionEmoji
+          key={emoji}
+          session={session}
+          emoji={emoji}
+          showCount
+          myUid={myUid}
+        />
+      ))}
 
       {myUid ? (
         <div ref={wrapRef} className="flex items-center">
           {showPicker ? (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.92 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.12 }}
-              className="inline-flex items-center gap-0.5 rounded-full bg-white p-0.5 shadow-sm ring-1 ring-slate-200"
+              className="inline-flex items-center gap-1 rounded-full bg-white p-0.5 shadow-sm ring-1 ring-slate-200"
             >
               {REACTION_EMOJIS.map((emoji) => {
-                const mine =
-                  !!myUid && reactorUids(reactions[emoji]).includes(myUid);
                 return (
-                  <button
-                    type="button"
+                  <ReactionEmoji
                     key={emoji}
-                    onClick={() => onToggle(emoji)}
-                    aria-label={emoji}
-                    aria-pressed={mine}
-                    className={`flex h-7 w-7 items-center justify-center rounded-full text-lg transition-colors ${
-                      mine ? "bg-wave-100" : "hover:bg-slate-100"
-                    }`}
-                  >
-                    {emoji}
-                  </button>
+                    session={session}
+                    emoji={emoji}
+                    myUid={myUid}
+                    onChange={() => setShowPicker(false)}
+                  />
                 );
               })}
-            </motion.div>
+            </m.div>
           ) : (
             <button
               type="button"
@@ -118,5 +85,60 @@ export default function ReactionBar({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ReactionEmoji({
+  session,
+  emoji,
+  myUid,
+  showCount,
+  onChange,
+}: {
+  session: SessionDoc;
+  emoji: string;
+  myUid?: string;
+  showCount?: boolean;
+  onChange?: () => void;
+}) {
+  const t = useT();
+
+  const reactions = session.reactions ?? {};
+
+  const reactors = reactorUids(reactions[emoji]);
+  const mine = !!myUid && reactors.includes(myUid);
+  const [pending, setPending] = useState<boolean>(false);
+
+  async function onToggle() {
+    if (!myUid || pending) return;
+    setPending(true);
+    onChange?.();
+    try {
+      const hasReacted = reactorUids(reactions[emoji]).includes(myUid);
+      await toggleReaction(session.id, emoji, myUid, hasReacted);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <m.button
+      key={emoji}
+      whileTap={{ scale: 0.85 }}
+      disabled={!myUid || pending}
+      onClick={() => onToggle()}
+      aria-label={t("reactions.toggle", { emoji })}
+      aria-pressed={mine}
+      className={`mx-0.5 flex items-center gap-1 rounded-full px-1 py-0.5 text-xs ring-1 transition-colors ${
+        mine
+          ? "bg-wave-100 text-wave-800 ring-wave-400"
+          : "bg-white/70 text-slate-600 ring-slate-200 hover:bg-slate-50"
+      } ${pending ? "opacity-60" : ""}`}
+    >
+      <span>{emoji}</span>
+      {showCount && (
+        <span className="font-medium tabular-nums">{reactors.length}</span>
+      )}
+    </m.button>
   );
 }

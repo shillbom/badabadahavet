@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { m } from "framer-motion";
 import { Lock } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
@@ -120,7 +120,7 @@ function Row({
 }) {
   const t = useT();
   return (
-    <motion.li
+    <m.li
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: Math.min(index, 12) * 0.025 }}
@@ -129,7 +129,7 @@ function Row({
         !unlocked && "opacity-70",
       )}
     >
-      <motion.div
+      <m.div
         whileHover={
           unlocked ? { rotate: [-3, 3, -2, 0], scale: 1.05 } : undefined
         }
@@ -149,7 +149,7 @@ function Row({
         ) : (
           <Lock className="h-5 w-5 text-slate-400" />
         )}
-      </motion.div>
+      </m.div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span
@@ -182,19 +182,19 @@ function Row({
         </div>
         {!unlocked && progress > 0 ? (
           <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.round(progress * 100)}%` }}
+            <m.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: progress }}
               transition={{
                 duration: 0.9,
                 ease: [0.16, 1, 0.3, 1],
                 delay: Math.min(index, 12) * 0.04,
               }}
-              className="h-full rounded-full bg-gradient-to-r from-wave-400 to-wave-600"
+              className="h-full origin-left rounded-full bg-gradient-to-r from-wave-400 to-wave-600"
             />
           </div>
         ) : null}
       </div>
-    </motion.li>
+    </m.li>
   );
 }
