@@ -48,6 +48,7 @@ import {
 import { useLocale, useT } from "@/lib/i18n";
 import BackButton from "@/components/ui/BackButton";
 import SegmentedControl from "@/components/ui/SegmentedControl";
+import { usePosition } from "@/hooks/position";
 
 type Mode = "now" | "pick";
 
@@ -95,6 +96,10 @@ export default function LogSessionPage() {
   const mySessions = useStore((s) => s.mySessions);
   const myPlaceIds = useStore((s) => s.myPlaceIds);
   const unlockedAchievements = useStore((s) => s.unlockedAchievements);
+  // Live GPS fix for the "current position" (blue) dot on the map. Falls back
+  // to the last known location while GPS resolves; null until we have either,
+  // so we never plant a "you are here" dot at a hardcoded guess.
+  const myLocation = usePosition();
   // Pin popups + achievement checks read the community feed — keep it
   // subscribed while logging (this page is behind login).
   useAllSessionsFeed();
@@ -643,6 +648,7 @@ export default function LogSessionPage() {
                   });
                 }}
                 pickedAt={coords}
+                userLocation={myLocation}
                 linkToSpot={false}
                 activePlaceId={pickedPlaceId}
                 lockPan={mode === "now"}
