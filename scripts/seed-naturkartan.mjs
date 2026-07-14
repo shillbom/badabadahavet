@@ -25,6 +25,7 @@
  *
  * Flags:
  *   --sites-url=URL      Override the sites endpoint (see NOTE below).
+ *   --accept=MEDIATYPE   Force the Accept header (default: auto-probe, see NOTE).
  *   --locale=sv|en       Language for names/descriptions (default sv).
  *   --per-page=N         Page size (default 500).
  *   --max-pages=N        Safety cap on pages fetched (default 200).
@@ -45,6 +46,11 @@
  * aliases — so a shape drift shouldn't need a code change, just a flag. Run a
  * dry run first: it prints the category histogram and sample docs so you can
  * confirm the swim category before writing.
+ *
+ * The server 406s if the Accept header/format doesn't suit the route, so
+ * fetchSites() probes a few strategies (JSON:API vendor media type, a `.json`
+ * path, plain JSON) and reuses the first the server accepts — override with
+ * --accept and/or a `.json` --sites-url if the probe can't find one.
  */
 
 import { initializeApp, applicationDefault, cert } from "firebase-admin/app";
@@ -58,6 +64,9 @@ const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "badligan";
 
 const SITES_URL =
   args.get("--sites-url") ?? "https://api.naturkartan.se/v3/sites";
+// Explicit Accept header. Left unset, fetchSites() probes a few strategies
+// (the API 406s on the wrong one) and reuses whichever the server accepts.
+const ACCEPT = args.get("--accept");
 const LOCALE = args.get("--locale") ?? "sv";
 const PER_PAGE = Number(args.get("--per-page") ?? 500);
 const MAX_PAGES = Number(args.get("--max-pages") ?? 200);
@@ -271,6 +280,64 @@ async function fetchFromFixture(path) {
   return out;
 }
 
+// Content-negotiation strategies, tried in order until the server stops
+// answering 406/415. The API is JSON:API-flavoured, so the vendor media type
+// and a `.json` route are the likely winners; plain application/json (what a
+// naive client sends, and what 406s) is kept last as a fallback. The first
+// success is cached in `negChoice` and reused for every later page.
+const NEG_STRATEGIES = [
+  { suffix: "", accept: "application/vnd.api+json" },
+  { suffix: ".json", accept: "application/json" },
+  { suffix: ".json", accept: "application/vnd.api+json" },
+  { suffix: "", accept: "application/json" },
+  { suffix: "", accept: "*/*" },
+];
+let negChoice = null;
+
+function urlFor(suffix, params) {
+  let base = SITES_URL;
+  if (suffix === ".json" && !base.endsWith(".json")) base += ".json";
+  return `${base}?${params}`;
+}
+
+function strategies() {
+  if (ACCEPT) {
+    const suffix = SITES_URL.endsWith(".json") ? ".json" : "";
+    return [{ suffix, accept: ACCEPT }];
+  }
+  return negChoice ? [negChoice] : NEG_STRATEGIES;
+}
+
+async function requestPage(params) {
+  let last = null;
+  for (const s of strategies()) {
+    const url = urlFor(s.suffix, params);
+    const res = await fetch(url, {
+      headers: { Accept: s.accept, "User-Agent": "badligan-seed" },
+    });
+    if (res.ok) {
+      if (!negChoice && !ACCEPT) {
+        negChoice = s;
+        console.log(`→ content negotiation: Accept "${s.accept}"${s.suffix}`);
+      }
+      return res;
+    }
+    // 406/415 = wrong Accept/format; probe the next strategy. Anything else
+    // (404 bad path, 5xx…) is a real failure — surface it immediately.
+    if (res.status !== 406 && res.status !== 415) {
+      throw new Error(
+        `Naturkartan responded ${res.status} ${res.statusText} for ${url}`,
+      );
+    }
+    last = { status: res.status, text: res.statusText, url };
+  }
+  throw new Error(
+    `Naturkartan responded ${last?.status ?? 406} ${last?.text ?? "Not Acceptable"} to every ` +
+      `content-negotiation strategy (last: ${last?.url}). Pass --accept=<mediatype> and/or a ` +
+      `--sites-url with the right path/extension — see https://apiv3.naturkartan.se/docs`,
+  );
+}
+
 async function fetchSites() {
   const places = [];
   let page = 1;
@@ -287,16 +354,8 @@ async function fetchSites() {
       params.append("category_ids[]", id);
       params.append("filter[categories]", id);
     }
-    const url = `${SITES_URL}?${params}`;
-    console.log(`→ fetching page ${page} — ${url}`);
-    const res = await fetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "badligan-seed" },
-    });
-    if (!res.ok) {
-      throw new Error(
-        `Naturkartan responded ${res.status} ${res.statusText} for page ${page}`,
-      );
-    }
+    console.log(`→ fetching page ${page}`);
+    const res = await requestPage(params);
     const data = await res.json();
     const included = indexIncluded(data);
     const items = itemsOf(data);
