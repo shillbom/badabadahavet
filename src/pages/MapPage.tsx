@@ -7,6 +7,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
 import StreakCard from "@/components/StreakCard";
 import Stat from "@/components/ui/Stat";
+import { usePosition } from "@/hooks/position";
 const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
@@ -25,10 +26,9 @@ export default function MapPage() {
   useAllSessionsFeed(!isGuest);
 
   // Seed from Firestore so the map opens at the right place without waiting for GPS
-  const currentLocation = useStore((s) => s.currentLocation);
   const locationPermission = useStore((s) => s.locationPermission);
   // Fall back to Firestore lastLocation while GPS hasn't resolved yet
-  const myLocation = currentLocation ?? profile?.lastLocation ?? null;
+  const myLocation = usePosition();
 
   const [{ fitToken, showAll }, dispatchMapView] = useReducer(
     (
