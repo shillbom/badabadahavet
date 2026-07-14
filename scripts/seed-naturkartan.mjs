@@ -26,6 +26,10 @@
  * Flags:
  *   --sites-url=URL      Override the sites endpoint (see NOTE below).
  *   --accept=MEDIATYPE   Force the Accept header (default: auto-probe, see NOTE).
+ *   --api-key=KEY        API key (or set NATURKARTAN_API_KEY). Required — the
+ *                        v3 API answers 401 without one.
+ *   --auth=SCHEME        How to send the key: bearer (default) | token |
+ *                        header:<Name> | query:<name>. See the AUTH note below.
  *   --locale=sv|en       Language for names/descriptions (default sv).
  *   --per-page=N         Page size (default 500).
  *   --max-pages=N        Safety cap on pages fetched (default 200).
@@ -51,6 +55,11 @@
  * fetchSites() probes a few strategies (JSON:API vendor media type, a `.json`
  * path, plain JSON) and reuses the first the server accepts — override with
  * --accept and/or a `.json` --sites-url if the probe can't find one.
+ *
+ * AUTH: the v3 API is not public — it answers 401 without credentials. Get a
+ * key from OutdoorMap (support@outdoormap.com) and check the security scheme
+ * in the OpenAPI docs at https://apiv3.naturkartan.se/docs, then pass it via
+ * NATURKARTAN_API_KEY / --api-key with a matching --auth (default Bearer).
  */
 
 import { initializeApp, applicationDefault, cert } from "firebase-admin/app";
@@ -67,6 +76,14 @@ const SITES_URL =
 // Explicit Accept header. Left unset, fetchSites() probes a few strategies
 // (the API 406s on the wrong one) and reuses whichever the server accepts.
 const ACCEPT = args.get("--accept");
+// The v3 API requires authentication (401 otherwise). Supply the key via
+// --api-key or the NATURKARTAN_API_KEY env var; --auth picks how it's sent:
+//   bearer (default) → Authorization: Bearer <key>
+//   token            → Authorization: Token token="<key>"   (Rails style)
+//   header:<Name>    → <Name>: <key>                         (e.g. X-Api-Key)
+//   query:<name>     → ?<name>=<key>
+const API_KEY = args.get("--api-key") ?? process.env.NATURKARTAN_API_KEY ?? "";
+const AUTH = args.get("--auth") ?? "bearer";
 const LOCALE = args.get("--locale") ?? "sv";
 const PER_PAGE = Number(args.get("--per-page") ?? 500);
 const MAX_PAGES = Number(args.get("--max-pages") ?? 200);
@@ -300,6 +317,20 @@ function urlFor(suffix, params) {
   return `${base}?${params}`;
 }
 
+// Auth as a header ({} for query-mode or no key)…
+function authHeader() {
+  if (!API_KEY) return {};
+  if (AUTH === "bearer") return { Authorization: `Bearer ${API_KEY}` };
+  if (AUTH === "token") return { Authorization: `Token token="${API_KEY}"` };
+  if (AUTH.startsWith("header:")) return { [AUTH.slice(7)]: API_KEY };
+  return {};
+}
+// …or as a [name, value] query param (null otherwise).
+function authQuery() {
+  if (API_KEY && AUTH.startsWith("query:")) return [AUTH.slice(6), API_KEY];
+  return null;
+}
+
 function strategies() {
   if (ACCEPT) {
     const suffix = SITES_URL.endsWith(".json") ? ".json" : "";
@@ -313,7 +344,11 @@ async function requestPage(params) {
   for (const s of strategies()) {
     const url = urlFor(s.suffix, params);
     const res = await fetch(url, {
-      headers: { Accept: s.accept, "User-Agent": "badligan-seed" },
+      headers: {
+        Accept: s.accept,
+        "User-Agent": "badligan-seed",
+        ...authHeader(),
+      },
     });
     if (res.ok) {
       if (!negChoice && !ACCEPT) {
@@ -325,8 +360,14 @@ async function requestPage(params) {
     // 406/415 = wrong Accept/format; probe the next strategy. Anything else
     // (404 bad path, 5xx…) is a real failure — surface it immediately.
     if (res.status !== 406 && res.status !== 415) {
+      const authHint =
+        (res.status === 401 || res.status === 403) && !API_KEY
+          ? " — this endpoint needs a key: set NATURKARTAN_API_KEY / --api-key (and --auth if not Bearer)"
+          : res.status === 401 || res.status === 403
+            ? " — key rejected; check the value and --auth scheme against https://apiv3.naturkartan.se/docs"
+            : "";
       throw new Error(
-        `Naturkartan responded ${res.status} ${res.statusText} for ${url}`,
+        `Naturkartan responded ${res.status} ${res.statusText} for ${url}${authHint}`,
       );
     }
     last = { status: res.status, text: res.statusText, url };
@@ -354,6 +395,8 @@ async function fetchSites() {
       params.append("category_ids[]", id);
       params.append("filter[categories]", id);
     }
+    const aq = authQuery();
+    if (aq) params.set(aq[0], aq[1]);
     console.log(`→ fetching page ${page}`);
     const res = await requestPage(params);
     const data = await res.json();
@@ -471,8 +514,14 @@ async function main() {
           : `category ~ /${CATEGORY_RE.source}/i`
     }`,
   );
-  if (FIXTURE) console.log(`→ source:   fixture (${FIXTURE})`);
-  else console.log(`→ source:   ${SITES_URL}`);
+  if (FIXTURE) {
+    console.log(`→ source:   fixture (${FIXTURE})`);
+  } else {
+    console.log(`→ source:   ${SITES_URL}`);
+    console.log(
+      `→ auth:     ${API_KEY ? `${AUTH} (key ****${API_KEY.slice(-4)})` : "none set — the v3 API needs a key (see --help/header)"}`,
+    );
+  }
 
   let all = FIXTURE ? await fetchFromFixture(FIXTURE) : await fetchSites();
   console.log(`→ parsed ${all.length} sites`);
