@@ -90,13 +90,18 @@ export function AnimatedNumber({
   className,
 }: Props) {
   const text = format ? format(value) : Math.round(value).toString();
+  // Track the previous value in an effect (after commit) to pick the slide
+  // direction, keeping render pure — no ref writes or set-state during render.
+  // setDir re-renders synchronously, well before the digit-step timeouts fire,
+  // so the direction is settled before anything animates.
   const prevValueRef = useRef(value);
-  const dirRef = useRef<1 | -1>(1);
-
-  if (value !== prevValueRef.current) {
-    dirRef.current = value >= prevValueRef.current ? 1 : -1;
-    prevValueRef.current = value;
-  }
+  const [dir, setDir] = useState<1 | -1>(1);
+  useEffect(() => {
+    if (value !== prevValueRef.current) {
+      setDir(value >= prevValueRef.current ? 1 : -1);
+      prevValueRef.current = value;
+    }
+  }, [value]);
 
   const chars = text.split("");
 
@@ -107,7 +112,7 @@ export function AnimatedNumber({
           // oxlint-disable-next-line react/no-array-index-key
           key={chars.length - 1 - i}
           char={char}
-          dir={dirRef.current}
+          dir={dir}
           duration={duration}
         />
       ))}

@@ -190,7 +190,11 @@ export default function SinceLastVisit() {
   // Mirror of `activity` so the auto-pop timeout can avoid stomping a sheet the
   // user opened manually in the meantime.
   const openRef = useRef(false);
-  openRef.current = activity !== null;
+  // Written after commit (not during render); only read later from the
+  // auto-pop timeout, so effect timing is fine.
+  useEffect(() => {
+    openRef.current = activity !== null;
+  }, [activity]);
 
   // Friend swims come from the community feed (reactions live on my own
   // sessions), so the feed is only needed when the user shares a group with
@@ -280,7 +284,9 @@ function Sheet({
   // Keep the last activity around so the sheet still has content to render
   // while it animates closed (`open` flips to false before the sheet unmounts).
   const lastRef = useRef<Activity | null>(activity);
-  if (activity) lastRef.current = activity;
+  useEffect(() => {
+    if (activity) lastRef.current = activity;
+  }, [activity]);
   const shown = activity ?? lastRef.current;
 
   // The recap list is frozen when the sheet opens, but reaction state should

@@ -37,6 +37,7 @@ export default function Lightbox({
           className="fixed inset-0 z-[3500] flex items-center justify-center bg-black/85 p-4"
         >
           <button
+            type="button"
             onClick={onClose}
             className="absolute top-[max(env(safe-area-inset-top),1rem)] right-4 rounded-full bg-white/10 p-2 text-white"
             aria-label={t("common.close")}

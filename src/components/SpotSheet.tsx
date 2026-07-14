@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import BottomSheet from "@/components/BottomSheet";
 
 const SpotView = lazy(() =>
@@ -21,7 +21,11 @@ export default function SpotSheet({
   onClose: () => void;
 }) {
   const lastRef = useRef<string | null>(placeId);
-  if (placeId) lastRef.current = placeId;
+  // Retain the last id from an effect (after commit) so the spot content stays
+  // rendered while the sheet animates closed, without writing a ref in render.
+  useEffect(() => {
+    if (placeId) lastRef.current = placeId;
+  }, [placeId]);
   const shown = placeId ?? lastRef.current;
 
   return (

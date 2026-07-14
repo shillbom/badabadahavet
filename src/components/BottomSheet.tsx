@@ -48,6 +48,10 @@ export default function BottomSheet({
         <>
           <motion.div
             key="bs-backdrop"
+            // Decorative click-away layer; keyboard users close via the X
+            // button, so hide it from assistive tech rather than making a
+            // full-screen div focusable.
+            aria-hidden="true"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -103,6 +107,7 @@ export default function BottomSheet({
                   >
                     <div className="min-w-0 flex-1">{title}</div>
                     <button
+                      type="button"
                       onClick={onClose}
                       aria-label={t("common.close")}
                       className="flex-none rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"

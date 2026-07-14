@@ -91,6 +91,7 @@ export default function ReactionBar({
                   !!myUid && reactorUids(reactions[emoji]).includes(myUid);
                 return (
                   <button
+                    type="button"
                     key={emoji}
                     onClick={() => onToggle(emoji)}
                     aria-label={emoji}
@@ -106,6 +107,7 @@ export default function ReactionBar({
             </motion.div>
           ) : (
             <button
+              type="button"
               onClick={() => setShowPicker(true)}
               aria-label={t("reactions.add")}
               className="flex h-6 w-6 items-center justify-center rounded-full bg-white/70 text-sm ring-1 ring-slate-200 hover:bg-slate-50"

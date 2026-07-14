@@ -200,6 +200,7 @@ export default function ProfilePage() {
       {/* Avatar + name */}
       <div className="mb-5 flex flex-col items-center gap-3">
         <button
+          type="button"
           onClick={() => setEmojiOpen((v) => !v)}
           className={cn(
             "flex h-20 w-20 items-center justify-center rounded-full bg-wave-100 text-5xl shadow-md ring-4 transition-transform active:scale-95",
@@ -227,6 +228,7 @@ export default function ProfilePage() {
             >
               {EMOJI_POOL.map((e) => (
                 <button
+                  type="button"
                   key={e}
                   onClick={() => pickEmoji(e)}
                   className={cn(
@@ -264,6 +266,7 @@ export default function ProfilePage() {
                 setEditingName(false);
                 setNameInput(profile?.displayName ?? "");
               }}
+              aria-label={t("common.cancel")}
               className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
             >
               <X className="h-4 w-4" />
@@ -271,6 +274,7 @@ export default function ProfilePage() {
           </form>
         ) : (
           <button
+            type="button"
             onClick={() => {
               setNameInput(profile?.displayName ?? "");
               setEditingName(true);
@@ -309,6 +313,7 @@ export default function ProfilePage() {
           {t("profile.home_country")}
         </span>
         <select
+          aria-label={t("profile.home_country")}
           value={profile?.homeCountry ?? ""}
           onChange={(e) => pickHomeCountry(e.target.value)}
           className="rounded-full border border-slate-200 bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"

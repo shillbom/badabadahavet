@@ -89,9 +89,12 @@ export default function GroupsPage() {
   } | null>(null);
 
   // Keep the last preview so the confirm sheet still has content to render
-  // while it animates closed (`open` flips to false before unmount).
+  // while it animates closed. Written from an effect (after commit), not
+  // during render, which must stay pure.
   const lastJoinRef = useRef(pendingJoin);
-  if (pendingJoin) lastJoinRef.current = pendingJoin;
+  useEffect(() => {
+    if (pendingJoin) lastJoinRef.current = pendingJoin;
+  }, [pendingJoin]);
   const join = pendingJoin ?? lastJoinRef.current;
 
   // Trigger a group lookup, then show the confirmation dialog.
@@ -145,11 +148,13 @@ export default function GroupsPage() {
   // Auto-trigger confirmation from ?join=CODE deep-link on mount.
   useEffect(() => {
     const code = searchParams.get("join");
-    if (code) {
-      setSearchParams({}, { replace: true });
-      // Small delay so the page is fully rendered before the dialog appears.
-      setTimeout(() => lookupAndConfirm(code), 350);
-    }
+    if (!code) return;
+    setSearchParams({}, { replace: true });
+    // Small delay so the page is fully rendered before the dialog appears.
+    // Cleared on unmount so navigating away before it fires can't run a
+    // stale callback (setState/toast on an unmounted page).
+    const id = setTimeout(() => lookupAndConfirm(code), 350);
+    return () => clearTimeout(id);
     // Only run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -317,6 +322,7 @@ export default function GroupsPage() {
                   </div>
                 </div>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     copyCode(g.code);
@@ -327,6 +333,7 @@ export default function GroupsPage() {
                   <Copy className="h-3 w-3" />
                 </button>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     shareInviteLink(g);
@@ -338,6 +345,7 @@ export default function GroupsPage() {
                   <Share2 className="h-3.5 w-3.5" />
                 </button>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onLeave(g.id, g.name);
@@ -425,9 +433,11 @@ function GroupDetailSheet({
   const t = useT();
 
   // Keep the last group around so the sheet still renders content while it
-  // animates closed (`group` flips to null before the sheet unmounts).
+  // animates closed. Written from an effect (after commit), not during render.
   const lastRef = useRef<GroupDoc | null>(group);
-  if (group) lastRef.current = group;
+  useEffect(() => {
+    if (group) lastRef.current = group;
+  }, [group]);
   const shown = group ?? lastRef.current;
 
   const [allSessions, setAllSessions] = useState<SessionDoc[]>([]);
@@ -670,6 +680,7 @@ function GroupDetailSheet({
         {/* Group emoji / picker trigger */}
         <div className="relative flex-none">
           <button
+            type="button"
             ref={emojiTriggerRef}
             disabled={!isLeader}
             onClick={() => {
@@ -722,6 +733,7 @@ function GroupDetailSheet({
                         const active = e === groupIcon;
                         return (
                           <button
+                            type="button"
                             key={e}
                             onClick={() => saveEmoji(e)}
                             className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl transition active:scale-95 ${
@@ -748,6 +760,7 @@ function GroupDetailSheet({
             <div className="flex items-center gap-1.5">
               <input
                 autoFocus
+                aria-label={t("groups.detail.rename")}
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -764,7 +777,9 @@ function GroupDetailSheet({
                 icon={<Check className="h-3.5 w-3.5" />}
               />
               <button
+                type="button"
                 onClick={() => setEditingName(false)}
+                aria-label={t("common.cancel")}
                 className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
               >
                 <X className="h-3.5 w-3.5" />
@@ -777,10 +792,12 @@ function GroupDetailSheet({
               </h3>
               {isLeader && (
                 <button
+                  type="button"
                   onClick={() => {
                     setNameInput(shown.name);
                     setEditingName(true);
                   }}
+                  aria-label={t("groups.detail.rename")}
                   className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -795,6 +812,7 @@ function GroupDetailSheet({
             {" · "}
             <span className="font-mono tracking-wider">{shown.code}</span>
             <button
+              type="button"
               onClick={shareInviteLink}
               className="inline-flex items-center gap-0.5 rounded-full bg-wave-50 px-2 py-0.5 text-[10px] font-medium text-wave-600 ring-1 ring-wave-200 hover:bg-wave-100"
               title={t("groups.share_link")}
@@ -846,7 +864,15 @@ function GroupDetailSheet({
                   return (
                     <li
                       key={member.uid}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => setSelectedMember(member)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedMember(member);
+                        }
+                      }}
                       className="flex cursor-pointer items-center gap-3 rounded-2xl bg-white/70 px-3 py-2.5 ring-1 ring-white/60 transition hover:bg-white/90 active:scale-[0.99]"
                     >
                       <EmojiAvatar emoji={member.emoji} size="sm">
@@ -916,6 +942,7 @@ function GroupDetailSheet({
                       </span>
                       {isLeader && !isMe ? (
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             onKick(member);
@@ -934,6 +961,7 @@ function GroupDetailSheet({
             )}
             {/* Leave button at bottom */}
             <button
+              type="button"
               onClick={onLeave}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 hover:bg-rose-100"
             >

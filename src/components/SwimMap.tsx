@@ -977,7 +977,13 @@ function MapFilterMenu({
       </button>
       {open ? (
         <>
-          <div className="fixed inset-0" onClick={() => setOpen(false)} />
+          {/* Decorative click-away layer for the menu; the ⋮ trigger stays
+              keyboard-accessible, so hide this from assistive tech. */}
+          <div
+            aria-hidden="true"
+            className="fixed inset-0"
+            onClick={() => setOpen(false)}
+          />
           <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white/95 p-1.5 shadow-lg ring-1 ring-slate-200">
             {toggles.map((tg) =>
               "options" in tg ? (

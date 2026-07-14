@@ -206,6 +206,18 @@ function BoardRow({
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
       transition={{ type: "tween", duration: 0.2 }}
       onClick={onSelect}
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onKeyDown={
+        onSelect
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect();
+              }
+            }
+          : undefined
+      }
       className={cn(
         "glass relative flex items-center gap-3 p-3 transition",
         podium.cardClass,
@@ -340,6 +352,7 @@ function ScopeChip({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       data-active={active}
       className="chip whitespace-nowrap data-[active=true]:bg-wave-600 data-[active=true]:text-white data-[active=true]:ring-wave-700"
