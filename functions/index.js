@@ -166,13 +166,20 @@ async function fetchSmhiStations(parameterId) {
   });
   if (!res.ok) return smhiStationsCache?.stations ?? [];
   const data = await res.json();
-  const stations = (data?.station ?? [])
-    .filter((s) => s.active !== false)
-    .map((s) => ({ id: s.id, lat: s.latitude, lng: s.longitude }))
-    .filter(
-      (s) =>
-        s.id != null && typeof s.lat === "number" && typeof s.lng === "number",
-    );
+  // Single pass: skip inactive stations and ones missing an id/coords,
+  // mapping the rest — avoids three separate traversals of the station list.
+  const stations = [];
+  for (const s of data?.station ?? []) {
+    if (s.active === false) continue;
+    if (
+      s.id == null ||
+      typeof s.latitude !== "number" ||
+      typeof s.longitude !== "number"
+    ) {
+      continue;
+    }
+    stations.push({ id: s.id, lat: s.latitude, lng: s.longitude });
+  }
   smhiStationsCache = { at: now, stations };
   return stations;
 }

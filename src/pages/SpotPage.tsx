@@ -49,6 +49,7 @@ import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";
 import { useAuth } from "@/auth/AuthContext";
+import { useIsAdmin } from "@/lib/adminMode";
 import { useT } from "@/lib/i18n";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Textarea } from "@/components/ui/Input";
@@ -74,7 +75,7 @@ export function SpotView({
 }) {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const isAdmin = profile?.isAdmin === true;
+  const isAdmin = useIsAdmin();
   const t = useT();
   const [place, setPlace] = useState<PlaceDoc | null>(null);
   const [sessions, setSessions] = useState<SessionDoc[]>([]);
@@ -301,6 +302,7 @@ export function SpotView({
     <div className="px-4 pt-2 pb-12">
       <div className="mb-3 flex items-center gap-2">
         <button
+          type="button"
           onClick={() => (variant === "sheet" ? onClose?.() : navigate(-1))}
           className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
           aria-label={
@@ -387,12 +389,14 @@ export function SpotView({
             {t("admin.label")}
           </span>
           <button
+            type="button"
             onClick={onAdminRename}
             className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
           >
             <Pencil className="h-3 w-3" /> {t("admin.rename")}
           </button>
           <button
+            type="button"
             onClick={onAdminDeletePlace}
             className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50"
           >
@@ -414,6 +418,7 @@ export function SpotView({
               </span>
               {isAdmin ? (
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onAdminRemovePhoto(s.id);
@@ -506,6 +511,7 @@ export function SpotView({
             aside={
               <>
                 <button
+                  type="button"
                   onClick={() => onShareSession(s)}
                   className="rounded-full bg-white/80 p-1 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
                   aria-label={t("spot.share_session")}
@@ -515,6 +521,7 @@ export function SpotView({
                 </button>
                 {!isGuest && isAdmin ? (
                   <button
+                    type="button"
                     onClick={() => onAdminDeleteSession(s.id)}
                     className="rounded-full bg-white/80 p-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
                     aria-label={t("admin.delete_session")}
@@ -676,7 +683,7 @@ function SpotInfoCard({
   const textRef = useRef<HTMLParagraphElement | null>(null);
 
   const info = place.info;
-  const isAdmin = profile?.isAdmin === true;
+  const isAdmin = useIsAdmin();
   // Contributing (info or the naturist flag) requires an established
   // account — MIN_INFO_POINTS total. UX gate; the function re-checks.
   const mayContribute =

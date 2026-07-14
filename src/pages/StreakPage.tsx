@@ -261,6 +261,7 @@ function Calendar({
     >
       <div className="mb-3 flex items-center justify-between">
         <button
+          type="button"
           onClick={() => shift(-1)}
           disabled={atMin}
           className="rounded-full bg-white/70 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
@@ -272,6 +273,7 @@ function Calendar({
           {monthLong(view.month)} {view.year}
         </div>
         <button
+          type="button"
           onClick={() => shift(1)}
           disabled={atMax}
           className="rounded-full bg-white/70 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"

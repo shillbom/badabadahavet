@@ -43,9 +43,12 @@ export default function MemberSwimsSheet({
     null,
   );
 
-  // Keep the closing frame populated while the sheet slides away.
+  // Keep the closing frame populated while the sheet slides away. Written
+  // from an effect (after commit) rather than during render, which must be pure.
   const lastMemberRef = useRef<UserDoc | null>(null);
-  if (member) lastMemberRef.current = member;
+  useEffect(() => {
+    if (member) lastMemberRef.current = member;
+  }, [member]);
   const shown = member ?? lastMemberRef.current;
 
   // Fresh member → start over on the map view without a stale focus.

@@ -271,6 +271,7 @@ export default function RecapPage() {
       <ConfettiBackdrop />
       <div className="relative z-10 mb-3 flex items-center gap-2">
         <button
+          type="button"
           onClick={() => navigate(-1)}
           className="rounded-full bg-white/80 p-2 ring-1 ring-slate-200"
           aria-label={t("common.back")}
@@ -282,6 +283,7 @@ export default function RecapPage() {
         </h2>
         <div className="ml-auto flex items-center gap-1">
           <button
+            type="button"
             onClick={() => setYear((y) => y - 1)}
             disabled={!canGoPrev}
             className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
@@ -290,6 +292,7 @@ export default function RecapPage() {
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
+            type="button"
             onClick={() => setYear((y) => y + 1)}
             disabled={!canGoNext}
             className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"

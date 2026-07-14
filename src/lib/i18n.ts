@@ -538,6 +538,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "reactions.toggle": "Reagera med {emoji}",
 
     "admin.label": "Admin",
+    "admin.mode": "Adminläge",
+    "admin.mode.on": "På",
+    "admin.mode.off": "Av",
     "admin.rename": "Döp om plats",
     "admin.rename.prompt": 'Nytt namn för "{name}"',
     "admin.rename.success": "Plats omdöpt till {name}",
@@ -1217,6 +1220,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "reactions.toggle": "React with {emoji}",
 
     "admin.label": "Admin",
+    "admin.mode": "Admin mode",
+    "admin.mode.on": "On",
+    "admin.mode.off": "Off",
     "admin.rename": "Rename spot",
     "admin.rename.prompt": 'New name for "{name}"',
     "admin.rename.success": "Renamed to {name}",

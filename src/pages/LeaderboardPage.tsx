@@ -49,20 +49,23 @@ export default function LeaderboardPage() {
       scope === "global"
         ? null
         : new Set(groups.find((g) => g.id === scope)?.members ?? []);
-    return roster
-      .filter((u) => !memberFilter || memberFilter.has(u.uid))
-      .map((u) => {
-        // Achievements persisted on the profile drive the border — richer
-        // than the old live computation (all-time, not just this year).
-        const unlocked = new Set(Object.keys(u.achievements ?? {}));
-        return {
-          uid: u.uid,
-          displayName: u.displayName,
-          points: u.scores?.[String(year)] ?? 0,
-          border: resolveBorder(u.selectedBorder, unlocked.size, unlocked),
-          stats: u.statsByYear?.[String(year)] ?? null,
-        };
+    // One pass: skip non-members and build each row inline, instead of
+    // filtering the roster and then mapping the survivors.
+    const out: Row[] = [];
+    for (const u of roster) {
+      if (memberFilter && !memberFilter.has(u.uid)) continue;
+      // Achievements persisted on the profile drive the border — richer
+      // than the old live computation (all-time, not just this year).
+      const unlocked = new Set(Object.keys(u.achievements ?? {}));
+      out.push({
+        uid: u.uid,
+        displayName: u.displayName,
+        points: u.scores?.[String(year)] ?? 0,
+        border: resolveBorder(u.selectedBorder, unlocked.size, unlocked),
+        stats: u.statsByYear?.[String(year)] ?? null,
       });
+    }
+    return out;
   }, [roster, groups, scope, year]);
 
   // The global board only shows the podium (top 5) plus your own row with
@@ -203,6 +206,18 @@ function BoardRow({
       animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
       transition={{ type: "tween", duration: 0.2 }}
       onClick={onSelect}
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      onKeyDown={
+        onSelect
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelect();
+              }
+            }
+          : undefined
+      }
       className={cn(
         "glass relative flex items-center gap-3 p-3 transition",
         podium.cardClass,
@@ -337,6 +352,7 @@ function ScopeChip({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       data-active={active}
       className="chip whitespace-nowrap data-[active=true]:bg-wave-600 data-[active=true]:text-white data-[active=true]:ring-wave-700"

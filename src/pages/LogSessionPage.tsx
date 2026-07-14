@@ -117,10 +117,12 @@ export default function LogSessionPage() {
   // True from now-mode entry until the auto-attach decision (or a
   // geolocation failure) — drives the non-blocking "waiting for GPS" hint.
   const [locating, setLocating] = useState(false);
-  // Render-synced mirror so the position-watch callback sees the current
-  // pick without re-subscribing.
+  // Mirror so the position-watch callback (async) sees the current pick
+  // without re-subscribing. Updated from an effect, not during render.
   const pickedPlaceIdRef = useRef(pickedPlaceId);
-  pickedPlaceIdRef.current = pickedPlaceId;
+  useEffect(() => {
+    pickedPlaceIdRef.current = pickedPlaceId;
+  }, [pickedPlaceId]);
   // Set when the user explicitly clicks the "now" tab — suppresses the
   // auto-fallback to "pick" mode when no nearby place is found so the
   // user's intentional choice is respected.
@@ -234,9 +236,11 @@ export default function LogSessionPage() {
     const q = debouncedSearch.trim().toLowerCase();
     if (!q) return [];
     const origin = coords ?? searchOrigin;
-    const matches = placesWithKey
-      .filter(({ key }) => key.includes(q))
-      .map(({ p }) => p);
+    // One pass over the (potentially large) place list per keystroke.
+    const matches: (typeof places)[number][] = [];
+    for (const { p, key } of placesWithKey) {
+      if (key.includes(q)) matches.push(p);
+    }
     if (origin) {
       matches.sort(
         (a, b) => haversineMeters(origin, a) - haversineMeters(origin, b),

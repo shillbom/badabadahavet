@@ -275,6 +275,7 @@ export default function LoginPage() {
             </Label>
             <select
               id="ob-country"
+              aria-label={t("auth.home_country")}
               value={homeCountry}
               onChange={(e) => setHomeCountry(e.target.value, true)}
               className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"
@@ -432,6 +433,7 @@ export default function LoginPage() {
               </Label>
               <select
                 id="home-country"
+                aria-label={t("auth.home_country")}
                 value={homeCountry}
                 onChange={(e) => setHomeCountry(e.target.value, true)}
                 className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"

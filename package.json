@@ -24,7 +24,8 @@
     "backfill:scores": "node scripts/backfill-scores.mjs",
     "backfill:thumbnails": "node scripts/backfill-thumbnails.mjs",
     "merge:places": "node scripts/merge-places.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "doctor": "npx react-doctor@latest"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -57,6 +58,7 @@
     "oxlint": "^1.73.0",
     "prettier": "^3.9.5",
     "prettier-plugin-tailwindcss": "^0.8.0",
+    "react-doctor": "^0.7.7",
     "tailwindcss": "^4.3.2",
     "typescript": "^7.0.2",
     "vite": "^8.1.4",

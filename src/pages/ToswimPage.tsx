@@ -254,6 +254,7 @@ export default function ToswimPage() {
                   </div>
                 )}
                 <button
+                  type="button"
                   onClick={() =>
                     onRemove(e.placeId, e.place?.name ?? t("toswim.this_spot"))
                   }

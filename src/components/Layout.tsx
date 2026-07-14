@@ -14,6 +14,7 @@ import {
 import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
+import { useIsAdmin } from "@/lib/adminMode";
 import { openRecap } from "@/components/SinceLastVisit";
 import { cn, rememberReturnPath } from "@/lib/utils";
 import { buttonClasses } from "@/components/ui/Button";
@@ -26,6 +27,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const t = useT();
+  const isAdmin = useIsAdmin();
   const myStats = useStore((s) => s.myStats);
 
   const [nudgeOpen, setNudgeOpen] = useState(false);
@@ -128,7 +130,7 @@ export default function Layout() {
                     <div className="font-display text-base leading-none font-bold text-wave-900">
                       {profile?.displayName ?? t("layout.swimmer")}
                     </div>
-                    {profile?.isAdmin ? (
+                    {isAdmin ? (
                       <span
                         className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-white uppercase shadow"
                         title={t("admin.label")}
