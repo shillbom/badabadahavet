@@ -144,10 +144,16 @@ function buildQuery(scope) {
   return `${head}${pre}(${clauses.join("")});out center tags;`;
 }
 
+const MAX_ROUNDS = 3;
+
 async function overpass(query) {
   let lastErr = null;
-  for (const endpoint of ENDPOINTS) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+  // Round-robin across the mirrors: the public instances are frequently busy
+  // (429 rate-limit / 504 gateway timeout), so on a transient failure we move
+  // straight to the next mirror rather than hammering the busy one, and only
+  // back off between full rounds.
+  for (let round = 1; round <= MAX_ROUNDS; round++) {
+    for (const endpoint of ENDPOINTS) {
       try {
         const res = await fetch(endpoint, {
           method: "POST",
@@ -158,11 +164,12 @@ async function overpass(query) {
           },
           body: `data=${encodeURIComponent(query)}`,
         });
-        // 429 (rate limited) / 504 (server timeout) are transient — back off,
-        // then move to the next mirror. Other non-2xx are real errors.
+        // 429 / 504 are transient — try the next mirror immediately.
         if (res.status === 429 || res.status === 504) {
-          console.warn(`  ⚠ ${endpoint} → ${res.status}, backing off…`);
-          await sleep(attempt * 3000);
+          console.warn(
+            `  ⚠ ${endpoint} → ${res.status} (round ${round}), next…`,
+          );
+          lastErr = new Error(`${endpoint} → ${res.status}`);
           continue;
         }
         if (!res.ok) {
@@ -173,13 +180,14 @@ async function overpass(query) {
         return await res.json();
       } catch (e) {
         lastErr = e;
-        console.warn(`  ⚠ ${endpoint} attempt ${attempt} failed: ${e.message}`);
-        await sleep(attempt * 2000);
+        console.warn(`  ⚠ ${endpoint} failed (round ${round}): ${e.message}`);
       }
     }
+    if (round < MAX_ROUNDS) await sleep(round * 3000);
   }
   throw new Error(
-    `all Overpass endpoints failed (last: ${lastErr?.message ?? "unknown"})`,
+    `all Overpass endpoints failed after ${MAX_ROUNDS} rounds (last: ${lastErr?.message ?? "unknown"}). ` +
+      `The public servers may be overloaded — retry later, narrow with --bbox, or pass --endpoint=<your instance>.`,
   );
 }
 
