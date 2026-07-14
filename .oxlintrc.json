@@ -24,6 +24,12 @@
       "rules": {
         "unicorn/consistent-function-scoping": "off"
       }
+    },
+    {
+      "files": ["src/components/fx/**"],
+      "rules": {
+        "unicorn/no-array-fill-with-reference-type": "off"
+      }
     }
   ]
 }

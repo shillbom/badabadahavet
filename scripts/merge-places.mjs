@@ -99,7 +99,9 @@ const [placesSnap, sessionsSnap, usersSnap] = await Promise.all([
   db.collection("users").get(),
 ]);
 const places = new Map(placesSnap.docs.map((d) => [d.id, d.data()]));
-const sessions = sessionsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+const sessions = sessionsSnap.docs.map((d) =>
+  Object.assign(d.data(), { id: d.id }),
+);
 
 const sessionCount = (placeId) =>
   sessions.filter((s) => s.placeId === placeId).length;
