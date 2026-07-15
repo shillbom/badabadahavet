@@ -1,4 +1,11 @@
-import { Navigate, Route, Routes, useNavigate } from "react-router";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { domMax, LazyMotion } from "framer-motion";
 import { useStore } from "@/store/sessions";
@@ -26,6 +33,20 @@ const UPDATE_CHECK_MS = 60 * 60 * 1000; // hourly
 function LoginRedirect() {
   rememberReturnPath();
   return <Navigate to="/login" replace />;
+}
+
+/**
+ * `/s/:placeId` is the share entrypoint. In production the spotPreview Cloud
+ * Function (see functions/index.js) intercepts it — serving OG tags to link
+ * scrapers and 302'ing browsers to `/spot/...`. This client-side fallback
+ * handles the same redirect for environments where that function isn't in the
+ * path (local dev, or if the browser ever renders the route directly), so a
+ * shared `/s/...` link always resolves to the real spot page.
+ */
+function ShareRedirect() {
+  const { placeId } = useParams();
+  const { search } = useLocation();
+  return <Navigate to={`/spot/${placeId ?? ""}${search}`} replace />;
 }
 
 // Route-level code splitting + post-login preload config lives in
@@ -175,6 +196,7 @@ export default function App() {
               path="login"
               element={user ? <Navigate to="/" replace /> : <LoginPage />}
             />
+            <Route path="s/:placeId" element={<ShareRedirect />} />
             <Route element={<Layout />}>
               <Route index element={<Pages.Map />} />
               <Route path="spot/:placeId" element={<Pages.Spot />} />
