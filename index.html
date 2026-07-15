@@ -122,48 +122,23 @@
     <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
-    <!-- Warm up the connections the app needs the instant it boots: the auth +
-         data backends, and Google Fonts. preconnect opens DNS/TLS early so the
-         first auth/Firestore request and the font fetch don't pay handshake
-         latency on the critical path. -->
+    <!-- Warm up the connections the app needs the instant it boots. preconnect
+         opens DNS/TLS early so the first auth/Firestore request doesn't pay
+         handshake latency on the critical path. -->
     <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
     <link rel="preconnect" href="https://securetoken.googleapis.com" />
     <link rel="preconnect" href="https://firestore.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Map tiles load only after sign-in, so a lighter DNS hint is enough. -->
     <link rel="dns-prefetch" href="https://a.tile.openstreetmap.org" />
 
-    <!-- Fonts loaded here (not via @import inside the bundled CSS) so the
-         browser discovers them during HTML parse and fetches them in parallel.
-         Loaded async (preload → swap to stylesheet onload) so this third-party
-         request never blocks first paint — the splash and body fall back to
-         system-ui and swap in the webfont when it arrives (display=swap). -->
-    <link
-      rel="preload"
-      as="style"
-      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap"
-      onload="
-        this.onload = null;
-        this.rel = 'stylesheet';
-      "
-    />
-    <noscript>
-      <link
-        rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=Caveat+Brush&display=swap"
-      />
-    </noscript>
-    <!-- Preload the splash wordmark's font (Caveat Brush, latin subset — the
-         range that covers "Badligan") so it's ready at first paint. Otherwise
-         the big centred word first renders in the fallback and visibly
-         reshapes/shifts when the async webfont swaps in. -->
+    <!-- Preload the self-hosted splash wordmark font so it is ready at first
+         paint. The remaining font files are discovered from the bundled CSS. -->
     <link
       rel="preload"
       as="font"
       type="font/woff2"
       crossorigin
-      href="https://fonts.gstatic.com/s/caveatbrush/v12/EYq0maZfwr9S9-ETZc3fKXt8XLOS.woff2"
+      href="/fonts/caveat-brush-latin.woff2"
     />
 
     <!-- First-paint background matching the splash. The animated splash
