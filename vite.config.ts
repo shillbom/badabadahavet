@@ -1,13 +1,28 @@
 import { defineConfig } from "vite";
 
 import { VitePWA } from "vite-plugin-pwa";
-import react from "@vitejs/plugin-react";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
+import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
+
+// React Compiler preset. Its default filter is a fast `code` heuristic that
+// only runs Babel on files whose (already react-transformed) source *looks*
+// component-y — but that has false-negatives, silently skipping ~8 real
+// component files here. Replace it with a path filter so every app .tsx/.jsx
+// is compiled (node_modules is already excluded by the plugin's defaults).
+const compilerPreset = reactCompilerPreset({ target: "19" });
+compilerPreset.rolldown.filter = { id: /\.[jt]sx(\?|$)/ };
 
 export default defineConfig({
   plugins: [
     react(),
+    // React Compiler — auto-memoizes components at build time (emits
+    // react/compiler-runtime). On rolldown-vite the base transform is oxc, so
+    // react()'s own `babel` option is ignored; the compiler must run as this
+    // separate Babel pass right after react(). Filter widened above.
+    // See npx react-compiler-healthcheck.
+    babel({ presets: [compilerPreset] }),
     tailwindcss(),
     VitePWA({
       // We control activation ourselves (see App.tsx): apply a new version
