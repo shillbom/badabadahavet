@@ -5,6 +5,8 @@ import {
   readingFromLegacyPlace,
   buildSummaryEntries,
   summaryChanged,
+  extractWaterSample,
+  qualityMapChanged,
 } from "./tempLogic.js";
 
 const reading = (at, t = 17.5, p = "smhi") => ({ t, at, p });
@@ -126,5 +128,65 @@ describe("summaryChanged", () => {
   it("treats null/undefined as empty", () => {
     expect(summaryChanged(null, {})).toBe(false);
     expect(summaryChanged(undefined, entries)).toBe(true);
+  });
+});
+
+describe("extractWaterSample", () => {
+  const day = 24 * 60 * 60 * 1000;
+  const base = 1_752_000_000_000;
+
+  it("takes the newest sample by date (ignores ordering)", () => {
+    const body = {
+      // top-level mirrors the newest sample
+      sampleValue: 3,
+      algalValue: 3,
+      sampleDate: base,
+      testResult: [
+        { sampleDate: base - 40 * day, sampleValue: 1, algalValue: 4 },
+        { sampleDate: base, sampleValue: 3, algalValue: 3 },
+      ],
+    };
+    expect(extractWaterSample(body)).toEqual({ v: 3, a: 3, at: base });
+  });
+
+  it("falls back to top-level fields when testResult is absent", () => {
+    expect(
+      extractWaterSample({ sampleValue: 1, algalValue: 4, sampleDate: base }),
+    ).toEqual({ v: 1, a: 4, at: base });
+  });
+
+  it("keeps a partial sample (verdict but no algae)", () => {
+    expect(extractWaterSample({ sampleValue: 2, sampleDate: base })).toEqual({
+      v: 2,
+      at: base,
+    });
+  });
+
+  it("returns null without a date or without verdict/algae", () => {
+    expect(extractWaterSample({})).toBeNull();
+    expect(extractWaterSample(null)).toBeNull();
+    expect(extractWaterSample({ sampleValue: 1 })).toBeNull(); // no date
+    expect(extractWaterSample({ sampleDate: base })).toBeNull(); // no v/a
+  });
+});
+
+describe("qualityMapChanged", () => {
+  const map = () => ({
+    a: { v: 1, a: 4, at: 1000 },
+    b: { v: 3, a: 3, at: 2000 },
+  });
+
+  it("false for identical content and both-empty", () => {
+    expect(qualityMapChanged(map(), map())).toBe(false);
+    expect(qualityMapChanged(null, {})).toBe(false);
+  });
+
+  it("true when a value, key, or count differs", () => {
+    expect(
+      qualityMapChanged(map(), { ...map(), a: { v: 1, a: 4, at: 1001 } }),
+    ).toBe(true);
+    expect(qualityMapChanged(map(), { a: map().a })).toBe(true);
+    expect(qualityMapChanged(map(), { a: map().a, c: map().b })).toBe(true);
+    expect(qualityMapChanged(undefined, map())).toBe(true);
   });
 });

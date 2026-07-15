@@ -65,6 +65,19 @@ export type TempProvider = "havochvatten" | "smhi" | "open-meteo";
  *  (doc-size budget): t = °C, at = epoch ms sampled, p = producing feed. */
 export type TempReading = { t: number; at: number; p: TempProvider };
 
+/** The latest official water-quality lab sample from Hav och Vatten, pulled
+ *  from the same badplatsen detail doc the temperature comes from. Packed
+ *  into `tempSummary/current` alongside the temp readings — kept OFF the
+ *  place docs for the same reason temps are (the always-on `places` listener
+ *  would fan every change out to every client). Field names are terse for the
+ *  same doc-size reason: `v` = sample verdict (1 Tjänligt · 2 Tjänligt m.
+ *  anm. · 3 Otjänligt · 4 Uppgift saknas), `a` = algae (3 Blomning · 4 Ingen
+ *  blomning · 5 Ingen uppgift), `at` = epoch ms the sample was taken.
+ *  Sampling is seasonal and roughly biweekly, so consumers gate on freshness
+ *  and always surface `at`. Codes are stored raw and mapped to bilingual
+ *  labels in the UI (see src/lib/waterQuality.ts). */
+export type WaterSample = { v?: number; a?: number; at: number };
+
 /** tempSummary/current — every place's latest reading keyed by placeId,
  *  rebuilt by the daily sweep (scripts/update-temperatures.mjs). Clients
  *  subscribe to this single doc instead of receiving each temp write as a
@@ -73,6 +86,10 @@ export type TempReading = { t: number; at: number; p: TempProvider };
 export type TempSummaryDoc = {
   updatedAt: number;
   entries: Record<string, TempReading>;
+  /** Latest water-quality sample per placeId (only spots sampled recently —
+   *  the sweep drops entries older than ~2 weeks). Present only for Hav och
+   *  Vatten baths that have a recent lab sample. */
+  quality?: Record<string, WaterSample>;
 };
 
 /** placeTemps/{placeId} — the latest reading for one place, written by the

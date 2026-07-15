@@ -12,6 +12,7 @@ import {
   Plus,
   Share2,
   Thermometer,
+  Droplets,
   Pencil,
   Trash2,
   ImageOff,
@@ -39,9 +40,16 @@ import type {
   PlaceWithTemp,
   SessionDoc,
   TempReading,
+  WaterSample,
 } from "@/lib/types";
 import { formatDate, rememberReturnPath, shareOrCopy } from "@/lib/utils";
 import { freshestReading } from "@/lib/temps";
+import {
+  algaeSeverity,
+  isSampleFresh,
+  sampleSeverity,
+  type QualitySeverity,
+} from "@/lib/waterQuality";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import { useStore } from "@/store/sessions";
 import SwimMap from "@/components/SwimMap";
@@ -126,6 +134,9 @@ export function SpotView({
   const summaryTemp = useStore((s) => s.tempsByPlace.get(placeId));
   const reading = freshestReading(liveTemp, summaryTemp ?? null);
   const readingAt = reading?.at;
+  // Latest official water sample (verdict + algae), from the same summary doc
+  // as the temps. Only Hav och Vatten baths with a recent sample have one.
+  const waterSample = useStore((s) => s.qualityByPlace.get(placeId));
 
   // Ask the server for a fresher reading once we know what we already have
   // (both the placeTemps snapshot and the place doc have resolved). The
@@ -456,6 +467,8 @@ export function SpotView({
 
       <WaterTempCard reading={reading} t={t} />
 
+      <WaterQualityCard sample={waterSample} t={t} />
+
       {place.nude ? (
         <div className="mt-3">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50/80 px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">
@@ -645,6 +658,69 @@ function WaterTempCard({
           {t("spot.temp.source", { source: sourceLabel })}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+const QUALITY_PILL: Record<QualitySeverity, string> = {
+  ok: "bg-teal-50 text-teal-800 ring-teal-200",
+  warn: "bg-amber-50 text-amber-800 ring-amber-200",
+  bad: "bg-rose-50 text-rose-800 ring-rose-200",
+  muted: "bg-slate-50 text-slate-600 ring-slate-200",
+};
+
+/**
+ * The latest official water sample from Hav och Vatten — the overall verdict
+ * (Tjänligt/Otjänligt) and any algae bloom. Renders nothing unless there's a
+ * recent sample (official sampling is biweekly; readings older than ~2 weeks
+ * are treated as no current data — see lib/waterQuality). The sample date is
+ * always shown so the reader can judge freshness.
+ */
+function WaterQualityCard({
+  sample,
+  t,
+}: {
+  sample: WaterSample | undefined;
+  t: (key: string, vars?: Record<string, string | number>) => string;
+}) {
+  if (!sample || !isSampleFresh(sample.at)) return null;
+
+  // Only render codes we have labels for (skip "no data" values).
+  const showAlgae = sample.a === 3 || sample.a === 4;
+  const showVerdict =
+    typeof sample.v === "number" && sample.v >= 1 && sample.v <= 3;
+  if (!showAlgae && !showVerdict) return null;
+
+  return (
+    <div className="mt-3 rounded-2xl bg-white/70 p-3 ring-1 ring-slate-200">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-wave-900">
+        <Droplets className="h-4 w-4 text-wave-600" />
+        {t("spot.quality.title")}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {showAlgae ? (
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${QUALITY_PILL[algaeSeverity(sample.a)]}`}
+          >
+            {t(`quality.algae.${sample.a}`)}
+          </span>
+        ) : null}
+        {showVerdict ? (
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${QUALITY_PILL[sampleSeverity(sample.v)]}`}
+          >
+            {t(`quality.sample.${sample.v}`)}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-1.5 text-[11px] text-slate-500">
+        {t("spot.quality.sampled", { date: formatDate(sample.at) })}
+      </div>
+      <div className="mt-0.5 text-[11px] text-slate-400">
+        {t("spot.quality.source")}
+      </div>
     </div>
   );
 }

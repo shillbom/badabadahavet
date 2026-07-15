@@ -3,6 +3,7 @@ import type {
   PlaceTempDoc,
   PlaceWithTemp,
   TempReading,
+  WaterSample,
 } from "./types";
 
 // Client-side twins of functions/tempLogic.js — the compact reading shape
@@ -43,6 +44,19 @@ export function summaryToMap(
   for (const [placeId, raw] of Object.entries(entries ?? {})) {
     const r = asReading(raw);
     if (r) m.set(placeId, r);
+  }
+  return m;
+}
+
+/** The tempSummary `quality` map as a Map, dropping entries with no date. */
+export function qualityToMap(
+  quality: Record<string, WaterSample> | undefined,
+): Map<string, WaterSample> {
+  const m = new Map<string, WaterSample>();
+  for (const [placeId, raw] of Object.entries(quality ?? {})) {
+    if (raw && typeof raw.at === "number" && !Number.isNaN(raw.at)) {
+      m.set(placeId, raw);
+    }
   }
   return m;
 }
