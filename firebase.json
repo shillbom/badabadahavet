@@ -55,6 +55,10 @@
         "source": "/api/banUser",
         "function": { "functionId": "banUser", "region": "europe-west1" }
       },
+      {
+        "source": "/s/**",
+        "function": { "functionId": "spotPreview", "region": "europe-west1" }
+      },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [

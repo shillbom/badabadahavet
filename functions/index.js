@@ -2,7 +2,7 @@ import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { getAuth } from "firebase-admin/auth";
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import {
@@ -1249,5 +1249,234 @@ export const banUser = onCall(
     }
 
     return { ok: true };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Share link previews (Open Graph / Twitter cards)
+// ---------------------------------------------------------------------------
+// The app is a SPA: Hosting rewrites every path to a single static index.html
+// whose OG tags are generic, so link-preview scrapers (Messenger, WhatsApp,
+// Slack, iMessage, X, Discord…) — which don't run our JS — render the same
+// logo card for every shared place/session. This function backs the `/s/**`
+// Hosting rewrite (see firebase.json) and serves *per-place / per-session* OG
+// tags. Real browsers are 302'd straight into the SPA route (keeping the app's
+// own `/spot/**` deep links fully static and fast); only scrapers pay for the
+// Firestore reads that build the card. Share buttons emit `/s/...` URLs; the
+// SPA also has a client-side `/s/:placeId` fallback for local dev where this
+// function isn't running.
+
+const CANONICAL_ORIGIN = "https://badligan.club";
+const SHARE_LOGO_URL = `${CANONICAL_ORIGIN}/web-app-manifest-512x512.png`;
+
+// Known link-preview / social scraper user-agents. Anything not matching is
+// treated as a real browser and bounced into the SPA. The list is generous on
+// purpose (false positives just mean a scraper-style page that still redirects
+// humans via the meta-refresh + script below, so misclassification is safe).
+const SHARE_CRAWLER_UA =
+  /facebookexternalhit|facebookcatalog|Facebot|Twitterbot|Slackbot|Slack-ImgProxy|LinkedInBot|WhatsApp|TelegramBot|Discordbot|Pinterest|redditbot|Applebot|SkypeUriPreview|vkShare|Googlebot|Google-InspectionTool|bingbot|embedly|Iframely|Nuzzel|Qwantify|outbrain|Bitrix|XING-contenttabreceiver/i;
+
+/** Minimal HTML-attribute escaping for values interpolated into meta tags. */
+function shareEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Collapse whitespace and clip to `max` chars on a word boundary, adding an
+ *  ellipsis — keeps long spot descriptions / notes from overflowing the card. */
+function shareTruncate(value, max) {
+  const s = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const lastSpace = cut.lastIndexOf(" ");
+  const body = lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return body.replace(/[\s.,;:!?–-]+$/, "") + "…";
+}
+
+/** The latest photo among a place's most recent swims. Scans a bounded window
+ *  (most spots' recent swims include a photo; this is a preview nicety, not an
+ *  exhaustive search) and returns the first photoUrl found, or null. */
+function latestPhotoFrom(sessionDocs) {
+  for (const doc of sessionDocs) {
+    const url = doc.data().photoUrl;
+    if (typeof url === "string" && url) return url;
+  }
+  return null;
+}
+
+export const spotPreview = onRequest(
+  {
+    region: PROJECT_REGION,
+    invoker: "public",
+    maxInstances: 10,
+    memory: "256MiB",
+    timeoutSeconds: 15,
+  },
+  async (req, res) => {
+    // Path is `/s/<placeId>` (+ optional `?session=<id>`); the `/s/**` rewrite
+    // passes the original URL through untouched.
+    const parts = req.path.split("/").filter(Boolean);
+    const placeId = parts[1] ?? "";
+    const sessionId =
+      typeof req.query.session === "string" ? req.query.session : "";
+
+    // Where a real browser should end up: the static SPA deep link.
+    const appPath = placeId
+      ? `/spot/${encodeURIComponent(placeId)}${
+          sessionId ? `?session=${encodeURIComponent(sessionId)}` : ""
+        }`
+      : "/";
+
+    // Real browsers: clean server redirect into the SPA, no Firestore reads.
+    const ua = req.get("user-agent") ?? "";
+    if (!SHARE_CRAWLER_UA.test(ua)) {
+      res.set("Cache-Control", "no-store");
+      res.redirect(302, appPath);
+      return;
+    }
+
+    // Scrapers: build a per-place / per-session card. Defaults cover a missing
+    // or deleted target so a stale link still previews as the app itself.
+    let title = "Badligan – en liten, vänlig badtävling";
+    let description =
+      "Logga dina bad, samla badplatser på kartan, lås upp utmärkelser och tävla med vänner om poäng.";
+    let image = SHARE_LOGO_URL;
+    let largeImage = false;
+    let ogType = "website";
+
+    try {
+      const db = getFirestore();
+      const placeSnap = placeId
+        ? await db.collection("places").doc(placeId).get()
+        : null;
+      const place = placeSnap?.exists ? placeSnap.data() : null;
+      const placeName = place?.name ?? null;
+
+      if (sessionId) {
+        // A shared swim: show its own photo and the swimmer's note (if any).
+        const sessionSnap = await db
+          .collection("sessions")
+          .doc(sessionId)
+          .get();
+        const session = sessionSnap.exists ? sessionSnap.data() : null;
+        if (session) {
+          const where = placeName ?? session.placeName ?? "en badplats";
+          ogType = "article";
+          title = `${session.displayName}s bad på ${where}`;
+          const note =
+            typeof session.note === "string" ? session.note.trim() : "";
+          description = note
+            ? `”${shareTruncate(note, 180)}” – ${session.displayName} på ${where}`
+            : `${session.displayName} badade på ${where}. Följ med i Badligan – logga bad, samla badplatser och tävla med vänner.`;
+          // A swim photo makes a proper wide card; otherwise the logo.
+          if (session.photoUrl) {
+            image = session.photoUrl;
+            largeImage = true;
+          }
+        }
+      } else if (place) {
+        title = `${placeName} på Badligan`;
+
+        // Gather the extras in parallel: total swim count, a recent photo to
+        // use as the card image, and the latest water temperature.
+        const sessionsForPlace = db
+          .collection("sessions")
+          .where("placeId", "==", placeId);
+        const [countSnap, recentSnap, tempSnap] = await Promise.all([
+          sessionsForPlace.count().get(),
+          sessionsForPlace.orderBy("date", "desc").limit(25).get(),
+          db.doc("tempSummary/current").get(),
+        ]);
+
+        const swimCount = countSnap.data().count ?? 0;
+        const photoUrl = latestPhotoFrom(recentSnap.docs);
+        const tempEntry = tempSnap.exists
+          ? tempSnap.data().entries?.[placeId]
+          : null;
+        const temp =
+          tempEntry && typeof tempEntry.t === "number" ? tempEntry.t : null;
+
+        // "18.3 °C i vattnet · 42 bad" — matches how the app renders both.
+        const stats = [];
+        if (temp != null) stats.push(`${temp.toFixed(1)} °C i vattnet`);
+        if (swimCount > 0) stats.push(`${swimCount} bad`);
+        const statLine = stats.join(" · ");
+
+        // Lead with the spot's own description when it has one, then the stats.
+        const info = typeof place.info === "string" ? place.info.trim() : "";
+        if (info) {
+          const infoText = shareTruncate(info, 160);
+          description = statLine ? `${infoText} · ${statLine}` : infoText;
+        } else {
+          description = statLine
+            ? `${statLine} · Kolla in ${placeName} på Badligan.`
+            : `Kolla in ${placeName} på Badligan – logga dina bad, samla badplatser på kartan och tävla med vänner om poäng.`;
+        }
+
+        if (photoUrl) {
+          image = photoUrl;
+          largeImage = true;
+        }
+      }
+    } catch (e) {
+      // Fall back to the site-level defaults; a preview is better than a 500.
+      logger.warn("spotPreview lookup failed", {
+        placeId,
+        sessionId,
+        error: String(e),
+      });
+    }
+
+    const shareUrl = `${CANONICAL_ORIGIN}/s/${encodeURIComponent(placeId)}${
+      sessionId ? `?session=${encodeURIComponent(sessionId)}` : ""
+    }`;
+    const cardType = largeImage ? "summary_large_image" : "summary";
+    const t = shareEscape(title);
+    const d = shareEscape(description);
+    const img = shareEscape(image);
+    const url = shareEscape(shareUrl);
+    const redirect = shareEscape(appPath);
+
+    const html = `<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${t}</title>
+    <meta name="description" content="${d}" />
+    <link rel="canonical" href="${url}" />
+    <meta property="og:type" content="${ogType}" />
+    <meta property="og:site_name" content="Badligan" />
+    <meta property="og:title" content="${t}" />
+    <meta property="og:description" content="${d}" />
+    <meta property="og:url" content="${url}" />
+    <meta property="og:locale" content="sv_SE" />
+    <meta property="og:image" content="${img}" />
+    <meta name="twitter:card" content="${cardType}" />
+    <meta name="twitter:title" content="${t}" />
+    <meta name="twitter:description" content="${d}" />
+    <meta name="twitter:image" content="${img}" />
+    <!-- Safety net: if a real browser reaches this page (e.g. a UA we didn't
+         classify as a scraper), send it into the app. Scrapers ignore both. -->
+    <meta http-equiv="refresh" content="0; url=${redirect}" />
+  </head>
+  <body>
+    <p>Öppnar Badligan…</p>
+    <script>
+      location.replace(${JSON.stringify(appPath)});
+    </script>
+  </body>
+</html>`;
+
+    // Short cache: scrapers re-fetch and the underlying data changes rarely.
+    res.set("Cache-Control", "public, max-age=300, s-maxage=600");
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.status(200).send(html);
   },
 );

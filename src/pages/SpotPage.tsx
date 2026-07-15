@@ -179,27 +179,42 @@ export function SpotView({
     [visibleSessions],
   );
 
-  // When a `?session=<id>` deep link is opened, scroll the matching swim
-  // into view once it has streamed in, and flash a highlight ring so the
-  // user can spot it in the list.
+  // When a `?session=<id>` deep link is opened (e.g. a shared swim), scroll
+  // the matching swim into view once it has streamed in, and flash a
+  // highlight ring so the user can spot it in the list.
+  //
+  // A single scroll isn't enough: the mini-map (a lazily-loaded Leaflet chunk)
+  // and the photo thumbnails above the list finish laying out *after* this
+  // first fires and push the row down — so a one-shot smooth scroll lands on
+  // stale coordinates (or gets interrupted mid-animation) and the swim ends
+  // up off-screen. Re-center a few times as the layout settles, using instant
+  // scrolls so no long animation is in flight when a height changes, then a
+  // final smooth nudge to tidy up. Guarded to run once per session id.
   useEffect(() => {
     if (!focusedSessionId) return;
     if (highlightedRef.current.has(focusedSessionId)) return;
     const exists = visibleSessions.some((s) => s.id === focusedSessionId);
     if (!exists) return;
     highlightedRef.current.add(focusedSessionId);
-    // Wait a tick so the freshly mounted <li ref={...}> is in the map.
-    const raf = requestAnimationFrame(() => {
+    const recenter = (smooth: boolean) => {
       const el = sessionRefs.current.get(focusedSessionId);
-      if (!el) return;
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-    return () => cancelAnimationFrame(raf);
+      el?.scrollIntoView({
+        behavior: smooth ? "smooth" : "auto",
+        block: "center",
+      });
+    };
+    const timers = [0, 200, 500, 1000].map((delay) =>
+      window.setTimeout(() => recenter(delay === 1000), delay),
+    );
+    return () => timers.forEach(clearTimeout);
   }, [focusedSessionId, visibleSessions]);
 
   async function onShareSpot() {
     if (!place) return;
-    const url = `${window.location.origin}/spot/${place.id}`;
+    // `/s/...` is the share entrypoint that serves per-place OG tags to link
+    // scrapers and 302s real browsers into `/spot/...` (see functions/index.js
+    // spotPreview + the SPA fallback route in App.tsx).
+    const url = `${window.location.origin}/s/${place.id}`;
     const result = await shareOrCopy({
       url,
       title: t("spot.share.title", { name: place.name }),
@@ -211,7 +226,7 @@ export function SpotView({
 
   async function onShareSession(s: SessionDoc) {
     if (!place) return;
-    const url = `${window.location.origin}/spot/${place.id}?session=${s.id}`;
+    const url = `${window.location.origin}/s/${place.id}?session=${s.id}`;
     const result = await shareOrCopy({
       url,
       title: t("spot.share.session_title", {
