@@ -33,8 +33,9 @@ import type {
   TempSummaryDoc,
   UserDoc,
   BannedUser,
+  WaterSample,
 } from "./types";
-import { summaryToMap } from "./temps";
+import { summaryToMap, qualityToMap } from "./temps";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS } from "./scoring";
 import { compressImage, makeThumbDataUrl } from "./image";
@@ -282,17 +283,23 @@ export function watchPlaces(cb: (places: PlaceDoc[]) => void): Unsubscribe {
 }
 
 /**
- * Every place's latest water temperature, packed into the single
- * `tempSummary/current` doc by the daily sweep. One always-on listener on
- * one doc (~1 read/client/day) replaces receiving each temp write as a
+ * Every place's latest water temperature and water-quality sample, packed
+ * into the single `tempSummary/current` doc by the daily sweep. One always-on
+ * listener on one doc (~1 read/client/day) replaces receiving each write as a
  * per-place delta on the whole-collection `places` listener.
  */
 export function watchTempSummary(
-  cb: (temps: Map<string, TempReading>) => void,
+  cb: (data: {
+    temps: Map<string, TempReading>;
+    quality: Map<string, WaterSample>;
+  }) => void,
 ): Unsubscribe {
   return onSnapshot(doc(db, "tempSummary", "current"), (snap) => {
     const data = snap.exists() ? (snap.data() as TempSummaryDoc) : null;
-    cb(summaryToMap(data?.entries));
+    cb({
+      temps: summaryToMap(data?.entries),
+      quality: qualityToMap(data?.quality),
+    });
   });
 }
 

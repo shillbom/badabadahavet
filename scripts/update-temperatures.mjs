@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
  * Refresh water temperatures for every seeded place whose stored reading
- * has gone stale (pass --all to force every place). The same run also
- * syncs, from the very same badplatsen detail doc the temperature comes
- * from, each Hav och Vatten place's:
- *   - official description (`bathInformation`) into
- *     `info`/`infoSource`/`infoUrl`, re-checked monthly per place;
- *     user-contributed info (infoSource === "user") is never touched.
- *   - water-quality checks (algae bloom, latest sample verdict, bathing
- *     advisories, EU classification) into `waterQuality`, re-checked every
- *     couple of days so summer blooms/advisories surface promptly.
- * Both are low-churn place-doc writes, gated on an actual change.
+ * has gone stale (pass --all to force every place). The same run also, from
+ * the very same badplatsen detail doc the temperature comes from:
+ *   - syncs each Hav och Vatten place's official description
+ *     (`bathInformation`) into `info`/`infoSource`/`infoUrl`, re-checked
+ *     monthly per place; user-contributed info (infoSource === "user") is
+ *     never touched (a low-churn place-doc write, gated on an actual change).
+ *   - packs each Hav och Vatten place's latest water sample (verdict + algae
+ *     + date) into the `quality` map on `tempSummary/current`, next to the
+ *     temp readings — kept off the place docs for the same reason temps are.
+ *     Only recent samples (≤ ~2 weeks) are kept.
  *
  *   - Places preferring Hav och Vatten (SE) are read from the `badplatsen`
  *     API first. Most baths have no real-time sensor, so when that returns
@@ -57,8 +57,8 @@ import {
   readingFromLegacyPlace,
   buildSummaryEntries,
   summaryChanged,
-  extractWaterQuality,
-  waterQualityChanged,
+  extractWaterSample,
+  qualityMapChanged,
 } from "../functions/tempLogic.js";
 
 const WRITE = process.argv.includes("--write");
@@ -89,12 +89,11 @@ const HAV_BATH_URL = (nutsCode) =>
 // most days add zero extra writes. Override with --all.
 const INFO_REFRESH_MS = 30 * 24 * 60 * 60 * 1000;
 
-// Water quality (algae blooms / bathing advisories) is time-sensitive in
-// summer, so re-check it far more often than the description — every couple
-// of days (`qualitySyncedAt` bookkeeping). The detail fetch is usually a
-// cache hit (the temperature refresh already pulled it), so this rarely
-// costs an extra upstream call; writes are still gated on an actual change.
-const QUALITY_REFRESH_MS = 2 * 24 * 60 * 60 * 1000;
+// Official bathing samples are taken roughly biweekly, so keep the latest
+// sample in the summary for up to ~2 weeks — matches SAMPLE_FRESH_MS on the
+// client (src/lib/waterQuality.ts). Older samples are dropped from the map so
+// stale results never show and the summary doc stays small.
+const QUALITY_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 // Max stored length for the synced description. Matches
 // PLACE_INFO_MAX_CHARS in functions/index.js — keep in sync.
@@ -439,6 +438,13 @@ async function main() {
   const oldEntries = summarySnap.exists
     ? (summarySnap.data().entries ?? {})
     : {};
+  // Latest water sample per place from the previous run. Seed the working map
+  // with it so places not re-checked this run keep their sample (stale ones
+  // are pruned when the map is rebuilt below).
+  const oldQuality = summarySnap.exists
+    ? (summarySnap.data().quality ?? {})
+    : {};
+  const qualityByPlace = new Map(Object.entries(oldQuality));
   const liveByPlace = new Map();
   placeTempsSnap.forEach((d) => liveByPlace.set(d.id, asReading(d.data())));
   const known = new Map();
@@ -470,19 +476,7 @@ async function main() {
     (ALL ||
       typeof data.infoSyncedAt !== "number" ||
       data.infoSyncedAt < infoCutoff);
-  // Water quality: only Hav och Vatten baths carry it, re-checked every
-  // couple of days (see QUALITY_REFRESH_MS) so blooms/advisories surface
-  // promptly even on a day the temperature reading was still fresh.
-  const qualityCutoff = Date.now() - QUALITY_REFRESH_MS;
-  const qualityDue = (data) =>
-    data.source === "havochvatten.se" &&
-    typeof data.externalId === "string" &&
-    (ALL ||
-      typeof data.qualitySyncedAt !== "number" ||
-      data.qualitySyncedAt < qualityCutoff);
-  const due = withCoords.filter(
-    (d) => tempDue(d) || infoDue(d.data()) || qualityDue(d.data()),
-  );
+  const due = withCoords.filter((d) => tempDue(d) || infoDue(d.data()));
   console.log(
     `→ ${withCoords.length} places with coordinates, ${due.length} due for refresh` +
       (ALL ? " (--all)" : ` (${withCoords.length - due.length} still fresh)`),
@@ -490,7 +484,6 @@ async function main() {
 
   let updated = 0;
   let infoUpdated = 0;
-  let qualityUpdated = 0;
   let skipped = 0;
   let noTemp = 0;
   let processed = 0;
@@ -499,7 +492,7 @@ async function main() {
 
   const tty = process.stdout.isTTY;
   const writeProgress = () => {
-    const line = `→ ${processed}/${due.length} (${updated} temps, ${infoUpdated} info, ${qualityUpdated} quality, ${skipped} unchanged, ${noTemp} no data)`;
+    const line = `→ ${processed}/${due.length} (${updated} temps, ${infoUpdated} info, ${skipped} unchanged, ${noTemp} no data)`;
     if (tty) {
       process.stdout.clearLine?.(0);
       process.stdout.cursorTo?.(0);
@@ -592,17 +585,22 @@ async function main() {
       }
     }
 
-    if (qualityDue(data)) {
-      // Same detail doc as the temp/info sync — usually already cached.
+    // Water sample: for every Hav och Vatten bath in this run, refresh its
+    // entry in the quality map from the same detail doc (usually already
+    // cached by the temp/info sync). Recent samples are kept; stale/missing
+    // ones are dropped. A failed fetch (null body) leaves the carried-over
+    // entry untouched so the next run retries.
+    if (
+      data.source === "havochvatten.se" &&
+      typeof data.externalId === "string"
+    ) {
       const body = await fetchHavDetail(data.externalId);
-      // A null body means the fetch failed: write nothing (not even the
-      // bookkeeping stamp) so the next run retries.
       if (body) {
-        docUpdates.qualitySyncedAt = Date.now();
-        const next = extractWaterQuality(body, Date.now());
-        if (waterQualityChanged(data.waterQuality ?? null, next)) {
-          docUpdates.waterQuality = next ?? FieldValue.delete();
-          qualityUpdated++;
+        const sample = extractWaterSample(body);
+        if (sample && Date.now() - sample.at <= QUALITY_MAX_AGE_MS) {
+          qualityByPlace.set(doc.id, sample);
+        } else {
+          qualityByPlace.delete(doc.id);
         }
       }
     }
@@ -633,24 +631,40 @@ async function main() {
   // no-change day costs the clients nothing.
   const newEntries = buildSummaryEntries(known);
   const entryCount = Object.keys(newEntries).length;
-  if (!summaryChanged(oldEntries, newEntries)) {
-    console.log(`\n→ tempSummary/current unchanged (${entryCount} entries)`);
+  // Rebuild the quality map from currently-known places only (drops deleted
+  // places) and prune any carried-over sample that has since aged out.
+  const cutoffAt = Date.now() - QUALITY_MAX_AGE_MS;
+  const newQuality = {};
+  for (const placeId of known.keys()) {
+    const s = qualityByPlace.get(placeId);
+    if (s && typeof s.at === "number" && s.at >= cutoffAt)
+      newQuality[placeId] = s;
+  }
+  const qualityCount = Object.keys(newQuality).length;
+
+  const entriesDiffer = summaryChanged(oldEntries, newEntries);
+  const qualityDiffer = qualityMapChanged(oldQuality, newQuality);
+  const label = `${entryCount} temps, ${qualityCount} quality`;
+  if (!entriesDiffer && !qualityDiffer) {
+    console.log(`\n→ tempSummary/current unchanged (${label})`);
   } else if (WRITE) {
-    await summaryRef.set({ updatedAt: Date.now(), entries: newEntries });
-    console.log(`\n→ tempSummary/current rewritten (${entryCount} entries)`);
+    await summaryRef.set({
+      updatedAt: Date.now(),
+      entries: newEntries,
+      quality: newQuality,
+    });
+    console.log(`\n→ tempSummary/current rewritten (${label})`);
   } else {
     console.log(
-      `\n→ dry-run: tempSummary/current would be rewritten (${entryCount} entries)`,
+      `\n→ dry-run: tempSummary/current would be rewritten (${label})`,
     );
   }
 
   console.log(
-    `\n✓ done — ${updated} temps updated, ${infoUpdated} info synced, ${qualityUpdated} quality synced, ${skipped} unchanged, ${noTemp} without data (of ${due.length})`,
+    `\n✓ done — ${updated} temps updated, ${infoUpdated} info synced, ${qualityCount} quality entries, ${skipped} unchanged, ${noTemp} without data (of ${due.length})`,
   );
-  if (!WRITE && (updated > 0 || infoUpdated > 0 || qualityUpdated > 0)) {
-    console.log(
-      `run again with --write to commit ${updated + infoUpdated + qualityUpdated} updates.`,
-    );
+  if (!WRITE && (updated > 0 || infoUpdated > 0 || qualityDiffer)) {
+    console.log(`run again with --write to commit the changes.`);
   }
 }
 

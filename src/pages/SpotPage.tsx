@@ -13,7 +13,6 @@ import {
   Share2,
   Thermometer,
   Droplets,
-  AlertTriangle,
   Pencil,
   Trash2,
   ImageOff,
@@ -41,17 +40,14 @@ import type {
   PlaceWithTemp,
   SessionDoc,
   TempReading,
-  WaterQuality,
+  WaterSample,
 } from "@/lib/types";
 import { formatDate, rememberReturnPath, shareOrCopy } from "@/lib/utils";
 import { freshestReading } from "@/lib/temps";
 import {
   algaeSeverity,
-  classSeverity,
-  hasDisplayableQuality,
   isSampleFresh,
   sampleSeverity,
-  visibleAdvisories,
   type QualitySeverity,
 } from "@/lib/waterQuality";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
@@ -138,6 +134,9 @@ export function SpotView({
   const summaryTemp = useStore((s) => s.tempsByPlace.get(placeId));
   const reading = freshestReading(liveTemp, summaryTemp ?? null);
   const readingAt = reading?.at;
+  // Latest official water sample (verdict + algae), from the same summary doc
+  // as the temps. Only Hav och Vatten baths with a recent sample have one.
+  const waterSample = useStore((s) => s.qualityByPlace.get(placeId));
 
   // Ask the server for a fresher reading once we know what we already have
   // (both the placeTemps snapshot and the place doc have resolved). The
@@ -468,7 +467,7 @@ export function SpotView({
 
       <WaterTempCard reading={reading} t={t} />
 
-      <WaterQualityCard quality={place.waterQuality} t={t} />
+      <WaterQualityCard sample={waterSample} t={t} />
 
       {place.nude ? (
         <div className="mt-3">
@@ -671,33 +670,26 @@ const QUALITY_PILL: Record<QualitySeverity, string> = {
 };
 
 /**
- * Official water-quality checks synced from Hav och Vatten (algae bloom,
- * latest lab-sample verdict, active bathing advisories, EU classification).
- * Renders nothing unless there is something current worth showing — HaV
- * samples are seasonal, so stale readings are gated out (see lib/waterQuality)
- * and everything sample-based is dated so the reader can judge freshness.
+ * The latest official water sample from Hav och Vatten — the overall verdict
+ * (Tjänligt/Otjänligt) and any algae bloom. Renders nothing unless there's a
+ * recent sample (official sampling is biweekly; readings older than ~2 weeks
+ * are treated as no current data — see lib/waterQuality). The sample date is
+ * always shown so the reader can judge freshness.
  */
 function WaterQualityCard({
-  quality,
+  sample,
   t,
 }: {
-  quality: WaterQuality | undefined;
+  sample: WaterSample | undefined;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
-  if (!quality || !hasDisplayableQuality(quality)) return null;
+  if (!sample || !isSampleFresh(sample.at)) return null;
 
-  const advisories = visibleAdvisories(quality);
-  const sampleFresh = isSampleFresh(quality.sampleAt);
-  const showAlgae = sampleFresh && (quality.algae === 3 || quality.algae === 4);
-  const showSample =
-    sampleFresh &&
-    typeof quality.sampleValue === "number" &&
-    quality.sampleValue >= 1 &&
-    quality.sampleValue <= 3;
-  const showClass =
-    typeof quality.classification === "number" &&
-    quality.classification >= 1 &&
-    quality.classification <= 4;
+  // Only render codes we have labels for (skip "no data" values).
+  const showAlgae = sample.a === 3 || sample.a === 4;
+  const showVerdict =
+    typeof sample.v === "number" && sample.v >= 1 && sample.v <= 3;
+  if (!showAlgae && !showVerdict) return null;
 
   return (
     <div className="mt-3 rounded-2xl bg-white/70 p-3 ring-1 ring-slate-200">
@@ -706,83 +698,32 @@ function WaterQualityCard({
         {t("spot.quality.title")}
       </div>
 
-      {advisories.map((a) => (
-        <div
-          key={`${a.type}-${a.at}`}
-          className="mb-2 flex items-start gap-2 rounded-xl bg-rose-50 px-2.5 py-2 ring-1 ring-rose-200"
-        >
-          <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-rose-600" />
-          <div className="min-w-0 text-xs text-rose-900">
-            <div className="font-semibold">
-              {t("quality.advisory.title")} · {t(advisoryTypeKey(a.type))}
-            </div>
-            {a.text ? <div className="mt-0.5">{a.text}</div> : null}
-            <div className="mt-0.5 text-[11px] text-rose-700/80">
-              {t("quality.advisory.since", { date: formatDate(a.at) })}
-            </div>
-          </div>
-        </div>
-      ))}
-
-      {showAlgae || showSample ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {showAlgae ? (
-            <span
-              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${QUALITY_PILL[algaeSeverity(quality.algae)]}`}
-            >
-              {t(`quality.algae.${quality.algae}`)}
-            </span>
-          ) : null}
-          {showSample ? (
-            <span
-              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${QUALITY_PILL[sampleSeverity(quality.sampleValue)]}`}
-            >
-              {t(`quality.sample.${quality.sampleValue}`)}
-            </span>
-          ) : null}
-        </div>
-      ) : null}
-
-      {sampleFresh && quality.sampleAt && (showAlgae || showSample) ? (
-        <div className="mt-1.5 text-[11px] text-slate-500">
-          {t("spot.quality.sampled", { date: formatDate(quality.sampleAt) })}
-        </div>
-      ) : null}
-
-      {showClass ? (
-        <div className="mt-2 text-[11px] text-slate-500">
-          {t("quality.class.label", {
-            year: quality.classificationYear ?? "",
-          })}
-          {": "}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {showAlgae ? (
           <span
-            className={
-              classSeverity(quality.classification) === "bad"
-                ? "font-medium text-rose-700"
-                : classSeverity(quality.classification) === "warn"
-                  ? "font-medium text-amber-700"
-                  : "text-slate-600"
-            }
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${QUALITY_PILL[algaeSeverity(sample.a)]}`}
           >
-            {t(`quality.class.${quality.classification}`)}
+            {t(`quality.algae.${sample.a}`)}
           </span>
-        </div>
-      ) : null}
+        ) : null}
+        {showVerdict ? (
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${QUALITY_PILL[sampleSeverity(sample.v)]}`}
+          >
+            {t(`quality.sample.${sample.v}`)}
+          </span>
+        ) : null}
+      </div>
 
-      <div className="mt-2 text-[11px] text-slate-400">
+      <div className="mt-1.5 text-[11px] text-slate-500">
+        {t("spot.quality.sampled", { date: formatDate(sample.at) })}
+      </div>
+      <div className="mt-0.5 text-[11px] text-slate-400">
         {t("spot.quality.source")}
       </div>
     </div>
   );
 }
-
-// Advisory type codes we have a specific label for (see i18n); anything else
-// falls back to the generic "Advisory" string.
-const KNOWN_ADVISORY_TYPES = new Set([1, 99]);
-const advisoryTypeKey = (type: number) =>
-  KNOWN_ADVISORY_TYPES.has(type)
-    ? `quality.advisory.type.${type}`
-    : "quality.advisory.type.default";
 
 /** Everything `setPlaceInfo(id, null)` removes server-side, mirrored locally. */
 function withoutInfo(place: PlaceDoc): PlaceDoc {

@@ -65,6 +65,19 @@ export type TempProvider = "havochvatten" | "smhi" | "open-meteo";
  *  (doc-size budget): t = °C, at = epoch ms sampled, p = producing feed. */
 export type TempReading = { t: number; at: number; p: TempProvider };
 
+/** The latest official water-quality lab sample from Hav och Vatten, pulled
+ *  from the same badplatsen detail doc the temperature comes from. Packed
+ *  into `tempSummary/current` alongside the temp readings — kept OFF the
+ *  place docs for the same reason temps are (the always-on `places` listener
+ *  would fan every change out to every client). Field names are terse for the
+ *  same doc-size reason: `v` = sample verdict (1 Tjänligt · 2 Tjänligt m.
+ *  anm. · 3 Otjänligt · 4 Uppgift saknas), `a` = algae (3 Blomning · 4 Ingen
+ *  blomning · 5 Ingen uppgift), `at` = epoch ms the sample was taken.
+ *  Sampling is seasonal and roughly biweekly, so consumers gate on freshness
+ *  and always surface `at`. Codes are stored raw and mapped to bilingual
+ *  labels in the UI (see src/lib/waterQuality.ts). */
+export type WaterSample = { v?: number; a?: number; at: number };
+
 /** tempSummary/current — every place's latest reading keyed by placeId,
  *  rebuilt by the daily sweep (scripts/update-temperatures.mjs). Clients
  *  subscribe to this single doc instead of receiving each temp write as a
@@ -73,6 +86,10 @@ export type TempReading = { t: number; at: number; p: TempProvider };
 export type TempSummaryDoc = {
   updatedAt: number;
   entries: Record<string, TempReading>;
+  /** Latest water-quality sample per placeId (only spots sampled recently —
+   *  the sweep drops entries older than ~2 weeks). Present only for Hav och
+   *  Vatten baths that have a recent lab sample. */
+  quality?: Record<string, WaterSample>;
 };
 
 /** placeTemps/{placeId} — the latest reading for one place, written by the
@@ -100,47 +117,6 @@ export type PlaceWithTemp = PlaceDoc & {
    *  can end up with an "open-meteo" reading when its preferred feed has
    *  none. */
   waterTempProvider?: TempProvider;
-};
-
-/** One active advisory against bathing (Hav och Vatten "avrådan"), pulled
- *  from the badplatsen detail doc's `dissuasion` array. HaV leaves expired
- *  advisories in the feed, so the sync keeps only current-season starts. */
-export type WaterAdvisory = {
-  /** HaV category code — 1 = unfit water sample, 99 = whole-season advisory
-   *  (mapped to bilingual labels in the UI; unknown codes get a generic one). */
-  type: number;
-  /** Epoch ms the advisory started. */
-  at: number;
-  /** The municipality's free-text detail (Swedish, as with `info`). */
-  text?: string;
-};
-
-/** Official water-quality snapshot synced from the Hav och Vatten badplatsen
- *  detail doc — the same response the temperature comes from. Written only
- *  onto `havochvatten` places by the daily sweep (low-churn, change-detected,
- *  the same place-doc pattern as `info`), never by clients. Numeric codes are
- *  stored raw and mapped to bilingual labels in the UI (see
- *  src/lib/waterQuality.ts). Sample-based fields reflect the latest lab
- *  sample, which is seasonal and can be weeks/months old — consumers gate on
- *  freshness and always surface `sampleAt`. */
-export type WaterQuality = {
-  /** Latest lab-sample verdict (E. coli + intestinal enterococci based):
-   *  1 Tjänligt · 2 Tjänligt m. anm. · 3 Otjänligt · 4 Uppgift saknas. */
-  sampleValue?: number;
-  /** Epoch ms of that sample. */
-  sampleAt?: number;
-  /** Algae/cyanobacteria bloom at the latest sample:
-   *  3 Blomning · 4 Ingen blomning · 5 Ingen uppgift. */
-  algae?: number;
-  /** EU multi-year bathing-water classification:
-   *  0 Ej klassificerad · 1 Utmärkt · 2 Bra · 3 Tillfredsställande ·
-   *  4 Dålig · 6 Ny badplats. */
-  classification?: number;
-  /** Year the `classification` applies to. */
-  classificationYear?: number;
-  /** Current-season advisories against bathing (avrådan), most recent first;
-   *  absent when there are none. */
-  advisories?: WaterAdvisory[];
 };
 
 export type PlaceDoc = {
@@ -186,14 +162,6 @@ export type PlaceDoc = {
    *  info (distinct from infoUpdatedAt: bookkeeping so the daily run only
    *  re-checks each place's description monthly). */
   infoSyncedAt?: number;
-  /** Official water-quality checks (algae bloom, latest sample verdict,
-   *  advisories, EU classification) synced from Hav och Vatten by the daily
-   *  sweep for `havochvatten` places. Absent when none is known. */
-  waterQuality?: WaterQuality;
-  /** Epoch ms — when the sweep last *checked* the source for water quality
-   *  (bookkeeping so blooms are re-checked promptly; see
-   *  scripts/update-temperatures.mjs). */
-  qualitySyncedAt?: number;
   /** True for naturist (nude bathing) spots. Set through setPlaceInfo by
    *  users with enough points, or seeded from naturism.se. An explicit
    *  `false` is a tombstone: a user unflagged the spot, and the seed

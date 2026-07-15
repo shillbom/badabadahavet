@@ -42,6 +42,7 @@ import type {
   SessionDoc,
   TempReading,
   UserDoc,
+  WaterSample,
 } from "@/lib/types";
 import { useLocale } from "@/lib/i18n";
 
@@ -97,6 +98,9 @@ type State = {
    *  `tempSummary/current` doc (rebuilt by the daily sweep). Kept off the
    *  place docs so temp churn never re-streams the `places` collection. */
   tempsByPlace: Map<string, TempReading>;
+  /** Latest water-quality sample per place id, from the same summary doc.
+   *  Only Hav och Vatten baths with a recent lab sample have an entry. */
+  qualityByPlace: Map<string, WaterSample>;
   groups: GroupDoc[];
 
   // ── Derived / pre-computed ────────────────────────────────────────────
@@ -225,6 +229,7 @@ export const useStore = create<State>((set, get) => {
     allSessionsReady: false,
     places: [],
     tempsByPlace: new Map(),
+    qualityByPlace: new Map(),
     groups: [],
     myStats: EMPTY_STATS,
     sessionsByPlace: new Map(),
@@ -413,16 +418,17 @@ export const useStore = create<State>((set, get) => {
           // One doc that only the daily sweep rewrites (~1 read/client/day),
           // so always-on is fine — no lazy refcounting like the community
           // feed. Needed by guests too (the map shows temps signed-out).
-          watchTempSummary((tempsByPlace) => {
+          watchTempSummary(({ temps, quality }) => {
             const { myUid, mySessions, allSessions, places, profile } = get();
             set({
-              tempsByPlace,
+              tempsByPlace: temps,
+              qualityByPlace: quality,
               ...derive(
                 myUid ?? "",
                 mySessions,
                 allSessions,
                 places,
-                tempsByPlace,
+                temps,
                 profile?.achievements,
               ),
             });

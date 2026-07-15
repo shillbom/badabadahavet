@@ -73,34 +73,29 @@ export function summaryChanged(oldEntries, newEntries) {
   return false;
 }
 
-// --- Water quality (algae / bathing advisories) ------------------------
+// --- Water quality (latest lab sample: verdict + algae) ----------------
 //
 // The badplatsen detail doc the temperature already comes from also carries
-// the official water-quality checks: algae/cyanobacteria bloom status, the
-// latest lab-sample verdict (E. coli + intestinal enterococci), any active
-// advisory against bathing (`dissuasion`), and the EU multi-year quality
-// classification. See src/lib/types.ts (WaterQuality) for the stored shape
-// and the numeric value scales.
-
-// HaV leaves expired advisories in the `dissuasion` array (spots have been
-// seen in 2026 still carrying 2024 starts), so keep only recent ones — a
-// stale "unfit sample" advisory shown as current would be misleading.
-const ADVISORY_KEEP_MS = 180 * 24 * 60 * 60 * 1000;
+// the latest official water sample: an overall verdict (E. coli + intestinal
+// enterococci → Tjänligt/Otjänligt) and an algae/cyanobacteria bloom
+// observation. We keep just those two sample-tied fields + the sample date
+// (see WaterSample in src/lib/types.ts); they ride in tempSummary alongside
+// the temp readings. Sampling is seasonal and biweekly, so freshness is
+// enforced by the caller — the sweep only stores recent samples and the
+// client only displays recent ones.
 
 const numOrUndef = (x) =>
   typeof x === "number" && Number.isFinite(x) ? x : undefined;
 
 /**
- * Pull a WaterQuality snapshot out of a badplatsen detail body, or null when
- * the body carries nothing useful (no sample, no classification, no current
- * advisory). `now` is passed in so the advisory recency filter is pure/testable.
- *
- * The latest lab sample lives both at the top level and in `testResult`; we
+ * Pull the latest water sample ({ v, a, at }) out of a badplatsen detail
+ * body, or null when there's no dated sample carrying a verdict or algae
+ * value. The latest sample lives both at the top level and in `testResult`;
  * take the newest `testResult` entry by `sampleDate` (don't assume ordering —
  * same defensiveness as the SMHI reducer) and fall back to the top-level
  * fields. Numeric codes are stored raw; the UI maps them to labels.
  */
-export function extractWaterQuality(body, now) {
+export function extractWaterSample(body) {
   if (!body || typeof body !== "object") return null;
 
   const results = Array.isArray(body.testResult) ? body.testResult : [];
@@ -113,62 +108,31 @@ export function extractWaterQuality(body, now) {
     null,
   );
 
-  const sampleValue = numOrUndef(latest?.sampleValue ?? body.sampleValue);
-  const algae = numOrUndef(latest?.algalValue ?? body.algalValue);
-  const sampleAt = numOrUndef(latest?.sampleDate ?? body.sampleDate);
-  const classification = numOrUndef(body.classification);
-  const classificationYear = numOrUndef(body.classificationYear);
+  const at = numOrUndef(latest?.sampleDate ?? body.sampleDate);
+  if (at === undefined) return null;
+  const v = numOrUndef(latest?.sampleValue ?? body.sampleValue);
+  const a = numOrUndef(latest?.algalValue ?? body.algalValue);
+  if (v === undefined && a === undefined) return null;
 
-  const advisories = [];
-  for (const d of Array.isArray(body.dissuasion) ? body.dissuasion : []) {
-    const at = numOrUndef(d?.startdate);
-    if (at === undefined || at < now - ADVISORY_KEEP_MS) continue;
-    const entry = { type: numOrUndef(d?.type) ?? 0, at };
-    if (typeof d?.description === "string" && d.description.trim()) {
-      entry.text = d.description.trim();
-    }
-    advisories.push(entry);
-  }
-  advisories.sort((a, b) => b.at - a.at); // most recent first (local array)
-
-  const wq = {};
-  if (sampleValue !== undefined) wq.sampleValue = sampleValue;
-  if (sampleAt !== undefined) wq.sampleAt = sampleAt;
-  if (algae !== undefined) wq.algae = algae;
-  if (classification !== undefined) wq.classification = classification;
-  if (classificationYear !== undefined)
-    wq.classificationYear = classificationYear;
-  if (advisories.length) wq.advisories = advisories;
-
-  return Object.keys(wq).length ? wq : null;
+  const sample = { at };
+  if (v !== undefined) sample.v = v;
+  if (a !== undefined) sample.a = a;
+  return sample;
 }
 
-/** True when two WaterQuality snapshots differ — lets the sweep skip a
- *  place-doc write (and its `places`-listener fan-out) when nothing changed.
- *  Either side may be null/undefined (no data). */
-export function waterQualityChanged(a, b) {
-  if (!a && !b) return false;
-  if (!a || !b) return true;
-  if (
-    a.sampleValue !== b.sampleValue ||
-    a.sampleAt !== b.sampleAt ||
-    a.algae !== b.algae ||
-    a.classification !== b.classification ||
-    a.classificationYear !== b.classificationYear
-  ) {
-    return true;
-  }
-  const aa = a.advisories ?? [];
-  const ba = b.advisories ?? [];
-  if (aa.length !== ba.length) return true;
-  for (let i = 0; i < aa.length; i++) {
-    if (
-      aa[i].type !== ba[i].type ||
-      aa[i].at !== ba[i].at ||
-      aa[i].text !== ba[i].text
-    ) {
-      return true;
-    }
+/** True when two placeId→WaterSample maps differ — lets the sweep skip the
+ *  summary write (and its one-read-per-client fan-out) when quality is
+ *  unchanged. Mirrors summaryChanged. Either side may be null/undefined. */
+export function qualityMapChanged(oldQuality, newQuality) {
+  const a = oldQuality ?? {};
+  const b = newQuality ?? {};
+  const aKeys = Object.keys(a);
+  if (aKeys.length !== Object.keys(b).length) return true;
+  for (const k of aKeys) {
+    const x = a[k];
+    const y = b[k];
+    if (!y) return true;
+    if (x.v !== y.v || x.a !== y.a || x.at !== y.at) return true;
   }
   return false;
 }

@@ -5,8 +5,8 @@ import {
   readingFromLegacyPlace,
   buildSummaryEntries,
   summaryChanged,
-  extractWaterQuality,
-  waterQualityChanged,
+  extractWaterSample,
+  qualityMapChanged,
 } from "./tempLogic.js";
 
 const reading = (at, t = 17.5, p = "smhi") => ({ t, at, p });
@@ -131,115 +131,62 @@ describe("summaryChanged", () => {
   });
 });
 
-describe("extractWaterQuality", () => {
-  // Times relative to a fixed "now" so the advisory recency filter is
-  // deterministic. 2026-07-14-ish.
-  const now = 1_752_000_000_000;
+describe("extractWaterSample", () => {
   const day = 24 * 60 * 60 * 1000;
+  const base = 1_752_000_000_000;
 
-  it("takes the newest sample and copies classification", () => {
-    // Two samples out of order — the newer one (algae bloom) must win.
+  it("takes the newest sample by date (ignores ordering)", () => {
     const body = {
-      algalValue: 4,
-      sampleValue: 1,
-      sampleDate: now - 5 * day,
-      classification: 1,
-      classificationYear: 2025,
-      dissuasion: [],
+      // top-level mirrors the newest sample
+      sampleValue: 3,
+      algalValue: 3,
+      sampleDate: base,
       testResult: [
-        { sampleDate: now - 40 * day, sampleValue: 1, algalValue: 4 },
-        { sampleDate: now - 5 * day, sampleValue: 3, algalValue: 3 },
+        { sampleDate: base - 40 * day, sampleValue: 1, algalValue: 4 },
+        { sampleDate: base, sampleValue: 3, algalValue: 3 },
       ],
     };
-    expect(extractWaterQuality(body, now)).toEqual({
-      sampleValue: 3,
-      sampleAt: now - 5 * day,
-      algae: 3,
-      classification: 1,
-      classificationYear: 2025,
-    });
+    expect(extractWaterSample(body)).toEqual({ v: 3, a: 3, at: base });
   });
 
   it("falls back to top-level fields when testResult is absent", () => {
-    const body = {
-      algalValue: 5,
-      sampleValue: 1,
-      sampleDate: now - 2 * day,
-      classification: 0,
-    };
-    expect(extractWaterQuality(body, now)).toEqual({
-      sampleValue: 1,
-      sampleAt: now - 2 * day,
-      algae: 5,
-      classification: 0,
+    expect(
+      extractWaterSample({ sampleValue: 1, algalValue: 4, sampleDate: base }),
+    ).toEqual({ v: 1, a: 4, at: base });
+  });
+
+  it("keeps a partial sample (verdict but no algae)", () => {
+    expect(extractWaterSample({ sampleValue: 2, sampleDate: base })).toEqual({
+      v: 2,
+      at: base,
     });
   });
 
-  it("keeps current advisories and drops stale ones", () => {
-    const body = {
-      dissuasion: [
-        // ~2 years old — HaV never removed it; must be dropped.
-        { type: 1, startdate: now - 700 * day, description: "Gammalt prov" },
-        // current season
-        {
-          type: 99,
-          startdate: now - 20 * day,
-          description: "Dålig badvattenkvalitet",
-        },
-        {
-          type: 1,
-          startdate: now - 3 * day,
-          description: "Höga halter E.coli",
-        },
-      ],
-    };
-    const wq = extractWaterQuality(body, now);
-    expect(wq.advisories).toEqual([
-      { type: 1, at: now - 3 * day, text: "Höga halter E.coli" },
-      { type: 99, at: now - 20 * day, text: "Dålig badvattenkvalitet" },
-    ]);
-  });
-
-  it("returns null when nothing useful is present", () => {
-    expect(extractWaterQuality({}, now)).toBeNull();
-    expect(extractWaterQuality(null, now)).toBeNull();
-    expect(
-      extractWaterQuality(
-        { dissuasion: [{ type: 1, startdate: now - 700 * day }] },
-        now,
-      ),
-    ).toBeNull();
+  it("returns null without a date or without verdict/algae", () => {
+    expect(extractWaterSample({})).toBeNull();
+    expect(extractWaterSample(null)).toBeNull();
+    expect(extractWaterSample({ sampleValue: 1 })).toBeNull(); // no date
+    expect(extractWaterSample({ sampleDate: base })).toBeNull(); // no v/a
   });
 });
 
-describe("waterQualityChanged", () => {
-  const wq = () => ({
-    sampleValue: 1,
-    sampleAt: 1000,
-    algae: 4,
-    classification: 1,
-    classificationYear: 2025,
-    advisories: [{ type: 1, at: 900, text: "x" }],
+describe("qualityMapChanged", () => {
+  const map = () => ({
+    a: { v: 1, a: 4, at: 1000 },
+    b: { v: 3, a: 3, at: 2000 },
   });
 
-  it("false for equal snapshots and for both-empty", () => {
-    expect(waterQualityChanged(wq(), wq())).toBe(false);
-    expect(waterQualityChanged(null, undefined)).toBe(false);
+  it("false for identical content and both-empty", () => {
+    expect(qualityMapChanged(map(), map())).toBe(false);
+    expect(qualityMapChanged(null, {})).toBe(false);
   });
 
-  it("true when one side is missing", () => {
-    expect(waterQualityChanged(wq(), null)).toBe(true);
-    expect(waterQualityChanged(null, wq())).toBe(true);
-  });
-
-  it("true on a scalar or advisory difference", () => {
-    expect(waterQualityChanged(wq(), { ...wq(), algae: 3 })).toBe(true);
-    expect(waterQualityChanged(wq(), { ...wq(), advisories: [] })).toBe(true);
+  it("true when a value, key, or count differs", () => {
     expect(
-      waterQualityChanged(wq(), {
-        ...wq(),
-        advisories: [{ type: 1, at: 901, text: "x" }],
-      }),
+      qualityMapChanged(map(), { ...map(), a: { v: 1, a: 4, at: 1001 } }),
     ).toBe(true);
+    expect(qualityMapChanged(map(), { a: map().a })).toBe(true);
+    expect(qualityMapChanged(map(), { a: map().a, c: map().b })).toBe(true);
+    expect(qualityMapChanged(undefined, map())).toBe(true);
   });
 });
