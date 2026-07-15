@@ -25,5 +25,16 @@
       ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "tempSummary",
+      "fieldPath": "entries",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "tempSummary",
+      "fieldPath": "quality",
+      "indexes": []
+    }
+  ]
 }

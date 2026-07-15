@@ -82,7 +82,13 @@ export type WaterSample = { v?: number; a?: number; at: number };
  *  rebuilt by the daily sweep (scripts/update-temperatures.mjs). Clients
  *  subscribe to this single doc instead of receiving each temp write as a
  *  per-place snapshot delta, which is what keeps the always-on `places`
- *  listener quiet (temps are the collection's highest-churn data). */
+ *  listener quiet (temps are the collection's highest-churn data).
+ *
+ *  The `entries` and `quality` maps are exempted from indexing in
+ *  firestore.indexes.json: Firestore auto-indexes every leaf field, so with
+ *  thousands of places the doc blows past the 40k-index-entries-per-document
+ *  cap on write (INDEX_ENTRIES_COUNT_LIMIT_EXCEEDED). Nothing queries these
+ *  subfields — the doc is only ever read whole — so the exemption is free. */
 export type TempSummaryDoc = {
   updatedAt: number;
   entries: Record<string, TempReading>;
