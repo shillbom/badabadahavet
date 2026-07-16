@@ -254,21 +254,14 @@ for (const uid of affectedUids) {
   scoreUpdates.set(uid, { scores, statsByYear });
 }
 
-// 4. Restamp the kept places' denormalised fields from the merged sessions.
+// 4. Carry the earliest firstSwumAt onto the kept place. The "last swim"
+// frame is no longer denormalised on place docs — the daily placesSummary
+// build derives it from the (now-merged) sessions.
 const placeUpdates = new Map(); // placeId -> partial update
 for (const { from, to } of pairs) {
   const kept = places.get(to);
   const dup = places.get(from);
   const upd = {};
-  let last = null;
-  for (const s of sessions) {
-    if (s.placeId === to && (!last || s.date > last.date)) last = s;
-  }
-  if (last && last.date !== kept.lastSwimAt) {
-    upd.lastSwimAt = last.date;
-    upd.lastSwimBy = last.uid;
-    upd.lastSwimBorder = last.border ?? "none";
-  }
   if (dup?.firstSwumAt && dup.firstSwumAt < (kept.firstSwumAt ?? Infinity)) {
     upd.firstSwumAt = dup.firstSwumAt;
   }

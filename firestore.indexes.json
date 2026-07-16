@@ -35,6 +35,11 @@
       "collectionGroup": "tempSummary",
       "fieldPath": "quality",
       "indexes": []
+    },
+    {
+      "collectionGroup": "placesSummary",
+      "fieldPath": "entries",
+      "indexes": []
     }
   ]
 }

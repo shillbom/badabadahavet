@@ -551,6 +551,10 @@ export const setPlaceInfo = onCall(
       updates.nudeSource = "user";
     }
     if (Object.keys(updates).length > 0) {
+      // Advance the delta cursor so the edit (notably a naturist-flag toggle,
+      // which the map reads) reaches every client before the next nightly
+      // placesSummary build. See PlacesSummaryDoc in src/lib/types.ts.
+      updates.updatedAt = Date.now();
       await placeRef.update(updates);
     }
     return {
@@ -856,14 +860,13 @@ export const logSession = onCall(
     const db = getFirestore();
     const userRef = db.collection("users").doc(uid);
     const sessionsCol = db.collection("sessions");
-    const placeRef = db.collection("places").doc(placeId);
     const newRef = sessionsCol.doc();
     const year = swimYear(date);
     const [yStart, yEnd] = yearBounds(year);
 
     const result = await db.runTransaction(async (tx) => {
       // ── reads (all before any writes) ──
-      const [userSnap, dupSnap, yearSnap, placeSnap] = await Promise.all([
+      const [userSnap, dupSnap, yearSnap] = await Promise.all([
         tx.get(userRef),
         tx.get(
           sessionsCol
@@ -880,7 +883,6 @@ export const logSession = onCall(
             // without it Firestore demands a separate (uid, date ASC) index.
             .orderBy("date", "desc"),
         ),
-        tx.get(placeRef),
       ]);
       if (!userSnap.exists) {
         throw new HttpsError("failed-precondition", "No profile yet.");
@@ -931,20 +933,10 @@ export const logSession = onCall(
         [`scores.${year}`]: yearTotal,
         [`statsByYear.${year}`]: yearStats(yearSnap, { extra: session }),
       });
-
-      // Stamp the place with this swim's frame when it's the most recent
-      // swim there (so back-logged older swims don't override a newer one).
-      const prevLast = placeSnap.exists ? placeSnap.data().lastSwimAt : null;
-      if (
-        placeSnap.exists &&
-        (typeof prevLast !== "number" || date >= prevLast)
-      ) {
-        tx.update(placeRef, {
-          lastSwimAt: date,
-          lastSwimBy: uid,
-          lastSwimBorder: border,
-        });
-      }
+      // The place's "last swim" frame is no longer denormalised here — the
+      // daily placesSummary build derives it from sessions. logSession no
+      // longer touches the place doc, so a swim never re-streams it to every
+      // client on the `places`/summary listeners.
 
       return { id: newRef.id, points, isUniqueForUser, isWinter };
     });
@@ -1019,27 +1011,6 @@ export const removeSession = onCall(
           .orderBy("date", "desc"),
       );
 
-      // If this was the place's most recent swim, find the next-latest so we
-      // can restamp the pin's outline. Only query when needed.
-      const placeRef = db.collection("places").doc(session.placeId);
-      const placeSnap = await tx.get(placeRef);
-      const wasLastSwim =
-        placeSnap.exists &&
-        placeSnap.data().lastSwimAt === session.date &&
-        placeSnap.data().lastSwimBy === ownerUid;
-      let nextLast = null;
-      if (wasLastSwim) {
-        const placeSessions = await tx.get(
-          db
-            .collection("sessions")
-            .where("placeId", "==", session.placeId)
-            .orderBy("date", "desc"),
-        );
-        placeSessions.forEach((s) => {
-          if (!nextLast && s.id !== sessionId) nextLast = s.data();
-        });
-      }
-
       // ── writes ──
       const yearTotal = sumYearPoints(yearSnap, sessionId);
       tx.delete(sessionRef);
@@ -1051,22 +1022,8 @@ export const removeSession = onCall(
           }),
         });
       }
-      if (wasLastSwim) {
-        tx.update(
-          placeRef,
-          nextLast
-            ? {
-                lastSwimAt: nextLast.date,
-                lastSwimBy: nextLast.uid,
-                lastSwimBorder: nextLast.border ?? "none",
-              }
-            : {
-                lastSwimAt: FieldValue.delete(),
-                lastSwimBy: FieldValue.delete(),
-                lastSwimBorder: FieldValue.delete(),
-              },
-        );
-      }
+      // The place's "last swim" frame is derived from sessions by the daily
+      // placesSummary build, so removeSession no longer restamps the place doc.
       return session.photoPath ?? null;
     });
 

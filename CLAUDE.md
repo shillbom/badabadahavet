@@ -77,13 +77,34 @@ refreshes (`refreshPlaceTemp` writes only there). Never write reading fields
 onto `places` docs, and consume `placesWithTemps` / `myPlaces` — not raw
 `places` — anywhere a temperature should show.
 
+### Places are read from a summary doc, not the collection
+
+For the same reason, the map/pickers no longer subscribe to the whole ~4k-doc
+`places` collection. They read `placesSummary/current` — one doc of every
+place's lightweight display fields (name, lat/lng, naturist flag) plus the
+`lastSwim*` recency glow/border, rebuilt by the daily sweep
+(`scripts/update-places-summary.mjs`) from the sessions — plus a bounded
+`updatedAt > builtAt` delta listener (`watchPlaceChangesSince`) for spots
+created or edited since that build. That delta is a live subscription, so it
+runs **only while signed in** (gated by `syncDelta()` on auth changes) — guests
+make do with the daily summary and never subscribe to `places` (one-off reads
+like `getPlace` on a spot page still work for them). The store reassembles its
+`places` array (`PlacePin[]`) via `mergeDelta` (`src/lib/places.ts`), and it
+flows through the same `derive()` pipeline. So: never add an always-on listener
+over `places`,
+never write `lastSwim*`/`waterTemp*` onto place docs (`logSession` /
+`removeSession` don't — the summary derives the last swim from sessions), and
+stamp `updatedAt` on any new place write so the delta catches it. The full
+place doc (info, provenance) is fetched on demand by `SpotPage` via `getPlace`;
+the standalone `scripts/scrub-place-legacy.mjs` clears the old fields off docs.
+
 ### Writes are server-authoritative
 
 Clients never write `sessions` docs or `users.scores` — the `logSession` /
 `removeSession` Cloud Functions (`functions/index.js`, scoring math in
 `functions/scoring.js`) do, so points can't be forged, and they also maintain
-the denormalized fields (`displayName`/`placeName` on sessions,
-`lastSwimAt/By/Border` on places). `firestore.rules` enforces this; emoji
+the denormalized `displayName`/`placeName` on sessions. `firestore.rules`
+enforces this; emoji
 reactions are the one client-writable session field. Callables go through
 `cloudFn()` in `src/firebase.ts`, which routes emulator vs. localhost vs. the
 production same-origin `/api/*` Hosting rewrite — add new functions to that

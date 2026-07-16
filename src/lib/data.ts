@@ -27,6 +27,8 @@ import { cloudFn, db, storage } from "@/firebase";
 import type {
   GroupDoc,
   PlaceDoc,
+  PlacePin,
+  PlacesSummaryDoc,
   PlaceTempDoc,
   SessionDoc,
   TempReading,
@@ -36,6 +38,7 @@ import type {
   WaterSample,
 } from "./types";
 import { summaryToMap, qualityToMap } from "./temps";
+import { summaryToPlaces } from "./places";
 import { generateGroupCode, haversineMeters } from "./utils";
 import { PLACE_RADIUS_METERS } from "./scoring";
 import { compressImage, makeThumbDataUrl } from "./image";
@@ -238,12 +241,12 @@ export async function findOrCreatePlace(opts: {
   date: number;
   /** Current known places — the store's live `places` array. Matching runs
    *  against this instead of re-downloading the whole collection per log. */
-  existingPlaces: PlaceDoc[];
-}): Promise<PlaceDoc> {
+  existingPlaces: PlacePin[];
+}): Promise<PlacePin> {
   // Match an existing place by exact name (case-insensitive) within radius.
   const target = { lat: opts.lat, lng: opts.lng };
   const nameKey = opts.name.trim().toLowerCase();
-  let best: PlaceDoc | null = null;
+  let best: PlacePin | null = null;
   let bestDist = Infinity;
   for (const p of opts.existingPlaces) {
     const sameName = p.name.trim().toLowerCase() === nameKey;
@@ -268,6 +271,10 @@ export async function findOrCreatePlace(opts: {
     lng: opts.lng,
     createdBy: opts.createdBy,
     firstSwumAt: opts.date,
+    // Wall-clock cursor for the placesSummary delta listener — distinct from
+    // firstSwumAt, which is the (back-datable) swim date. Lets a brand-new
+    // spot surface on every client before the next nightly summary build.
+    updatedAt: Date.now(),
     source: "manual",
     // No official feed for user-added spots — read temps from Open-Meteo.
     tempSource: "open-meteo",
@@ -276,10 +283,51 @@ export async function findOrCreatePlace(opts: {
   return data;
 }
 
-export function watchPlaces(cb: (places: PlaceDoc[]) => void): Unsubscribe {
-  return onSnapshot(placesCol, (snap) => {
-    cb(snap.docs.map((d) => d.data() as PlaceDoc));
+/**
+ * The lightweight map fields for every place, packed into the single
+ * `placesSummary/current` doc by the daily sweep. One doc read replaces the
+ * always-on whole-collection (~4k-doc) `places` listener; recent changes come
+ * from the bounded `watchPlaceChangesSince` delta. `exists` is false until the
+ * first daily build has produced the doc — the store falls back to a one-time
+ * full read then (see `getAllPlacesOnce`) so the map is never blank.
+ */
+export function watchPlacesSummary(
+  cb: (data: { pins: PlacePin[]; builtAt: number; exists: boolean }) => void,
+): Unsubscribe {
+  return onSnapshot(doc(db, "placesSummary", "current"), (snap) => {
+    const data = snap.exists() ? (snap.data() as PlacesSummaryDoc) : null;
+    cb({
+      pins: summaryToPlaces(data?.entries),
+      builtAt: typeof data?.builtAt === "number" ? data.builtAt : 0,
+      exists: snap.exists(),
+    });
   });
+}
+
+/**
+ * Places created or edited since the summary was built (`updatedAt > builtAt`)
+ * — a handful of docs a day, not the whole collection. The store overlays
+ * these full docs onto the summary pins so brand-new spots and same-day
+ * renames/info edits appear without waiting for the next nightly build.
+ * `updatedAt` is a single-field inequality, so Firestore's automatic
+ * single-field index covers it (no composite needed).
+ */
+export function watchPlaceChangesSince(
+  builtAt: number,
+  cb: (docs: PlaceDoc[]) => void,
+): Unsubscribe {
+  return onSnapshot(
+    query(placesCol, where("updatedAt", ">", builtAt)),
+    (snap) => cb(snap.docs.map((d) => d.data() as PlaceDoc)),
+  );
+}
+
+/** One-time full read of the `places` collection — the degraded fallback the
+ *  store uses only when `placesSummary/current` is missing (e.g. before the
+ *  first daily build), so an early client sees pins instead of a blank map. */
+export async function getAllPlacesOnce(): Promise<PlaceDoc[]> {
+  const snap = await getDocs(placesCol);
+  return snap.docs.map((d) => d.data() as PlaceDoc);
 }
 
 /**
@@ -334,7 +382,7 @@ export type LoggedSession = {
  */
 export async function createSession(opts: {
   uid: string;
-  place: PlaceDoc;
+  place: PlacePin;
   lat: number;
   lng: number;
   date: number;
@@ -740,7 +788,12 @@ export async function deleteAccountData(): Promise<void> {
 export async function adminRenamePlace(placeId: string, name: string) {
   const trimmed = name.trim();
   if (!trimmed) throw new Error("empty name");
-  await updateDoc(doc(placesCol, placeId), { name: trimmed });
+  // Stamp the delta cursor so the rename reaches every client before the next
+  // nightly placesSummary build (rules allow name + updatedAt together).
+  await updateDoc(doc(placesCol, placeId), {
+    name: trimmed,
+    updatedAt: Date.now(),
+  });
   const snap = await getDocs(
     query(sessionsCol, where("placeId", "==", placeId)),
   );

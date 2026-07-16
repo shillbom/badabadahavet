@@ -19,7 +19,7 @@ import { toast } from "@/components/ui/toastStore";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import SegmentedControl from "@/components/ui/SegmentedControl";
-import type { PlaceDoc, ToswimEntry } from "@/lib/types";
+import type { PlacePin, ToswimEntry } from "@/lib/types";
 
 type View = "todo" | "done";
 
@@ -32,7 +32,7 @@ export default function ToswimPage() {
   const [search, setSearch] = useState("");
 
   const placesById = useMemo(() => {
-    const byId = new Map<string, PlaceDoc>();
+    const byId = new Map<string, PlacePin>();
     for (const p of places) byId.set(p.id, p);
     return byId;
   }, [places]);
@@ -50,7 +50,7 @@ export default function ToswimPage() {
   const entries = useMemo(() => {
     const list: Array<{
       placeId: string;
-      place: PlaceDoc | null;
+      place: PlacePin | null;
       entry: ToswimEntry;
       doneAt: number | undefined;
     }> = [];

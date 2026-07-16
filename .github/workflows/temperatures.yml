@@ -40,3 +40,8 @@ jobs:
         env:
           GOOGLE_CLOUD_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
         run: npm run update:temperatures -- --write
+
+      - name: Rebuild places summary
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: npm run update:places-summary -- --write
