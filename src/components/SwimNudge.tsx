@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { Link } from "react-router";
 import { MapPin, Thermometer } from "lucide-react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
@@ -38,7 +37,7 @@ export default function SwimNudge({
   // worth subscribing while the sheet is actually open.
   useAllSessionsFeed(open && !!myUid);
 
-  const suggestion = useMemo(() => {
+  const suggestion = (() => {
     if (!open) return null;
     const origin = currentLocation ?? profile?.lastLocation ?? null;
     const candidates = places.filter((p) => !myPlaceIds.has(p.id));
@@ -66,16 +65,7 @@ export default function SwimNudge({
         .toSorted((a, b) => b.date - a.date)[0] ?? null;
 
     return { place, distM, friendName: friendSwim?.displayName ?? null };
-  }, [
-    open,
-    places,
-    myPlaceIds,
-    allSessions,
-    groups,
-    myUid,
-    currentLocation,
-    profile,
-  ]);
+  })();
 
   const title = (
     <h3 className="font-display text-xl font-black text-wave-900">

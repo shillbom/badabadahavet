@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
@@ -82,25 +82,34 @@ export function SpotView({
   variant?: "page" | "sheet";
   onClose?: () => void;
 }) {
+  // Changing spots is a full data-context change. A keyed remount resets the
+  // subscriptions and live-reading state before the new spot can render,
+  // without an extra effect-driven reset.
+  return (
+    <SpotViewContent
+      key={placeId}
+      placeId={placeId}
+      variant={variant}
+      onClose={onClose}
+    />
+  );
+}
+
+function SpotViewContent({
+  placeId,
+  variant = "page",
+  onClose,
+}: {
+  placeId: string;
+  variant?: "page" | "sheet";
+  onClose?: () => void;
+}) {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const isAdmin = useIsAdmin();
   const t = useT();
-  const [{ place, loading }, setPlaceState] = useState<{
-    place: PlaceDoc | null;
-    loading: boolean;
-  }>({ place: null, loading: true });
-  const setPlace = (next: PlaceDoc) => {
-    setPlaceState((current) => ({ ...current, place: next }));
-  };
-  const [sessions, setSessions] = useState<SessionDoc[]>([]);
-  // The live per-place reading (placeTemps/{id}) — fresher than the daily
-  // summary once an on-demand refresh has landed. undefined = the snapshot
-  // hasn't delivered yet (so we don't fire a refresh against a reading we
-  // simply haven't seen); null = the doc doesn't exist.
-  const [liveTemp, setLiveTemp] = useState<PlaceTempDoc | null | undefined>(
-    undefined,
-  );
+  const { place, loading, setPlace, sessions, reading, waterSample } =
+    useSpotData(placeId);
   const [searchParams] = useSearchParams();
   const focusedSessionId = searchParams.get("session");
   // Track which sessions have been highlighted once so we don't replay
@@ -111,73 +120,9 @@ export function SpotView({
   const toswimEntry = placeId ? profile?.toswim?.[placeId] : undefined;
   const onToswim = !!toswimEntry;
 
-  useEffect(() => {
-    if (!placeId) return;
-    let cancelled = false;
-    getPlace(placeId).then((p) => {
-      if (cancelled) return;
-      setPlaceState({ place: p, loading: false });
-      return;
-    });
-    const unsub = watchPlaceSessions(placeId, setSessions);
-    setLiveTemp(undefined);
-    const unsubTemp = watchPlaceTemp(placeId, setLiveTemp);
-    return () => {
-      cancelled = true;
-      unsub();
-      unsubTemp();
-    };
-  }, [placeId]);
-
-  // Freshest known reading: the live per-place doc wins over the daily
-  // summary entry when both exist (freshestReading validates each side).
-  const summaryTemp = useStore((s) => s.tempsByPlace.get(placeId));
-  const reading = freshestReading(liveTemp, summaryTemp ?? null);
-  const readingAt = reading?.at;
-  // Latest official water sample (verdict + algae), from the same summary doc
-  // as the temps. Only Hav och Vatten baths with a recent sample have one.
-  const waterSample = useStore((s) => s.qualityByPlace.get(placeId));
-
-  // Ask the server for a fresher reading once we know what we already have
-  // (both the placeTemps snapshot and the place doc have resolved). The
-  // result streams back through the placeTemps subscription above;
-  // maybeRefreshPlaceTemp itself gates on staleness, a local throttle, and
-  // auth, so re-runs are cheap no-ops.
-  useEffect(() => {
-    if (!place || liveTemp === undefined) return;
-    maybeRefreshPlaceTemp(place.id, readingAt);
-  }, [place, liveTemp, readingAt]);
-
   const visibleSessions = sessions;
 
-  const stats = useMemo(
-    () => buildStats(visibleSessions, user?.uid),
-    [visibleSessions, user],
-  );
-  // Merge the reading onto the place so the mini-map's own pin still shows
-  // the temperature (place docs no longer carry it).
-  const placesForMap = useMemo<PlaceWithTemp[]>(() => {
-    if (!place) return [];
-    if (!reading) return [place];
-    return [
-      {
-        ...place,
-        waterTemp: reading.t,
-        waterTempAt: reading.at,
-        waterTempProvider: reading.p,
-      },
-    ];
-  }, [place, reading]);
-  const sessionsByPlace = useMemo(() => {
-    const m = new Map<string, SessionDoc[]>();
-    if (place) m.set(place.id, visibleSessions);
-    return m;
-  }, [visibleSessions, place]);
-
-  const photoSessions = useMemo(
-    () => visibleSessions.filter((s) => s.photoUrl),
-    [visibleSessions],
-  );
+  const stats = buildStats(visibleSessions, user?.uid);
 
   // When a `?session=<id>` deep link is opened (e.g. a shared swim), scroll
   // the matching swim into view once it has streamed in, and flash a
@@ -331,140 +276,32 @@ export function SpotView({
 
   return (
     <div className="px-4 pt-2 pb-12">
-      <div className="mb-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => (variant === "sheet" ? onClose?.() : navigate(-1))}
-          className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
-          aria-label={
-            variant === "sheet" ? t("common.close") : t("common.back")
-          }
-        >
-          {variant === "sheet" ? (
-            <X className="h-4 w-4" />
-          ) : (
-            <ArrowLeft className="h-4 w-4" />
-          )}
-        </button>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate font-display text-2xl font-black text-wave-900">
-            {place.name}
-          </h2>
-          <div className="flex items-center gap-1 text-[11px] text-slate-500">
-            <MapPin className="h-3 w-3" />
-            {place.lat.toFixed(4)}, {place.lng.toFixed(4)}
-            {sessions.length > 0 ? (
-              <>
-                {" · "}
-                {t("spot.first_dipped", {
-                  date: formatDate(
-                    sessions.reduce(
-                      (min, s) => (s.date < min ? s.date : min),
-                      sessions[0].date,
-                    ),
-                  ),
-                })}
-              </>
-            ) : null}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onShareSpot}
-          className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
-          aria-label={t("spot.share")}
-          title={t("spot.share")}
-        >
-          <Share2 className="h-4 w-4" />
-        </button>
-      </div>
+      <SpotHeader
+        place={place}
+        sessions={sessions}
+        variant={variant}
+        onClose={onClose}
+        onShareSpot={onShareSpot}
+      />
 
-      <div className="h-44 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
-        <SwimMap
-          places={placesForMap}
-          sessionsByPlace={sessionsByPlace}
-          center={[place.lat, place.lng]}
-          zoom={13}
-          linkToSpot={false}
-          viewKey={`spot-${place.id}`}
-        />
-      </div>
+      <SpotMiniMap place={place} reading={reading} sessions={visibleSessions} />
 
       {!isGuest ? (
-        <button
-          type="button"
-          onClick={onToggleToswim}
-          className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow ring-1 transition active:scale-95 ${
-            onToswim
-              ? "bg-rose-50 text-rose-800 ring-rose-200 hover:bg-rose-50"
-              : "bg-white/80 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"
-          }`}
-        >
-          {onToswim ? (
-            <>
-              <Delete className="h-3.5 w-3.5" />
-              {t("spot.toswim.remove")}
-            </>
-          ) : (
-            <>
-              <ListChecks className="h-3.5 w-3.5" />
-              {t("spot.toswim.add")}
-            </>
-          )}
-        </button>
+        <ToswimButton onToswim={onToswim} onToggle={onToggleToswim} />
       ) : null}
 
       {isAdmin ? (
-        <div className="mt-3 flex flex-wrap gap-2 rounded-2xl bg-amber-50/80 p-2 ring-1 ring-amber-200">
-          <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold tracking-widest text-white uppercase">
-            {t("admin.label")}
-          </span>
-          <button
-            type="button"
-            onClick={onAdminRename}
-            className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
-          >
-            <Pencil className="h-3 w-3" /> {t("admin.rename")}
-          </button>
-          <button
-            type="button"
-            onClick={onAdminDeletePlace}
-            className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50"
-          >
-            <Trash2 className="h-3 w-3" /> {t("admin.delete_spot")}
-          </button>
-        </div>
+        <SpotAdminBar
+          onRename={onAdminRename}
+          onDeletePlace={onAdminDeletePlace}
+        />
       ) : null}
 
-      {photoSessions.length > 0 ? (
-        <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
-          {photoSessions.map((s) => (
-            <div
-              key={s.id}
-              className="relative h-24 w-24 flex-none overflow-hidden rounded-xl ring-1 ring-white/60"
-            >
-              <SwimPhoto session={s} className="h-full w-full" />
-              <span className="pointer-events-none absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
-                {s.displayName}
-              </span>
-              {isAdmin ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onAdminRemovePhoto(s.id);
-                  }}
-                  className="absolute top-1 right-1 rounded-full bg-rose-600/90 p-1 text-white shadow ring-1 ring-white/30"
-                  aria-label={t("admin.remove_photo")}
-                  title={t("admin.remove_photo")}
-                >
-                  <ImageOff className="h-3 w-3" />
-                </button>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <SpotPhotoStrip
+        sessions={visibleSessions}
+        isAdmin={isAdmin}
+        onRemovePhoto={onAdminRemovePhoto}
+      />
 
       <div className="mt-3 grid grid-cols-3 gap-2">
         <Stat label={t("spot.stat.swims")} value={stats.total} />
@@ -509,96 +346,421 @@ export function SpotView({
       <h3 className="mt-5 mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
         {t("spot.recent_dips")}
       </h3>
-      <ul className="space-y-2">
-        {visibleSessions.map((s, i) => (
-          <SwimListItem
-            key={s.id}
-            ref={(el) => {
-              if (el) sessionRefs.current.set(s.id, el);
-              else sessionRefs.current.delete(s.id);
-            }}
-            index={i}
-            className={
-              focusedSessionId === s.id ? "animate-highlight" : undefined
-            }
-            seed={s.id}
-            thumb={
-              s.photoUrl ? (
-                <SwimPhoto
-                  session={s}
-                  className="h-14 w-14 flex-none rounded-lg ring-1 ring-wave-200 ring-inset"
-                />
-              ) : undefined
-            }
-            title={
-              <div className="truncate font-semibold text-wave-900">
-                {s.displayName}
-                {s.uid === user?.uid ? (
-                  <span className="ml-1.5 text-[10px] text-wave-600">
-                    {t("common.you")}
-                  </span>
-                ) : null}
-              </div>
-            }
-            points={s.points}
-            aside={
-              <>
+      <SpotRecentDips
+        sessions={visibleSessions}
+        sessionRefs={sessionRefs}
+        focusedSessionId={focusedSessionId}
+        myUid={user?.uid}
+        isGuest={isGuest}
+        isAdmin={isAdmin}
+        onShareSession={onShareSession}
+        onAdminDeleteSession={onAdminDeleteSession}
+      />
+
+      <SpotFooterCta isGuest={isGuest} placeId={place.id} />
+    </div>
+  );
+}
+
+/**
+ * Fetches the full place doc on demand and subscribes to the spot's live
+ * sessions and per-place temperature reading, exposing the freshest known
+ * reading and the latest official water sample. Kept in a hook so the view
+ * component stays focused on layout.
+ */
+function useSpotData(placeId: string) {
+  const [{ place, loading }, setPlaceState] = useState<{
+    place: PlaceDoc | null;
+    loading: boolean;
+  }>({ place: null, loading: true });
+  const setPlace = (next: PlaceDoc) => {
+    setPlaceState((current) => ({ ...current, place: next }));
+  };
+  const [sessions, setSessions] = useState<SessionDoc[]>([]);
+  // The live per-place reading (placeTemps/{id}) — fresher than the daily
+  // summary once an on-demand refresh has landed. undefined = the snapshot
+  // hasn't delivered yet (so we don't fire a refresh against a reading we
+  // simply haven't seen); null = the doc doesn't exist.
+  const [liveTemp, setLiveTemp] = useState<PlaceTempDoc | null | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    if (!placeId) return;
+    let cancelled = false;
+    getPlace(placeId).then((p) => {
+      if (cancelled) return;
+      setPlaceState({ place: p, loading: false });
+      return;
+    });
+    const unsub = watchPlaceSessions(placeId, setSessions);
+    const unsubTemp = watchPlaceTemp(placeId, setLiveTemp);
+    return () => {
+      cancelled = true;
+      unsub();
+      unsubTemp();
+    };
+  }, [placeId]);
+
+  // Freshest known reading: the live per-place doc wins over the daily
+  // summary entry when both exist (freshestReading validates each side).
+  const summaryTemp = useStore((s) => s.tempsByPlace.get(placeId));
+  const reading = freshestReading(liveTemp, summaryTemp ?? null);
+  const readingAt = reading?.at;
+  // Latest official water sample (verdict + algae), from the same summary doc
+  // as the temps. Only Hav och Vatten baths with a recent sample have one.
+  const waterSample = useStore((s) => s.qualityByPlace.get(placeId));
+
+  // Ask the server for a fresher reading once we know what we already have
+  // (both the placeTemps snapshot and the place doc have resolved). The
+  // result streams back through the placeTemps subscription above;
+  // maybeRefreshPlaceTemp itself gates on staleness, a local throttle, and
+  // auth, so re-runs are cheap no-ops.
+  useEffect(() => {
+    if (!place || liveTemp === undefined) return;
+    maybeRefreshPlaceTemp(place.id, readingAt);
+  }, [place, liveTemp, readingAt]);
+
+  return { place, loading, setPlace, sessions, reading, waterSample };
+}
+
+/** Top row: back/close affordance, spot name + coords/first-dip, share. */
+function SpotHeader({
+  place,
+  sessions,
+  variant,
+  onClose,
+  onShareSpot,
+}: {
+  place: PlaceDoc;
+  sessions: SessionDoc[];
+  variant: "page" | "sheet";
+  onClose?: () => void;
+  onShareSpot: () => void;
+}) {
+  const navigate = useNavigate();
+  const t = useT();
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => (variant === "sheet" ? onClose?.() : navigate(-1))}
+        className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
+        aria-label={variant === "sheet" ? t("common.close") : t("common.back")}
+      >
+        {variant === "sheet" ? (
+          <X className="h-4 w-4" />
+        ) : (
+          <ArrowLeft className="h-4 w-4" />
+        )}
+      </button>
+      <div className="min-w-0 flex-1">
+        <h2 className="truncate font-display text-2xl font-black text-wave-900">
+          {place.name}
+        </h2>
+        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+          <MapPin className="h-3 w-3" />
+          {place.lat.toFixed(4)}, {place.lng.toFixed(4)}
+          {sessions.length > 0 ? (
+            <>
+              {" · "}
+              {t("spot.first_dipped", {
+                date: formatDate(
+                  sessions.reduce(
+                    (min, s) => (s.date < min ? s.date : min),
+                    sessions[0].date,
+                  ),
+                ),
+              })}
+            </>
+          ) : null}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onShareSpot}
+        className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+        aria-label={t("spot.share")}
+        title={t("spot.share")}
+      >
+        <Share2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+/** The mini-map, with the reading merged onto the place so its pin shows temp. */
+function SpotMiniMap({
+  place,
+  reading,
+  sessions,
+}: {
+  place: PlaceDoc;
+  reading: TempReading | null;
+  sessions: SessionDoc[];
+}) {
+  // Merge the reading onto the place so the mini-map's own pin still shows
+  // the temperature (place docs no longer carry it).
+  const placesForMap: PlaceWithTemp[] = !reading
+    ? [place]
+    : [
+        {
+          ...place,
+          waterTemp: reading.t,
+          waterTempAt: reading.at,
+          waterTempProvider: reading.p,
+        },
+      ];
+  const sessionsByPlace = new Map<string, SessionDoc[]>();
+  sessionsByPlace.set(place.id, sessions);
+
+  return (
+    <div className="h-44 overflow-hidden rounded-2xl border border-white/60 shadow-sm">
+      <SwimMap
+        places={placesForMap}
+        sessionsByPlace={sessionsByPlace}
+        center={[place.lat, place.lng]}
+        zoom={13}
+        linkToSpot={false}
+        viewKey={`spot-${place.id}`}
+      />
+    </div>
+  );
+}
+
+/** "Add to / remove from my to-swim list" toggle. */
+function ToswimButton({
+  onToswim,
+  onToggle,
+}: {
+  onToswim: boolean;
+  onToggle: () => void;
+}) {
+  const t = useT();
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow ring-1 transition active:scale-95 ${
+        onToswim
+          ? "bg-rose-50 text-rose-800 ring-rose-200 hover:bg-rose-50"
+          : "bg-white/80 text-emerald-700 ring-emerald-200 hover:bg-emerald-100"
+      }`}
+    >
+      {onToswim ? (
+        <>
+          <Delete className="h-3.5 w-3.5" />
+          {t("spot.toswim.remove")}
+        </>
+      ) : (
+        <>
+          <ListChecks className="h-3.5 w-3.5" />
+          {t("spot.toswim.add")}
+        </>
+      )}
+    </button>
+  );
+}
+
+/** Admin-only rename / delete-spot controls. */
+function SpotAdminBar({
+  onRename,
+  onDeletePlace,
+}: {
+  onRename: () => void;
+  onDeletePlace: () => void;
+}) {
+  const t = useT();
+  return (
+    <div className="mt-3 flex flex-wrap gap-2 rounded-2xl bg-amber-50/80 p-2 ring-1 ring-amber-200">
+      <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold tracking-widest text-white uppercase">
+        {t("admin.label")}
+      </span>
+      <button
+        type="button"
+        onClick={onRename}
+        className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50"
+      >
+        <Pencil className="h-3 w-3" /> {t("admin.rename")}
+      </button>
+      <button
+        type="button"
+        onClick={onDeletePlace}
+        className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50"
+      >
+        <Trash2 className="h-3 w-3" /> {t("admin.delete_spot")}
+      </button>
+    </div>
+  );
+}
+
+/** Horizontal strip of swim photos (with an admin remove-photo control). */
+function SpotPhotoStrip({
+  sessions,
+  isAdmin,
+  onRemovePhoto,
+}: {
+  sessions: SessionDoc[];
+  isAdmin: boolean;
+  onRemovePhoto: (id: string) => void;
+}) {
+  const t = useT();
+  const photoSessions = sessions.filter((s) => s.photoUrl);
+  if (photoSessions.length === 0) return null;
+  return (
+    <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4">
+      {photoSessions.map((s) => (
+        <div
+          key={s.id}
+          className="relative h-24 w-24 flex-none overflow-hidden rounded-xl ring-1 ring-white/60"
+        >
+          <SwimPhoto session={s} className="h-full w-full" />
+          <span className="pointer-events-none absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+            {s.displayName}
+          </span>
+          {isAdmin ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemovePhoto(s.id);
+              }}
+              className="absolute top-1 right-1 rounded-full bg-rose-600/90 p-1 text-white shadow ring-1 ring-white/30"
+              aria-label={t("admin.remove_photo")}
+              title={t("admin.remove_photo")}
+            >
+              <ImageOff className="h-3 w-3" />
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The recent-dips list, including the deep-link scroll target refs. */
+function SpotRecentDips({
+  sessions,
+  sessionRefs,
+  focusedSessionId,
+  myUid,
+  isGuest,
+  isAdmin,
+  onShareSession,
+  onAdminDeleteSession,
+}: {
+  sessions: SessionDoc[];
+  sessionRefs: RefObject<Map<string, HTMLLIElement>>;
+  focusedSessionId: string | null;
+  myUid?: string;
+  isGuest: boolean;
+  isAdmin: boolean;
+  onShareSession: (s: SessionDoc) => void;
+  onAdminDeleteSession: (id: string) => void;
+}) {
+  const t = useT();
+  return (
+    <ul className="space-y-2">
+      {sessions.map((s, i) => (
+        <SwimListItem
+          key={s.id}
+          ref={(el) => {
+            if (el) sessionRefs.current.set(s.id, el);
+            else sessionRefs.current.delete(s.id);
+          }}
+          index={i}
+          className={
+            focusedSessionId === s.id ? "animate-highlight" : undefined
+          }
+          seed={s.id}
+          thumb={
+            s.photoUrl ? (
+              <SwimPhoto
+                session={s}
+                className="h-14 w-14 flex-none rounded-lg ring-1 ring-wave-200 ring-inset"
+              />
+            ) : undefined
+          }
+          title={
+            <div className="truncate font-semibold text-wave-900">
+              {s.displayName}
+              {s.uid === myUid ? (
+                <span className="ml-1.5 text-[10px] text-wave-600">
+                  {t("common.you")}
+                </span>
+              ) : null}
+            </div>
+          }
+          points={s.points}
+          aside={
+            <>
+              <button
+                type="button"
+                onClick={() => onShareSession(s)}
+                className="rounded-full bg-white/80 p-1 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+                aria-label={t("spot.share_session")}
+                title={t("spot.share_session")}
+              >
+                <Share2 className="h-3 w-3" />
+              </button>
+              {!isGuest && isAdmin ? (
                 <button
                   type="button"
-                  onClick={() => onShareSession(s)}
-                  className="rounded-full bg-white/80 p-1 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
-                  aria-label={t("spot.share_session")}
-                  title={t("spot.share_session")}
+                  onClick={() => onAdminDeleteSession(s.id)}
+                  className="rounded-full bg-white/80 p-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
+                  aria-label={t("admin.delete_session")}
+                  title={t("admin.delete_session")}
                 >
-                  <Share2 className="h-3 w-3" />
+                  <Trash2 className="h-3 w-3" />
                 </button>
-                {!isGuest && isAdmin ? (
-                  <button
-                    type="button"
-                    onClick={() => onAdminDeleteSession(s.id)}
-                    className="rounded-full bg-white/80 p-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50"
-                    aria-label={t("admin.delete_session")}
-                    title={t("admin.delete_session")}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                ) : null}
-              </>
-            }
-            date={s.date}
-            winter={s.isWinter}
-            unique={s.isUniqueForUser}
-            note={s.note}
-          >
-            <ReactionBar session={s} myUid={user?.uid} />
-          </SwimListItem>
-        ))}
-        {visibleSessions.length === 0 ? (
-          <li className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
-            {t("spot.empty.all")}
-          </li>
-        ) : null}
-      </ul>
+              ) : null}
+            </>
+          }
+          date={s.date}
+          winter={s.isWinter}
+          unique={s.isUniqueForUser}
+          note={s.note}
+        >
+          <ReactionBar session={s} myUid={myUid} />
+        </SwimListItem>
+      ))}
+      {sessions.length === 0 ? (
+        <li className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500">
+          {t("spot.empty.all")}
+        </li>
+      ) : null}
+    </ul>
+  );
+}
 
-      <div className="mt-6 text-center">
-        {isGuest ? (
-          <Link
-            to="/login"
-            onClick={rememberReturnPath}
-            className={buttonClasses("primary", "md")}
-          >
-            <LogIn className="h-3.5 w-3.5" />
-            {t("spot.guest.cta")}
-          </Link>
-        ) : (
-          <Link
-            to={`/log?placeId=${place.id}`}
-            className={buttonClasses("primary", "md")}
-          >
-            {t("spot.log_here")}
-          </Link>
-        )}
-      </div>
+/** Bottom call-to-action: sign in (guests) or log a swim here. */
+function SpotFooterCta({
+  isGuest,
+  placeId,
+}: {
+  isGuest: boolean;
+  placeId: string;
+}) {
+  const t = useT();
+  return (
+    <div className="mt-6 text-center">
+      {isGuest ? (
+        <Link
+          to="/login"
+          onClick={rememberReturnPath}
+          className={buttonClasses("primary", "md")}
+        >
+          <LogIn className="h-3.5 w-3.5" />
+          {t("spot.guest.cta")}
+        </Link>
+      ) : (
+        <Link
+          to={`/log?placeId=${placeId}`}
+          className={buttonClasses("primary", "md")}
+        >
+          {t("spot.log_here")}
+        </Link>
+      )}
     </div>
   );
 }
@@ -625,10 +787,19 @@ function WaterTempCard({
   reading: TempReading | null;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
-  if (!reading) return null;
-  if (Date.now() - reading.at > WEEK_MS) return null;
+  const [now, setNow] = useState(() => Date.now());
 
-  const ageMs = Date.now() - reading.at;
+  // The displayed age changes while the card stays open. Keep the clock in an
+  // effect rather than reading it during render, which keeps renders pure.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (!reading) return null;
+  if (now - reading.at > WEEK_MS) return null;
+
+  const ageMs = now - reading.at;
   const ageHrs = Math.floor(ageMs / (60 * 60 * 1000));
   const ageMins = Math.floor(ageMs / 60_000);
   const ageLabel =
@@ -842,9 +1013,8 @@ function SpotInfoCard({
             : "spot.info.error",
         ),
       );
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   if (editing) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useReducer, useState } from "react";
 import { List as ListIcon, Map as MapIcon, MapPin } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
@@ -58,12 +58,12 @@ export default function MemberSwimsSheet({
   onClose,
   zBase = 1300,
 }: Props) {
-  // Keep the closing frame populated while the sheet slides away.
-  const lastMemberRef = useRef<UserDoc | null>(null);
-  useEffect(() => {
-    if (member) lastMemberRef.current = member;
-  }, [member]);
-  const shown = member ?? lastMemberRef.current;
+  // Keep the closing frame populated while the sheet slides away. Held in
+  // state (not a ref) since it drives render; updated during render via
+  // React's "storing info from previous renders" pattern so the compiler can
+  // track it without a ref being read mid-render.
+  const [shown, setShown] = useState<UserDoc | null>(member);
+  if (member && member !== shown) setShown(member);
 
   return (
     <MemberSwimsSheetContent
@@ -98,16 +98,15 @@ function MemberSwimsSheetContent({
     dispatch({ type: "show-place", placeId, token: Date.now() });
   }
 
-  const memberSessions = useMemo(
-    () => (shown ? sessions.filter((s) => s.uid === shown.uid) : []),
-    [sessions, shown],
-  );
+  const memberSessions = shown
+    ? sessions.filter((s) => s.uid === shown.uid)
+    : [];
   // Only the places this member has actually swum at.
-  const memberPlaces = useMemo(() => {
+  const memberPlaces = (() => {
     const ids = new Set(memberSessions.map((s) => s.placeId));
     return places.filter((p) => ids.has(p.id));
-  }, [memberSessions, places]);
-  const sessionsByPlace = useMemo(() => {
+  })();
+  const sessionsByPlace = (() => {
     const m = new Map<string, SessionDoc[]>();
     for (const s of memberSessions) {
       const arr = m.get(s.placeId);
@@ -115,13 +114,10 @@ function MemberSwimsSheetContent({
       else m.set(s.placeId, [s]);
     }
     return m;
-  }, [memberSessions]);
+  })();
   // Most-recent swim first for the list view.
-  const memberSwims = useMemo(
-    () => [...memberSessions].toSorted((a, b) => b.date - a.date),
-    [memberSessions],
-  );
-  const stats = useMemo(() => {
+  const memberSwims = [...memberSessions].toSorted((a, b) => b.date - a.date);
+  const stats = (() => {
     const spots = new Set<string>();
     let points = 0;
     for (const s of memberSessions) {
@@ -129,7 +125,7 @@ function MemberSwimsSheetContent({
       points += s.points;
     }
     return { points, swims: memberSessions.length, spots: spots.size };
-  }, [memberSessions]);
+  })();
 
   const title = shown ? (
     <div className="flex min-w-0 items-center gap-3">

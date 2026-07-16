@@ -1,4 +1,4 @@
-import { lazy, useMemo, useReducer, useState } from "react";
+import { lazy, useReducer, useState } from "react";
 import { m } from "framer-motion";
 import { MapPin, Trophy } from "lucide-react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
@@ -44,12 +44,12 @@ export default function MapPage() {
   // everything, "off" = hide naturist spots.
   const [nudeMode, setNudeMode] = useState<"only" | "on" | "off">("on");
 
-  const shownPlaces = useMemo(() => {
+  const shownPlaces = (() => {
     const base = isGuest || showAll ? places : myPlaces;
     if (nudeMode === "only") return base.filter((p) => p.nude === true);
     if (nudeMode === "off") return base.filter((p) => p.nude !== true);
     return base;
-  }, [isGuest, showAll, places, myPlaces, nudeMode]);
+  })();
 
   function changeShowAll(next: boolean) {
     dispatchMapView({ type: "showAll", value: next });
@@ -69,14 +69,11 @@ export default function MapPage() {
 
   // Stable random seed picked once per mount — prevents re-roll on every render.
   const [greetingSeed] = useState(() => Math.floor(Math.random() * 1000));
-  // Re-derive greeting when locale or profile name changes.
-  const locale = useLocale((s) => s.locale);
+  // Subscribe to locale so the greeting re-derives when it (or the profile
+  // name) changes — getTimeGreeting reads the active language internally.
+  useLocale((s) => s.locale);
   const greetingName = profile?.displayName ?? t("layout.swimmer");
-  const greeting = useMemo(
-    () => getTimeGreeting(greetingName, greetingSeed),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [greetingName, locale],
-  );
+  const greeting = getTimeGreeting(greetingName, greetingSeed);
 
   const subtitle =
     myStats.totalSwims === 0

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { reactorUids, reactionAddedAt, fetchUsers } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
@@ -157,6 +157,14 @@ function recapToShow(mode: "visit" | "month"): Activity | null {
  * devices rather than reset per browser.
  */
 export default function SinceLastVisit() {
+  // Reset all recap state on identity change by remounting the inner component
+  // (React's canonical key-prop reset) rather than clearing each piece from an
+  // effect. myUid only changes on login/logout, so the remount is rare.
+  const myUid = useStore((s) => s.myUid);
+  return <SinceLastVisitForUser key={myUid ?? "signed-out"} />;
+}
+
+function SinceLastVisitForUser() {
   const myUid = useStore((s) => s.myUid);
   const loading = useStore((s) => s.loading);
   const lastSeenResolved = useStore((s) => s.lastSeenResolved);
@@ -169,9 +177,11 @@ export default function SinceLastVisit() {
   const recapToken = useRecapTrigger((s) => s.token);
 
   const [activity, setActivity] = useState<Activity | null>(null);
-  const handledRecapTokenRef = useRef(0);
-  const monthPending =
-    recapToken !== 0 && recapToken !== handledRecapTokenRef.current;
+  // Which manual-recap token we've already acted on. State (not a ref) because
+  // `monthPending` — derived from it — is a render input that gates the feed
+  // acquisition and the effect below.
+  const [handledRecapToken, setHandledRecapToken] = useState(0);
+  const monthPending = recapToken !== 0 && recapToken !== handledRecapToken;
   const doneRef = useRef(false);
   // State mirror of doneRef, so the feed acquisition below can react to it.
   const [digestDone, setDigestDone] = useState(false);
@@ -200,12 +210,7 @@ export default function SinceLastVisit() {
   );
   const feedReady = !feedNeeded || allSessionsReady;
 
-  // Reset when the signed-in user changes (incl. logout).
-  useEffect(() => {
-    doneRef.current = false;
-    setDigestDone(false);
-    setActivity(null);
-  }, [myUid]);
+  // (Per-user reset is handled by remounting via `key` in the wrapper above.)
 
   // Once auth + data have settled, decide the since-last-visit recap exactly
   // once. The timer resets on each data change so we don't fire on a
@@ -241,7 +246,14 @@ export default function SinceLastVisit() {
   // so the recap isn't built from an empty snapshot.
   useEffect(() => {
     if (!monthPending || !feedReady) return;
-    handledRecapTokenRef.current = recapToken;
+    // Legitimate effect, not a prop mirror: it runs once the external recap
+    // trigger has arrived AND the community feed has finished loading — an
+    // async condition that can't be derived during render or handled in the
+    // button's click handler. The two updates are independent (neither reads
+    // the other) and React batches them into a single render.
+    // react-doctor-disable-next-line react-hooks-js/set-state-in-effect
+    setHandledRecapToken(recapToken);
+    // react-doctor-disable-next-line react-doctor/no-chain-state-updates
     setActivity(recapToShow("month"));
   }, [monthPending, feedReady, recapToken]);
 
@@ -267,11 +279,11 @@ function Sheet({
 
   // Keep the last activity around so the sheet still has content to render
   // while it animates closed (`open` flips to false before the sheet unmounts).
-  const lastRef = useRef<Activity | null>(activity);
-  useEffect(() => {
-    if (activity) lastRef.current = activity;
-  }, [activity]);
-  const shown = activity ?? lastRef.current;
+  // Held in state (not a ref) because it feeds render; updated during render via
+  // React's "storing info from previous renders" pattern so the compiler can
+  // track it without a ref being read mid-render.
+  const [shown, setShown] = useState<Activity | null>(activity);
+  if (activity && activity !== shown) setShown(activity);
 
   // The recap list is frozen when the sheet opens, but reaction state should
   // stay live: reacting writes to Firestore, which updates the store, and we
@@ -279,27 +291,27 @@ function Sheet({
   // sheet would keep rendering the stale snapshot captured at open time.
   const allSessions = useStore((s) => s.allSessions);
   const mySessions = useStore((s) => s.mySessions);
-  const liveById = useMemo(() => {
+  const liveById = (() => {
     const m = new Map<string, SessionDoc>();
     for (const s of allSessions) m.set(s.id, s);
     for (const s of mySessions) m.set(s.id, s);
     return m;
-  }, [allSessions, mySessions]);
+  })();
 
   // Resolve reactor UIDs to display names. Sessions carry their author's name,
   // so the union of sessions is a free directory — but a reactor may not have
   // logged a swim this year, so we also fetch the user docs of any reactor we
   // can't name from sessions alone.
-  const sessionNames = useMemo(() => {
+  const sessionNames = (() => {
     const m = new Map<string, string>();
     for (const s of allSessions) m.set(s.uid, s.displayName);
     for (const s of mySessions) m.set(s.uid, s.displayName);
     return m;
-  }, [allSessions, mySessions]);
+  })();
 
   // Every distinct reactor UID (other than me) referenced by the reaction
   // feed items — the people whose names we need to show.
-  const reactorUidList = useMemo(() => {
+  const reactorUidList = (() => {
     const set = new Set<string>();
     for (const item of shown?.items ?? []) {
       if (item.kind !== "reaction") continue;
@@ -309,7 +321,7 @@ function Sheet({
           if (uid !== myUid) set.add(uid);
     }
     return [...set];
-  }, [shown?.items, myUid]);
+  })();
 
   // Names fetched from user docs for reactors not covered by `sessionNames`.
   const [fetchedNames, setFetchedNames] = useState<Map<string, string>>(
@@ -337,11 +349,11 @@ function Sheet({
     };
   }, [reactorUidList, sessionNames]);
 
-  const nameByUid = useMemo(() => {
+  const nameByUid = (() => {
     const m = new Map(fetchedNames);
     for (const [uid, name] of sessionNames) m.set(uid, name);
     return m;
-  }, [sessionNames, fetchedNames]);
+  })();
 
   // Photo opened full-screen in the lightbox (tapping a card's image).
   const [lightboxFor, setLightboxFor] = useState<SessionDoc | null>(null);

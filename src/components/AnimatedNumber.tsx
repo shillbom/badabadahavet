@@ -23,42 +23,38 @@ function DigitSlot({
   const isDigit = /\d/.test(char);
   const target = isDigit ? parseInt(char, 10) : 0;
   const currentRef = useRef(0);
-  const stepDurationRef = useRef(
-    isDigit && target > 0 ? duration / target : duration,
-  );
-  const [displayed, setDisplayed] = useState(isDigit ? "0" : char);
+  const [displayed, setDisplayed] = useState("0");
 
   useEffect(() => {
+    if (!isDigit) return;
     const timeouts: ReturnType<typeof setTimeout>[] = [];
+    const from = currentRef.current;
+    const steps = Math.abs(target - from);
 
-    if (!isDigit) {
-      setDisplayed(char);
-    } else {
-      const from = currentRef.current;
-      const steps = Math.abs(target - from);
+    if (steps > 0) {
+      const stepDuration = duration / steps;
+      const step = target > from ? 1 : -1;
 
-      if (steps > 0) {
-        const stepDuration = duration / steps;
-        stepDurationRef.current = stepDuration;
-        const step = target > from ? 1 : -1;
-
-        for (let i = 1; i <= steps; i++) {
-          const val = from + i * step;
-          timeouts.push(
-            window.setTimeout(
-              () => {
-                currentRef.current = val;
-                setDisplayed(String(val));
-              },
-              i * stepDuration * 1000,
-            ),
-          );
-        }
+      for (let i = 1; i <= steps; i++) {
+        const val = from + i * step;
+        timeouts.push(
+          window.setTimeout(
+            () => {
+              currentRef.current = val;
+              setDisplayed(String(val));
+            },
+            i * stepDuration * 1000,
+          ),
+        );
       }
     }
 
     return () => timeouts.forEach(window.clearTimeout);
-  }, [char]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [duration, isDigit, target]);
+
+  if (!isDigit) return <span className="inline-block">{char}</span>;
+
+  const transitionDuration = duration / Math.max(1, target);
 
   return (
     <span className="relative inline-block overflow-hidden">
@@ -69,7 +65,7 @@ function DigitSlot({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: dir > 0 ? -8 : 8, opacity: 0 }}
           transition={{
-            duration: stepDurationRef.current * 0.85,
+            duration: transitionDuration * 0.85,
             ease: "circInOut",
           }}
           className="inline-block"

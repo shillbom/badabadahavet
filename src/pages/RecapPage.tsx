@@ -1,4 +1,4 @@
-import { useMemo, useReducer, useState } from "react";
+import { useReducer, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
 import {
@@ -61,7 +61,6 @@ function recapNavigationReducer(
 export default function RecapPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const t = useT();
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
   // The recap's community slides read the year feed — keep it subscribed
@@ -74,12 +73,12 @@ export default function RecapPage() {
     { year: currentYear, idx: 0, dir: 1 },
   );
 
-  const availableYears = useMemo(() => {
+  const availableYears = (() => {
     const years = new Set<number>();
     for (const s of mySessions) years.add(new Date(s.date).getFullYear());
     if (years.size === 0) return [currentYear];
     return [...years].toSorted((a, b) => a - b);
-  }, [mySessions, currentYear]);
+  })();
 
   const minYear = availableYears[0] ?? currentYear;
   const canGoPrev = year > minYear;
@@ -88,134 +87,335 @@ export default function RecapPage() {
   const startTs = startOfYear(year);
   const endTs = endOfYear(year);
 
-  const yearSessions = useMemo(
-    () => mySessions.filter((s) => s.date >= startTs && s.date <= endTs),
-    [mySessions, startTs, endTs],
+  const yearSessions = mySessions.filter(
+    (s) => s.date >= startTs && s.date <= endTs,
   );
-  const stats = useMemo(() => computeMyStats(yearSessions), [yearSessions]);
+  const stats = computeMyStats(yearSessions);
 
-  const ctxYear = useMemo(
-    () => ({
-      uid: user?.uid ?? "",
-      mySessions: yearSessions,
-      allSessions: allSessions.filter(
-        (s) => s.date >= startTs && s.date <= endTs,
-      ),
-    }),
-    [user, yearSessions, allSessions, startTs, endTs],
+  const ctxYear = {
+    uid: user?.uid ?? "",
+    mySessions: yearSessions,
+    allSessions: allSessions.filter(
+      (s) => s.date >= startTs && s.date <= endTs,
+    ),
+  };
+  const unlockedYear = evaluateAchievements(ctxYear);
+
+  const slides = useRecapSlides({ stats, year, yearSessions, unlockedYear });
+  const { sharing, onShare } = useRecapShare({ stats, year, yearSessions });
+
+  const slide = slides[idx];
+  const isLast = idx === slides.length - 1;
+
+  const advance = (delta: 1 | -1) => {
+    navigateRecap({ type: "advance", delta, lastIndex: slides.length - 1 });
+  };
+
+  return (
+    <div className="relative min-h-[calc(var(--app-height,100dvh)-4rem)] overflow-hidden px-4 pt-2 pb-12">
+      <ConfettiBackdrop />
+      <RecapHeader
+        year={year}
+        canGoPrev={canGoPrev}
+        canGoNext={canGoNext}
+        onBack={() => navigate(-1)}
+        onChangeYear={(delta) => navigateRecap({ type: "changeYear", delta })}
+      />
+
+      <div className="relative z-10 mb-3 flex gap-1">
+        {slides.map((s, i) => (
+          <span
+            key={s.title}
+            className={`h-1 flex-1 rounded-full ${
+              i <= idx ? "bg-wave-600" : "bg-white/70"
+            }`}
+          />
+        ))}
+      </div>
+
+      <div className="relative z-10 mt-4 flex h-[60vh] items-center justify-center">
+        <AnimatePresence mode="wait" custom={dir}>
+          <m.div
+            key={idx}
+            custom={dir}
+            variants={slideVariants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: "spring", stiffness: 240, damping: 26 }}
+            drag="x"
+            dragElastic={0.2}
+            dragConstraints={{ left: 0, right: 0 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.x < -60 && idx < slides.length - 1) {
+                advance(1);
+              } else if (info.offset.x > 60 && idx > 0) {
+                advance(-1);
+              }
+            }}
+            className="w-full max-w-sm cursor-grab active:cursor-grabbing"
+          >
+            <SlideCard slide={slide} />
+          </m.div>
+        </AnimatePresence>
+      </div>
+
+      <RecapFooter
+        year={year}
+        idx={idx}
+        isLast={isLast}
+        sharing={sharing}
+        onShare={onShare}
+        onAdvance={advance}
+      />
+    </div>
   );
-  const unlockedYear = useMemo(() => evaluateAchievements(ctxYear), [ctxYear]);
+}
 
-  const slides = useMemo<Slide[]>(() => {
-    const total = stats.totalPoints;
-    const fav = stats.favouriteSpot;
-    const best = stats.bestMonth;
-    const winters = stats.winterSwims;
-    const range = stats.range?.km ?? 0;
-    const earnedThisYear = [...unlockedYear];
-    return [
-      {
-        kind: "intro",
-        title: `${year}`,
-        subtitle: t("recap.intro.subtitle"),
-        accent: "🌊",
-        big: yearSessions.length.toString(),
-        bigLabel:
-          yearSessions.length === 1
-            ? t("recap.intro.label_one")
-            : t("recap.intro.label_many"),
-      },
-      {
-        kind: "stat",
-        title: t("recap.points.title"),
-        subtitle: t("recap.points.normal"),
-        accent: "🏆",
-        big: total.toString(),
-        bigLabel: t("recap.points.label"),
-      },
-      {
-        kind: "stat",
-        title: t("recap.spots.title"),
-        subtitle:
-          stats.uniquePlaces > 1 ? t("recap.spots.subtitle") : undefined,
-        accent: "📍",
-        big: stats.uniquePlaces.toString(),
-        bigLabel: t("recap.spots.label"),
-      },
-      {
-        kind: "stat",
-        title: t("recap.winter.title"),
-        subtitle:
-          winters >= 5
-            ? t("recap.winter.brave")
-            : winters > 0
-              ? t("recap.winter.cold")
-              : t("recap.winter.maybe"),
-        accent: "❄️",
-        big: winters.toString(),
-        bigLabel:
-          winters === 1
-            ? t("recap.winter.label_one")
-            : t("recap.winter.label_many"),
-      },
-      ...(fav
-        ? [
-            {
-              kind: "stat" as const,
-              title: t("recap.fav.title"),
-              subtitle: fav.name,
-              accent: "⭐",
-              big: fav.count.toString(),
-              bigLabel:
-                fav.count === 1
-                  ? t("recap.fav.label_one")
-                  : t("recap.fav.label_many"),
-              link: `/spot/${fav.placeId}`,
-            },
-          ]
-        : []),
-      ...(best
-        ? [
-            {
-              kind: "stat" as const,
-              title: t("recap.month.title"),
-              subtitle: t("recap.month.subtitle"),
-              accent: "🗓️",
-              big: monthShort(best.month),
-              bigLabel: t("recap.month.label", { n: best.points }),
-            },
-          ]
-        : []),
-      ...(range > 0.5
-        ? [
-            {
-              kind: "stat" as const,
-              title: t("recap.range.title"),
-              subtitle: t("recap.range.subtitle"),
-              accent: "🧭",
-              big: `${range.toFixed(0)}`,
-              bigLabel: t("recap.range.label"),
-            },
-          ]
-        : []),
-      {
-        kind: "achievements",
-        title: t("recap.achievements.title"),
-        subtitle: t("recap.achievements.subtitle", {
-          n: earnedThisYear.length,
-        }),
-        accent: "🏅",
-        ids: earnedThisYear,
-      },
-      {
-        kind: "outro",
-        title: t("recap.outro.title"),
-        subtitle: t("recap.outro.subtitle"),
-        accent: "💧",
-      },
-    ];
-  }, [stats, year, yearSessions, unlockedYear, t]);
+function RecapHeader({
+  year,
+  canGoPrev,
+  canGoNext,
+  onBack,
+  onChangeYear,
+}: {
+  year: number;
+  canGoPrev: boolean;
+  canGoNext: boolean;
+  onBack: () => void;
+  onChangeYear: (delta: 1 | -1) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="relative z-10 mb-3 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={onBack}
+        className="rounded-full bg-white/80 p-2 ring-1 ring-slate-200"
+        aria-label={t("common.back")}
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </button>
+      <h2 className="font-display text-xl font-black text-wave-900">
+        {t("recap.title", { year })}
+      </h2>
+      <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onChangeYear(-1)}
+          disabled={!canGoPrev}
+          className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
+          aria-label={t("common.previous")}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onChangeYear(1)}
+          disabled={!canGoNext}
+          className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
+          aria-label={t("common.next")}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
+function RecapFooter({
+  year,
+  idx,
+  isLast,
+  sharing,
+  onShare,
+  onAdvance,
+}: {
+  year: number;
+  idx: number;
+  isLast: boolean;
+  sharing: boolean;
+  onShare: () => void;
+  onAdvance: (delta: 1 | -1) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="relative z-10 mt-4 flex justify-between">
+      <m.button
+        whileTap={{ scale: 0.92 }}
+        disabled={idx === 0}
+        onClick={() => onAdvance(-1)}
+        className="rounded-full bg-white/80 p-3 ring-1 ring-slate-200 disabled:opacity-40"
+        aria-label={t("common.previous")}
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </m.button>
+      {isLast ? (
+        <div className="flex items-center gap-2">
+          <Button
+            size="lg"
+            className="text-sm"
+            icon={<Share2 className="h-4 w-4" />}
+            loading={sharing}
+            onClick={onShare}
+          >
+            {t("recap.share.button", { year })}
+          </Button>
+          <m.div whileTap={{ scale: 0.96 }}>
+            <Link
+              to="/"
+              className={buttonClasses("secondary", "lg", "text-sm")}
+            >
+              {t("recap.back_to_map")}
+            </Link>
+          </m.div>
+        </div>
+      ) : (
+        <m.button
+          whileTap={{ scale: 0.92 }}
+          onClick={() => onAdvance(1)}
+          className={buttonClasses("primary", "icon", "h-11 w-11")}
+          aria-label={t("common.next")}
+        >
+          <ChevronRight className="h-5 w-5" />
+        </m.button>
+      )}
+    </div>
+  );
+}
+
+type MyStats = ReturnType<typeof computeMyStats>;
+
+function useRecapSlides({
+  stats,
+  year,
+  yearSessions,
+  unlockedYear,
+}: {
+  stats: MyStats;
+  year: number;
+  yearSessions: { date: number }[];
+  unlockedYear: Set<string>;
+}): Slide[] {
+  const t = useT();
+  const total = stats.totalPoints;
+  const fav = stats.favouriteSpot;
+  const best = stats.bestMonth;
+  const winters = stats.winterSwims;
+  const range = stats.range?.km ?? 0;
+  const earnedThisYear = [...unlockedYear];
+  return [
+    {
+      kind: "intro",
+      title: `${year}`,
+      subtitle: t("recap.intro.subtitle"),
+      accent: "🌊",
+      big: yearSessions.length.toString(),
+      bigLabel:
+        yearSessions.length === 1
+          ? t("recap.intro.label_one")
+          : t("recap.intro.label_many"),
+    },
+    {
+      kind: "stat",
+      title: t("recap.points.title"),
+      subtitle: t("recap.points.normal"),
+      accent: "🏆",
+      big: total.toString(),
+      bigLabel: t("recap.points.label"),
+    },
+    {
+      kind: "stat",
+      title: t("recap.spots.title"),
+      subtitle: stats.uniquePlaces > 1 ? t("recap.spots.subtitle") : undefined,
+      accent: "📍",
+      big: stats.uniquePlaces.toString(),
+      bigLabel: t("recap.spots.label"),
+    },
+    {
+      kind: "stat",
+      title: t("recap.winter.title"),
+      subtitle:
+        winters >= 5
+          ? t("recap.winter.brave")
+          : winters > 0
+            ? t("recap.winter.cold")
+            : t("recap.winter.maybe"),
+      accent: "❄️",
+      big: winters.toString(),
+      bigLabel:
+        winters === 1
+          ? t("recap.winter.label_one")
+          : t("recap.winter.label_many"),
+    },
+    ...(fav
+      ? [
+          {
+            kind: "stat" as const,
+            title: t("recap.fav.title"),
+            subtitle: fav.name,
+            accent: "⭐",
+            big: fav.count.toString(),
+            bigLabel:
+              fav.count === 1
+                ? t("recap.fav.label_one")
+                : t("recap.fav.label_many"),
+            link: `/spot/${fav.placeId}`,
+          },
+        ]
+      : []),
+    ...(best
+      ? [
+          {
+            kind: "stat" as const,
+            title: t("recap.month.title"),
+            subtitle: t("recap.month.subtitle"),
+            accent: "🗓️",
+            big: monthShort(best.month),
+            bigLabel: t("recap.month.label", { n: best.points }),
+          },
+        ]
+      : []),
+    ...(range > 0.5
+      ? [
+          {
+            kind: "stat" as const,
+            title: t("recap.range.title"),
+            subtitle: t("recap.range.subtitle"),
+            accent: "🧭",
+            big: `${range.toFixed(0)}`,
+            bigLabel: t("recap.range.label"),
+          },
+        ]
+      : []),
+    {
+      kind: "achievements",
+      title: t("recap.achievements.title"),
+      subtitle: t("recap.achievements.subtitle", {
+        n: earnedThisYear.length,
+      }),
+      accent: "🏅",
+      ids: earnedThisYear,
+    },
+    {
+      kind: "outro",
+      title: t("recap.outro.title"),
+      subtitle: t("recap.outro.subtitle"),
+      accent: "💧",
+    },
+  ];
+}
+
+function useRecapShare({
+  stats,
+  year,
+  yearSessions,
+}: {
+  stats: MyStats;
+  year: number;
+  yearSessions: { date: number }[];
+}) {
+  const t = useT();
   const [sharing, setSharing] = useState(false);
 
   async function onShare() {
@@ -276,136 +476,11 @@ export default function RecapPage() {
       else if (result === "failed") toast.error(t("recap.share.error"));
     } catch {
       toast.error(t("recap.share.error"));
-    } finally {
-      setSharing(false);
     }
+    setSharing(false);
   }
 
-  const slide = slides[idx];
-  const isLast = idx === slides.length - 1;
-
-  const advance = (delta: 1 | -1) => {
-    navigateRecap({ type: "advance", delta, lastIndex: slides.length - 1 });
-  };
-
-  return (
-    <div className="relative min-h-[calc(var(--app-height,100dvh)-4rem)] overflow-hidden px-4 pt-2 pb-12">
-      <ConfettiBackdrop />
-      <div className="relative z-10 mb-3 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="rounded-full bg-white/80 p-2 ring-1 ring-slate-200"
-          aria-label={t("common.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <h2 className="font-display text-xl font-black text-wave-900">
-          {t("recap.title", { year })}
-        </h2>
-        <div className="ml-auto flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => navigateRecap({ type: "changeYear", delta: -1 })}
-            disabled={!canGoPrev}
-            className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
-            aria-label={t("common.previous")}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => navigateRecap({ type: "changeYear", delta: 1 })}
-            disabled={!canGoNext}
-            className="rounded-full bg-white/80 p-1.5 ring-1 ring-slate-200 disabled:opacity-30"
-            aria-label={t("common.next")}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="relative z-10 mb-3 flex gap-1">
-        {slides.map((s, i) => (
-          <span
-            key={s.title}
-            className={`h-1 flex-1 rounded-full ${
-              i <= idx ? "bg-wave-600" : "bg-white/70"
-            }`}
-          />
-        ))}
-      </div>
-
-      <div className="relative z-10 mt-4 flex h-[60vh] items-center justify-center">
-        <AnimatePresence mode="wait" custom={dir}>
-          <m.div
-            key={idx}
-            custom={dir}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{ type: "spring", stiffness: 240, damping: 26 }}
-            drag="x"
-            dragElastic={0.2}
-            dragConstraints={{ left: 0, right: 0 }}
-            onDragEnd={(_, info) => {
-              if (info.offset.x < -60 && idx < slides.length - 1) {
-                advance(1);
-              } else if (info.offset.x > 60 && idx > 0) {
-                advance(-1);
-              }
-            }}
-            className="w-full max-w-sm cursor-grab active:cursor-grabbing"
-          >
-            <SlideCard slide={slide} />
-          </m.div>
-        </AnimatePresence>
-      </div>
-
-      <div className="relative z-10 mt-4 flex justify-between">
-        <m.button
-          whileTap={{ scale: 0.92 }}
-          disabled={idx === 0}
-          onClick={() => advance(-1)}
-          className="rounded-full bg-white/80 p-3 ring-1 ring-slate-200 disabled:opacity-40"
-          aria-label={t("common.previous")}
-        >
-          <ChevronLeft className="h-5 w-5" />
-        </m.button>
-        {isLast ? (
-          <div className="flex items-center gap-2">
-            <Button
-              size="lg"
-              className="text-sm"
-              icon={<Share2 className="h-4 w-4" />}
-              loading={sharing}
-              onClick={onShare}
-            >
-              {t("recap.share.button", { year })}
-            </Button>
-            <m.div whileTap={{ scale: 0.96 }}>
-              <Link
-                to="/"
-                className={buttonClasses("secondary", "lg", "text-sm")}
-              >
-                {t("recap.back_to_map")}
-              </Link>
-            </m.div>
-          </div>
-        ) : (
-          <m.button
-            whileTap={{ scale: 0.92 }}
-            onClick={() => advance(1)}
-            className={buttonClasses("primary", "icon", "h-11 w-11")}
-            aria-label={t("common.next")}
-          >
-            <ChevronRight className="h-5 w-5" />
-          </m.button>
-        )}
-      </div>
-    </div>
-  );
+  return { sharing, onShare };
 }
 
 type Slide =
@@ -532,16 +607,15 @@ function AchievementsSlide({
 const CONFETTI_EMOJIS = ["🌊", "💧", "❄️", "✨", "⭐", "🐬"];
 
 function ConfettiBackdrop() {
-  // Memoize so positions/timing don't re-randomize on every slide navigation.
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: 30 }, (_, i) => ({
-        key: i,
-        left: Math.random() * 100,
-        delay: Math.random() * 4,
-        duration: 5 + Math.random() * 4,
-      })),
-    [],
+  // Generate positions/timing once per mount so slide navigation cannot
+  // reshuffle the animation, while keeping render deterministic.
+  const [pieces] = useState(() =>
+    Array.from({ length: 30 }, (_, i) => ({
+      key: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 4,
+      duration: 5 + Math.random() * 4,
+    })),
   );
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">

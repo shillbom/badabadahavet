@@ -113,12 +113,10 @@ function ReactionEmoji({
     if (!myUid || pending) return;
     setPending(true);
     onChange?.();
-    try {
-      const hasReacted = reactorUids(reactions[emoji]).includes(myUid);
-      await toggleReaction(session.id, emoji, myUid, hasReacted);
-    } finally {
-      setPending(false);
-    }
+    const hasReacted = reactorUids(reactions[emoji]).includes(myUid);
+    await toggleReaction(session.id, emoji, myUid, hasReacted).finally(() =>
+      setPending(false),
+    );
   }
 
   return (

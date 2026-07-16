@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { m } from "framer-motion";
 import { Link, useSearchParams } from "react-router";
 import { ChevronRight, MapPin, Snowflake, Sparkles } from "lucide-react";
@@ -23,12 +22,9 @@ export default function HistoryPage() {
   const [params] = useSearchParams();
   const view = params.get("view");
 
-  const filtered = useMemo(() => {
-    if (view === "streak") return streakSessions(sessions);
-    return sessions;
-  }, [sessions, view]);
+  const filtered = view === "streak" ? streakSessions(sessions) : sessions;
 
-  const spots = useMemo(() => {
+  const spots = (() => {
     if (view !== "spots") return [];
     const spotsByPlace = new Map<
       string,
@@ -66,7 +62,7 @@ export default function HistoryPage() {
     return [...spotsByPlace.values()].toSorted(
       (a, b) => b.count - a.count || b.lastDate - a.lastDate,
     );
-  }, [sessions, view]);
+  })();
 
   const title =
     view === "streak"
