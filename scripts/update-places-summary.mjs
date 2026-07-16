@@ -20,8 +20,6 @@
  * semantics, incl. back-dated swims). It is read UNBOUNDED on purpose: the
  * pin's border ring shows regardless of age even though the glow fades after
  * ~60 days, so windowing the read would drop long-stale border frames.
- * During the transition it also folds any legacy `lastSwim*` still sitting on
- * place docs (a no-op once those are scrubbed).
  *
  * Usage (local):
  *   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
@@ -100,20 +98,6 @@ async function main() {
   ]);
 
   const lastSwim = aggregateLastSwim(sessionSnap.docs);
-  // Transition backfill: fold any legacy lastSwim* still on a place doc for
-  // places that have no session rows (a no-op once the fields are scrubbed).
-  for (const doc of placeSnap.docs) {
-    const data = doc.data();
-    if (!lastSwim.has(doc.id) && typeof data.lastSwimAt === "number") {
-      lastSwim.set(doc.id, {
-        at: data.lastSwimAt,
-        border:
-          typeof data.lastSwimBorder === "string"
-            ? data.lastSwimBorder
-            : "none",
-      });
-    }
-  }
 
   const places = placeSnap.docs.map((d) => {
     const data = d.data();

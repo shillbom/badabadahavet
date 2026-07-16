@@ -22,6 +22,7 @@
     "seed:osm": "node scripts/seed-osm-swimming.mjs",
     "update:temperatures": "node scripts/update-temperatures.mjs",
     "update:places-summary": "node scripts/update-places-summary.mjs",
+    "scrub:place-legacy": "node scripts/scrub-place-legacy.mjs",
     "scrub:usernames": "node scripts/scrub-usernames.mjs",
     "backfill:scores": "node scripts/backfill-scores.mjs",
     "backfill:thumbnails": "node scripts/backfill-thumbnails.mjs",

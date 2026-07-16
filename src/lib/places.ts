@@ -26,12 +26,12 @@ export function summaryToPlaces(
 /**
  * Overlay the recent-changes delta (full place docs created or edited since
  * the summary was built) onto the summary pins. A delta doc replaces the
- * summary's name/lat/lng/nude for its id but KEEPS the summary's lastSwim*
- * (the daily aggregate — a same-day rename must not drop the pin's glow, and
- * the delta doc's own lastSwim* can be staler or absent); delta-only ids
- * (brand-new spots not yet in any summary) are appended, taking their glow
- * from the doc itself. An empty delta returns the input array itself, so
- * derive()'s reference-equality memo only churns when something changed.
+ * summary's name/lat/lng/nude for its id but KEEPS the summary's lastSwim*:
+ * the daily aggregate is the only source of the pin's glow/border (place docs
+ * no longer carry lastSwim*), so a same-day rename mustn't drop it, and a
+ * brand-new spot simply has no glow until the next daily build. An empty
+ * delta returns the input array itself, so derive()'s reference-equality memo
+ * only churns when something changed.
  */
 export function mergeDelta(
   summaryPins: PlacePin[],
@@ -46,10 +46,9 @@ export function mergeDelta(
     const base = byId.get(d.id);
     const pin: PlacePin = { id: d.id, name: d.name, lat: d.lat, lng: d.lng };
     if (d.nude === true) pin.nude = true;
-    const at = base?.lastSwimAt ?? d.lastSwimAt;
-    const border = base?.lastSwimBorder ?? d.lastSwimBorder;
-    if (typeof at === "number") pin.lastSwimAt = at;
-    if (typeof border === "string") pin.lastSwimBorder = border;
+    if (typeof base?.lastSwimAt === "number") pin.lastSwimAt = base.lastSwimAt;
+    if (typeof base?.lastSwimBorder === "string")
+      pin.lastSwimBorder = base.lastSwimBorder;
     byId.set(d.id, pin);
   }
   return [...byId.values()];

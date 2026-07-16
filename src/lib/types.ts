@@ -176,13 +176,6 @@ export type PlaceDoc = {
   nude?: boolean;
   /** Where the nude flag came from: "naturism.se" or "user". */
   nudeSource?: string;
-  /** Denormalised "last swim here", maintained by the logSession /
-   *  removeSession Cloud Functions. Lets the map outline each pin with the
-   *  most recent swimmer's frame without loading any sessions. */
-  lastSwimAt?: number;
-  lastSwimBy?: string;
-  /** Border id (see lib/borders.ts) of that last swimmer; "none" = no frame. */
-  lastSwimBorder?: string;
   /** Epoch ms of the last create/rename/info write to this doc (wall-clock,
    *  not the swim date). The cursor for watchPlaceChangesSince — the bounded
    *  delta listener that surfaces spots created or edited since the daily

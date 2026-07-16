@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 /**
- * One-time / re-runnable backfill from existing sessions. Two jobs:
+ * One-time / re-runnable backfill from existing sessions:
  *
- *   1. users/{uid}.scores + users/{uid}.statsByYear — per-year point totals
- *      and leaderboard card stats (swims / new spots / winters / countries
- *      abroad). The leaderboard reads both straight off the user doc.
- *      Recomputed from each user's sessions' stored fields.
+ *   users/{uid}.scores + users/{uid}.statsByYear — per-year point totals
+ *   and leaderboard card stats (swims / new spots / winters / countries
+ *   abroad). The leaderboard reads both straight off the user doc.
+ *   Recomputed from each user's sessions' stored fields.
  *
- *   2. places/{id}.lastSwim* — the most recent swim at each place and that
- *      swimmer's border frame, so the map can outline each pin with the
- *      last swimmer's frame. (Live logSession/removeSession maintain this
- *      going forward; this seeds it for places that existed before.)
+ * (The map's per-place "last swim" frame is no longer stored on place docs —
+ * the daily placesSummary build derives it from sessions.)
  *
  * Idempotent — safe to re-run; it overwrites with freshly-computed values.
  *
@@ -53,12 +51,11 @@ const snap = await db.collection("sessions").get();
 
 const byUser = new Map(); // uid -> { [year]: points }
 const statsByUser = new Map(); // uid -> { [year]: {swims,uniquePlaces,winters,abroad:Set} }
-const lastByPlace = new Map(); // placeId -> { date, uid, border|null }
 snap.forEach((d) => {
   const s = d.data();
   if (typeof s.uid !== "string" || typeof s.date !== "number") return;
 
-  // (1) yearly score + leaderboard card stats
+  // yearly score + leaderboard card stats
   const pts = typeof s.points === "number" ? s.points : 0;
   const year = String(swimYear(s.date));
   const scores = byUser.get(s.uid) ?? {};
@@ -79,40 +76,14 @@ snap.forEach((d) => {
     st.abroad.add(s.country);
   }
   statsByUser.set(s.uid, years);
-
-  // (2) most recent swim per place
-  if (typeof s.placeId === "string") {
-    const cur = lastByPlace.get(s.placeId);
-    if (!cur || s.date > cur.date) {
-      lastByPlace.set(s.placeId, {
-        date: s.date,
-        uid: s.uid,
-        border: typeof s.border === "string" ? s.border : null,
-      });
-    }
-  }
 });
 
-// Fallback frame for places whose latest session predates the `border`
-// field: that swimmer's currently-chosen border. (Live logSession stores
-// the fully-resolved frame, so this only matters for old swims.)
+// Which users still exist (a session can outlive its user).
 const usersSnap = await db.collection("users").get();
-const borderByUser = new Map();
 const userExists = new Set();
-usersSnap.forEach((u) => {
-  userExists.add(u.id);
-  const b = u.data().selectedBorder;
-  if (typeof b === "string") borderByUser.set(u.id, b);
-});
+usersSnap.forEach((u) => userExists.add(u.id));
 
-// Only stamp places that still exist (a session can outlive its place).
-const placesSnap = await db.collection("places").get();
-const placeExists = new Set(placesSnap.docs.map((p) => p.id));
-
-console.log(
-  `From ${snap.size} session(s): scores for ${byUser.size} user(s), ` +
-    `last-swim for ${[...lastByPlace.keys()].filter((id) => placeExists.has(id)).length} place(s).`,
-);
+console.log(`From ${snap.size} session(s): scores for ${byUser.size} user(s).`);
 
 if (!WRITE) {
   console.log("\nDry run — pass --write to commit.");
@@ -139,20 +110,7 @@ for (const [uid, scores] of byUser) {
   scored++;
 }
 
-let stamped = 0;
-for (const [placeId, last] of lastByPlace) {
-  if (!placeExists.has(placeId)) continue;
-  const border = last.border ?? borderByUser.get(last.uid) ?? "none";
-  await db.collection("places").doc(placeId).update({
-    lastSwimAt: last.date,
-    lastSwimBy: last.uid,
-    lastSwimBorder: border,
-  });
-  stamped++;
-}
-
 console.log(
-  `Wrote scores to ${scored} user(s) (skipped ${missingUsers} missing); ` +
-    `stamped ${stamped} place(s).`,
+  `Wrote scores to ${scored} user(s) (skipped ${missingUsers} missing).`,
 );
 process.exit(0);
