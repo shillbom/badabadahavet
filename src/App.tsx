@@ -202,6 +202,7 @@ export default function App() {
               <Route path="spot/:placeId" element={<Pages.Spot />} />
               <Route path="leaderboard" element={<Pages.Leaderboard />} />
               <Route path="about" element={<Pages.About />} />
+              <Route path="privacy" element={<Pages.Privacy />} />
               <Route
                 path="history"
                 element={protectedRoute(<Pages.History />)}

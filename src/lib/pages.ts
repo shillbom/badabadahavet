@@ -52,6 +52,10 @@ const PAGES = [
     load: withStaleReload(() => import("@/pages/ProfilePage")),
   },
   { key: "About", load: withStaleReload(() => import("@/pages/AboutPage")) },
+  {
+    key: "Privacy",
+    load: withStaleReload(() => import("@/pages/PrivacyPage")),
+  },
   { key: "Recap", load: withStaleReload(() => import("@/pages/RecapPage")) },
   { key: "Toswim", load: withStaleReload(() => import("@/pages/ToswimPage")) },
   {
