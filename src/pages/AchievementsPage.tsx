@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { m } from "framer-motion";
 import { Lock } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
@@ -28,19 +27,14 @@ export default function AchievementsPage() {
 
   // One aggregate pass feeds every row's progress bar — recomputing per row
   // would rescan the session arrays once per achievement, every render.
-  const stats = useMemo(
-    () => computeAchievementStats(achievementCtx),
-    [achievementCtx],
-  );
+  const stats = computeAchievementStats(achievementCtx);
 
-  const items = useMemo(() => {
-    return [...ACHIEVEMENTS].toSorted((a, b) => {
-      const ua = unlockedAchievements.has(a.id);
-      const ub = unlockedAchievements.has(b.id);
-      if (ua !== ub) return ua ? -1 : 1;
-      return a.tier - b.tier;
-    });
-  }, [unlockedAchievements]);
+  const items = [...ACHIEVEMENTS].toSorted((a, b) => {
+    const ua = unlockedAchievements.has(a.id);
+    const ub = unlockedAchievements.has(b.id);
+    if (ua !== ub) return ua ? -1 : 1;
+    return a.tier - b.tier;
+  });
 
   return (
     <div className="px-4 pt-2 pb-12">

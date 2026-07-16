@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { m, AnimatePresence } from "framer-motion";
 import {
   Check,
@@ -43,26 +43,23 @@ export default function StreakPage() {
   const [today] = useState(() => dayStartMs(Date.now()));
   const [rulesOpen, setRulesOpen] = useState(false);
 
-  const firstDay = useMemo(() => {
-    if (sessions.length === 0) return null;
-    return dayStartMs(Math.min(...sessions.map((s) => s.date)));
-  }, [sessions]);
+  const firstDay =
+    sessions.length === 0
+      ? null
+      : dayStartMs(Math.min(...sessions.map((s) => s.date)));
 
   // Nextory-style "9 of the last 10 days" habit meter.
-  const last10 = useMemo(() => {
-    const days: { day: number; state: DayState; label: string }[] = [];
-    for (let i = 9; i >= 0; i--) {
-      const day = dayStartMs(today - i * DAY_MS + DAY_MS / 2);
-      days.push({
-        day,
-        state: dayState(day, streak, today, firstDay),
-        label: new Date(day)
-          .toLocaleString(bcp, { weekday: "short" })
-          .slice(0, 2),
-      });
-    }
-    return days;
-  }, [streak, today, firstDay, bcp]);
+  const last10: { day: number; state: DayState; label: string }[] = [];
+  for (let i = 9; i >= 0; i--) {
+    const day = dayStartMs(today - i * DAY_MS + DAY_MS / 2);
+    last10.push({
+      day,
+      state: dayState(day, streak, today, firstDay),
+      label: new Date(day)
+        .toLocaleString(bcp, { weekday: "short" })
+        .slice(0, 2),
+    });
+  }
 
   const recentSwims = last10.filter((d) => d.state === "swim").length;
 
@@ -231,27 +228,21 @@ function Calendar({
     });
 
   // Monday-first weekday headers (2024-01-01 is a Monday).
-  const weekdays = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) =>
-        new Date(2024, 0, 1 + i)
-          .toLocaleString(bcp, { weekday: "short" })
-          .slice(0, 2),
-      ),
-    [bcp],
+  const weekdays = Array.from({ length: 7 }, (_, i) =>
+    new Date(2024, 0, 1 + i)
+      .toLocaleString(bcp, { weekday: "short" })
+      .slice(0, 2),
   );
 
-  const cells = useMemo(() => {
-    const firstOfMonth = new Date(view.year, view.month, 1);
-    const lead = (firstOfMonth.getDay() + 6) % 7; // Monday-start offset
-    const count = new Date(view.year, view.month + 1, 0).getDate();
-    return [
-      ...Array.from({ length: lead }, () => null),
-      ...Array.from({ length: count }, (_, i) =>
-        new Date(view.year, view.month, i + 1).getTime(),
-      ),
-    ];
-  }, [view]);
+  const firstOfMonth = new Date(view.year, view.month, 1);
+  const lead = (firstOfMonth.getDay() + 6) % 7; // Monday-start offset
+  const count = new Date(view.year, view.month + 1, 0).getDate();
+  const cells = [
+    ...Array.from({ length: lead }, () => null),
+    ...Array.from({ length: count }, (_, i) =>
+      new Date(view.year, view.month, i + 1).getTime(),
+    ),
+  ];
 
   return (
     <m.div

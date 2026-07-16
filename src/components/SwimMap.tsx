@@ -417,9 +417,7 @@ export default function SwimMap({
   focusToken,
   fullscreenControl,
 }: SwimMapProps) {
-  const t = useT();
   const [satellite, setSatellite] = useState(false);
-  const [fullscreen, setFullscreen] = useState(false);
   // ── Live per-place sessions for the open popup ────────────────────────
   // `sessionsByPlace` comes from the year-scoped community feed (and is empty
   // for guests / before the feed loads), so an open popup subscribes to ALL
@@ -451,25 +449,294 @@ export default function SwimMap({
   // How many clusterable pins are currently in the viewport (null until the
   // first measurement). Drives whether we cluster at all.
   const [inViewCount, setInViewCount] = useState<number | null>(null);
-  const clusteringRef = useRef(false);
   const baseTheme = MAP_THEMES[0];
   const satelliteTheme = MAP_THEMES.find((st) => st.id === "satellite")!;
   const theme = satellite ? satelliteTheme : baseTheme;
-  const fallbackCenter: LatLngExpression = useMemo(() => {
+  const fallbackCenter: LatLngExpression = (() => {
     if (userLocation) return [userLocation.lat, userLocation.lng];
     if (places.length) return [places[0].lat, places[0].lng];
     return [59.32, 18.06]; // Stockholm — a wholesome default for swim spots
-  }, [places, userLocation]);
+  })();
   const fallbackZoom = userLocation && places.length === 0 ? 12 : zoom;
   const mapRef = useRef<L.Map | null>(null);
   // Leaflet marker instances, so a focus request can pan to a place and open
   // its popup. (Focused places render outside the cluster, so no cluster
   // reveal is needed.)
   const markerRefs = useRef(new Map<string, L.Marker>());
-  // ── Fullscreen spot search ────────────────────────────────────────────
-  // Picking a result focuses that place (fly + open popup) via the same
-  // machinery as the focusPlaceId prop. Coordinates are captured at pick
-  // time so a Firestore re-emit of `places` can't re-trigger the flight.
+  // Fullscreen state + the fullscreen-only spot search (query, results, and
+  // the picked-result focus point) live in one hook — see useFullscreenSearch.
+  const {
+    fullscreen,
+    toggleFullscreen,
+    query,
+    setQuery,
+    searchResults,
+    pickSearchResult,
+    searchInputRef,
+    searchFocus,
+  } = useFullscreenSearch(places);
+
+  const focusTarget = (() => {
+    if (searchFocus) return searchFocus;
+    if (!focusPlaceId) return null;
+    const p = places.find((pl) => pl.id === focusPlaceId);
+    return p
+      ? { lat: p.lat, lng: p.lng, id: p.id, token: focusToken ?? 0 }
+      : null;
+  })();
+  const saved = savedViews.get(viewKey);
+
+  // Cluster derivation (temp/recency lookups, the stable cluster-icon builder,
+  // the unclustered-pin split, and the in-view clustering hysteresis) lives in
+  // a dedicated hook. It runs inline during render, so the deliberate ref/memo
+  // timing that avoids cluster-group remounts is preserved exactly.
+  const {
+    clusterablePlaces,
+    unclusteredPlaces,
+    shouldCluster,
+    createClusterIcon,
+  } = useClusterMarkers({
+    places,
+    activePlaceId,
+    focusPlaceId,
+    searchFocus,
+    inViewCount,
+  });
+
+  return (
+    <div
+      className={
+        fullscreen
+          ? // Fullscreen keeps the same Leaflet instance mounted — the wrapper
+            // just becomes a viewport-covering fixed overlay (above the app
+            // chrome; header/nav sit at z-1000/1010).
+            "fixed inset-0 z-[1200] bg-slate-100"
+          : cn("relative h-full w-full", className)
+      }
+    >
+      <MapContainer
+        center={saved?.center ?? center ?? fallbackCenter}
+        zoom={saved?.zoom ?? fallbackZoom}
+        scrollWheelZoom
+        dragging={!lockPan}
+        doubleClickZoom
+        touchZoom
+        boxZoom={!lockPan}
+        keyboard={!lockPan}
+        className={cn("h-full w-full", !fullscreen && "rounded-2xl")}
+        ref={(m) => {
+          mapRef.current = m;
+          if (externalMapRef) externalMapRef.current = m;
+        }}
+      >
+        <TileLayer
+          key={theme.id}
+          attribution={theme.attribution}
+          url={theme.url}
+          subdomains={theme.subdomains ?? "abc"}
+          maxZoom={theme.maxZoom ?? 19}
+        />
+        {/* Transparent labels overlay on top of satellite imagery */}
+        {satellite && (
+          <TileLayer
+            key="satellite-labels"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            attribution=""
+            maxZoom={20}
+            opacity={1}
+          />
+        )}
+        <AutoInvalidateSize />
+        <MapZoomLock locked={!!lockPan} />
+        <SaveView viewKey={viewKey} skip={!!saved} />
+        <FitToPlaces
+          places={places}
+          userLocation={userLocation ?? null}
+          fitToken={fitToken}
+          skipInitialFit={skipInitialFit || !!saved}
+          fitBoundsToPlaces={fitBoundsToPlaces}
+        />
+        {keepCenteredOn ? <KeepCentered target={keepCenteredOn} /> : null}
+        <FocusPlace target={focusTarget} markerRefs={markerRefs} />
+        <ViewportPinCount places={clusterablePlaces} onCount={setInViewCount} />
+        {userLocation ? (
+          <Marker
+            position={[userLocation.lat, userLocation.lng]}
+            icon={userLocationIcon}
+          />
+        ) : null}
+        <MarkerClusterGroup
+          // Remount when clustering toggles on/off — markercluster reads
+          // maxClusterRadius once at creation. 0 disables clustering, which
+          // we use whenever there are fewer than 10 pins to cluster.
+          key={shouldCluster ? "clustered" : "flat"}
+          chunkedLoading
+          maxClusterRadius={shouldCluster ? 50 : 0}
+          showCoverageOnHover={false}
+          spiderfyOnMaxZoom
+          iconCreateFunction={createClusterIcon}
+        >
+          {clusterablePlaces.map((p) => (
+            <PlaceMarker
+              key={p.id}
+              place={p}
+              icon={pinIcon(
+                hasFreshTemp(p) ? p.waterTemp : null,
+                pinRingFor(p.lastSwimBorder),
+                recencyFactor(p.lastSwimAt),
+              )}
+              markerRefs={markerRefs}
+              mapRef={mapRef}
+              onPickExisting={onPickExisting}
+              canPickExisting={canPickExisting}
+              setPopup={setPopup}
+              popupSessionsFor={popupSessionsFor}
+              linkToSpot={linkToSpot}
+            />
+          ))}
+        </MarkerClusterGroup>
+        {/* The active (picked) and focused places render outside the cluster
+            group with the orange highlight icon, so they're never merged into
+            a cluster bubble regardless of zoom level. */}
+        {unclusteredPlaces.map((p) => (
+          <PlaceMarker
+            key={`active-${p.id}`}
+            place={p}
+            icon={activePlaceIcon}
+            markerRefs={markerRefs}
+            mapRef={mapRef}
+            onPickExisting={onPickExisting}
+            canPickExisting={canPickExisting}
+            setPopup={setPopup}
+            popupSessionsFor={popupSessionsFor}
+            linkToSpot={linkToSpot}
+          />
+        ))}
+        {pickedAt && !activePlaceId ? (
+          <Marker position={[pickedAt.lat, pickedAt.lng]} icon={newSwimIcon} />
+        ) : null}
+        {onPick ? <ClickToPick onPick={onPick} /> : null}
+      </MapContainer>
+      {/* Spot search — fullscreen only, pinned across the top (the action
+          stack moves down below it while it's visible). */}
+      {fullscreenControl && fullscreen ? (
+        <MapSpotSearch
+          query={query}
+          setQuery={setQuery}
+          searchResults={searchResults}
+          pickSearchResult={pickSearchResult}
+          searchInputRef={searchInputRef}
+          sessionsByPlace={sessionsByPlace}
+        />
+      ) : null}
+
+      {/* Stacked action buttons — caller-supplied actions on top, the
+          built-in satellite + fullscreen toggles at the bottom of the stack.
+          With `menuToggles`, the whole stack collapses into one ⋯ button
+          that opens a filter menu (satellite becomes a row in it).
+          In fullscreen the stack drops below the search bar. */}
+      <MapControlStack
+        menuToggles={menuToggles}
+        satellite={satellite}
+        setSatellite={setSatellite}
+        topRightActions={topRightActions}
+        fullscreen={fullscreen}
+      />
+
+      {/* Round icon buttons — bottom right, Google Maps style: fullscreen
+          toggle stacked above "locate me". */}
+      <MapCornerButtons
+        fullscreenControl={fullscreenControl}
+        fullscreen={fullscreen}
+        toggleFullscreen={toggleFullscreen}
+        userLocation={userLocation}
+        mapRef={mapRef}
+      />
+    </div>
+  );
+}
+
+type PopupState = { placeId: string | null; sessions: SessionDoc[] | null };
+
+/**
+ * One place pin. Shared by the clustered layer and the pulled-out
+ * active/focused pins — they differ only in `key` and `icon`. In logging
+ * mode a pickable pin selects the spot on click instead of opening a popup.
+ */
+function PlaceMarker({
+  place,
+  icon,
+  markerRefs,
+  mapRef,
+  onPickExisting,
+  canPickExisting,
+  setPopup,
+  popupSessionsFor,
+  linkToSpot,
+}: {
+  place: PlaceWithTemp;
+  icon: L.DivIcon;
+  markerRefs: RefObject<Map<string, L.Marker>>;
+  mapRef: RefObject<L.Map | null>;
+  onPickExisting?: (place: PlaceWithTemp) => void;
+  canPickExisting?: (place: PlaceWithTemp) => boolean;
+  setPopup: React.Dispatch<React.SetStateAction<PopupState>>;
+  popupSessionsFor: (placeId: string) => SessionDoc[];
+  linkToSpot: boolean;
+}) {
+  // When logging a swim, clicking a pickable pin selects it immediately —
+  // no popup button needed.
+  const isPickable =
+    !!onPickExisting && (!canPickExisting || canPickExisting(place));
+  return (
+    <Marker
+      ref={(m) => {
+        if (m) markerRefs.current.set(place.id, m);
+        else markerRefs.current.delete(place.id);
+      }}
+      position={stablePosition(place.id, place.lat, place.lng)}
+      icon={icon}
+      eventHandlers={{
+        click: () => {
+          if (isPickable) {
+            mapRef.current?.closePopup();
+            onPickExisting(place);
+          }
+        },
+        popupopen: () => setPopup({ placeId: place.id, sessions: null }),
+        popupclose: () =>
+          setPopup((current) =>
+            current.placeId === place.id
+              ? { placeId: null, sessions: null }
+              : current,
+          ),
+      }}
+    >
+      {/* Only show popup when not in logging mode — clicking a pin while
+          logging selects it immediately instead. */}
+      {!isPickable ? (
+        <PlacePopup
+          place={place}
+          sessions={popupSessionsFor(place.id)}
+          linkToSpot={linkToSpot}
+        />
+      ) : null}
+    </Marker>
+  );
+}
+
+/** Alphabetical place-name comparator for the spot-search results. */
+const byPlaceName = (a: PlaceWithTemp, b: PlaceWithTemp) =>
+  a.name.localeCompare(b.name);
+
+/**
+ * Fullscreen state plus the fullscreen-only spot search. Picking a result
+ * sets a `searchFocus` point (with a bumped token) that {@link SwimMap} feeds
+ * to its focus machinery; coordinates are captured at pick time so a Firestore
+ * re-emit of `places` can't re-trigger the flight.
+ */
+function useFullscreenSearch(places: PlaceWithTemp[]) {
+  const [fullscreen, setFullscreen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchFocus, setSearchFocus] = useState<{
     lat: number;
@@ -480,7 +747,7 @@ export default function SwimMap({
   const searchSeq = useRef(0);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  const searchResults = useMemo(() => {
+  const searchResults = (() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
     const starts: PlaceWithTemp[] = [];
@@ -490,15 +757,13 @@ export default function SwimMap({
       if (name.startsWith(q)) starts.push(p);
       else if (name.includes(q)) contains.push(p);
     }
-    const byName = (a: PlaceWithTemp, b: PlaceWithTemp) =>
-      a.name.localeCompare(b.name);
-    return [...starts.toSorted(byName), ...contains.toSorted(byName)].slice(
-      0,
-      8,
-    );
-  }, [query, places]);
+    return [
+      ...starts.toSorted(byPlaceName),
+      ...contains.toSorted(byPlaceName),
+    ].slice(0, 8);
+  })();
 
-  const pickSearchResult = useCallback((p: PlaceWithTemp) => {
+  const pickSearchResult = (p: PlaceWithTemp) => {
     setSearchFocus({
       lat: p.lat,
       lng: p.lng,
@@ -507,33 +772,62 @@ export default function SwimMap({
     });
     setQuery("");
     searchInputRef.current?.blur();
-  }, []);
+  };
 
-  const toggleFullscreen = useCallback(() => {
+  const toggleFullscreen = () => {
     setFullscreen((v) => !v);
     setQuery("");
     setSearchFocus(null);
-  }, []);
+  };
 
-  // Escape exits fullscreen (desktop nicety).
+  // Escape exits fullscreen (desktop nicety). The listener is only attached
+  // while fullscreen, so Escape always means "exit" — set state directly via
+  // the (stable) setters rather than depending on toggleFullscreen, so the
+  // effect only re-subscribes when `fullscreen` actually changes.
   useEffect(() => {
     if (!fullscreen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") toggleFullscreen();
+      if (e.key !== "Escape") return;
+      setFullscreen(false);
+      setQuery("");
+      setSearchFocus(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fullscreen, toggleFullscreen]);
+  }, [fullscreen]);
 
-  const focusTarget = useMemo(() => {
-    if (searchFocus) return searchFocus;
-    if (!focusPlaceId) return null;
-    const p = places.find((pl) => pl.id === focusPlaceId);
-    return p
-      ? { lat: p.lat, lng: p.lng, id: p.id, token: focusToken ?? 0 }
-      : null;
-  }, [searchFocus, focusPlaceId, focusToken, places]);
-  const saved = savedViews.get(viewKey);
+  return {
+    fullscreen,
+    toggleFullscreen,
+    query,
+    setQuery,
+    searchResults,
+    pickSearchResult,
+    searchInputRef,
+    searchFocus,
+  };
+}
+
+/**
+ * Cluster derivation, extracted so the deliberate ref/memo machinery that
+ * keeps the cluster group from remounting stays in one place. Runs inline
+ * during render (a hook is just a function call), so render timing is
+ * identical to inlining it in {@link SwimMap}.
+ */
+function useClusterMarkers({
+  places,
+  activePlaceId,
+  focusPlaceId,
+  searchFocus,
+  inViewCount,
+}: {
+  places: PlaceWithTemp[];
+  activePlaceId?: string | null;
+  focusPlaceId?: string | null;
+  searchFocus: { id: string } | null;
+  inViewCount: number | null;
+}) {
+  const clusteringRef = useRef(false);
 
   // Position → fresh temperature, so a cluster can average the temps of
   // its child markers. Held in a ref the (stable) cluster icon builder
@@ -644,336 +938,235 @@ export default function SwimMap({
     clusteringRef.current = shouldCluster;
   }, [shouldCluster]);
 
+  // `shouldCluster` carries the deliberate hysteresis value read from
+  // clusteringRef above (see the note there); returning it is intentional,
+  // not a stray ref read during render.
+  // react-doctor-disable-next-line react-hooks-js/refs
+  return {
+    clusterablePlaces,
+    unclusteredPlaces,
+    shouldCluster,
+    createClusterIcon,
+  };
+}
+
+/**
+ * The fullscreen-only spot search: a pinned search box across the top plus
+ * the results dropdown. Picking a result focuses that place via the same
+ * machinery as the `focusPlaceId` prop.
+ */
+function MapSpotSearch({
+  query,
+  setQuery,
+  searchResults,
+  pickSearchResult,
+  searchInputRef,
+  sessionsByPlace,
+}: {
+  query: string;
+  setQuery: React.Dispatch<React.SetStateAction<string>>;
+  searchResults: PlaceWithTemp[];
+  pickSearchResult: (p: PlaceWithTemp) => void;
+  searchInputRef: RefObject<HTMLInputElement | null>;
+  sessionsByPlace: Map<string, SessionDoc[]>;
+}) {
+  const t = useT();
+  return (
+    // left-14 keeps clear of Leaflet's zoom control (top-left, ~44px).
+    <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 left-14 z-[650]">
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          ref={searchInputRef}
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && searchResults[0])
+              pickSearchResult(searchResults[0]);
+          }}
+          placeholder={t("map.search.placeholder")}
+          aria-label={t("map.search.placeholder")}
+          className="w-full rounded-full bg-white/95 py-2.5 pr-9 pl-9 text-sm text-wave-900 shadow-md ring-1 ring-slate-200 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-wave-400 [&::-webkit-search-cancel-button]:hidden"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            aria-label={t("common.close")}
+            className="absolute top-1/2 right-2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+      {query.trim() ? (
+        <ul className="mt-2 max-h-64 overflow-y-auto rounded-2xl bg-white/95 shadow-lg ring-1 ring-slate-200 backdrop-blur">
+          {searchResults.length === 0 ? (
+            <li className="px-3 py-2.5 text-sm text-slate-500">
+              {t("map.search.no_results")}
+            </li>
+          ) : (
+            searchResults.map((p) => {
+              const swims = sessionsByPlace.get(p.id)?.length ?? 0;
+              return (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    // pickSearchResult only touches refs inside the click
+                    // handler (allowed) — the compiler just can't prove it.
+                    // react-doctor-disable-next-line react-hooks-js/refs
+                    onClick={() => pickSearchResult(p)}
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-wave-50"
+                  >
+                    <MapPin className="h-3.5 w-3.5 flex-none text-wave-600" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-wave-900">
+                      {p.name}
+                    </span>
+                    <span className="flex-none text-[11px] text-slate-500">
+                      {swims === 1
+                        ? t("map.popup.swims_one")
+                        : swims > 0
+                          ? t("map.popup.swims_many", { n: swims })
+                          : t("map.popup.no_swims_yet")}
+                      {hasFreshTemp(p)
+                        ? ` · 💧 ${Math.round(p.waterTemp)}°`
+                        : ""}
+                    </span>
+                  </button>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Top-right control stack: caller-supplied actions plus the built-in
+ * satellite toggle — collapsed into a single ⋯ filter menu when
+ * `menuToggles` is supplied. In fullscreen the stack drops below the
+ * search bar.
+ */
+function MapControlStack({
+  menuToggles,
+  satellite,
+  setSatellite,
+  topRightActions,
+  fullscreen,
+}: {
+  menuToggles?: MapMenuToggle[];
+  satellite: boolean;
+  setSatellite: React.Dispatch<React.SetStateAction<boolean>>;
+  topRightActions?: MapAction[];
+  fullscreen: boolean;
+}) {
+  const t = useT();
   return (
     <div
-      className={
+      className={cn(
+        "absolute right-3 z-[600] flex flex-col items-end gap-2",
         fullscreen
-          ? // Fullscreen keeps the same Leaflet instance mounted — the wrapper
-            // just becomes a viewport-covering fixed overlay (above the app
-            // chrome; header/nav sit at z-1000/1010).
-            "fixed inset-0 z-[1200] bg-slate-100"
-          : cn("relative h-full w-full", className)
-      }
+          ? "top-[calc(max(env(safe-area-inset-top),0.75rem)+3.5rem)]"
+          : "top-3",
+      )}
     >
-      <MapContainer
-        center={saved?.center ?? center ?? fallbackCenter}
-        zoom={saved?.zoom ?? fallbackZoom}
-        scrollWheelZoom
-        dragging={!lockPan}
-        doubleClickZoom
-        touchZoom
-        boxZoom={!lockPan}
-        keyboard={!lockPan}
-        className={cn("h-full w-full", !fullscreen && "rounded-2xl")}
-        ref={(m) => {
-          mapRef.current = m;
-          if (externalMapRef) externalMapRef.current = m;
-        }}
-      >
-        <TileLayer
-          key={theme.id}
-          attribution={theme.attribution}
-          url={theme.url}
-          subdomains={theme.subdomains ?? "abc"}
-          maxZoom={theme.maxZoom ?? 19}
+      {menuToggles && menuToggles.length > 0 ? (
+        <MapFilterMenu
+          ariaLabel={t("map.filters")}
+          toggles={[
+            ...menuToggles,
+            {
+              label: t("map.toggle_satellite"),
+              checked: satellite,
+              onChange: setSatellite,
+              icon: <Layers className="h-3.5 w-3.5" />,
+            },
+          ]}
         />
-        {/* Transparent labels overlay on top of satellite imagery */}
-        {satellite && (
-          <TileLayer
-            key="satellite-labels"
-            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-            attribution=""
-            maxZoom={20}
-            opacity={1}
-          />
-        )}
-        <AutoInvalidateSize />
-        <MapZoomLock locked={!!lockPan} />
-        <SaveView viewKey={viewKey} skip={!!saved} />
-        <FitToPlaces
-          places={places}
-          userLocation={userLocation ?? null}
-          fitToken={fitToken}
-          skipInitialFit={skipInitialFit || !!saved}
-          fitBoundsToPlaces={fitBoundsToPlaces}
-        />
-        {keepCenteredOn ? <KeepCentered target={keepCenteredOn} /> : null}
-        <FocusPlace target={focusTarget} markerRefs={markerRefs} />
-        <ViewportPinCount places={clusterablePlaces} onCount={setInViewCount} />
-        {userLocation ? (
-          <Marker
-            position={[userLocation.lat, userLocation.lng]}
-            icon={userLocationIcon}
-          />
-        ) : null}
-        <MarkerClusterGroup
-          // Remount when clustering toggles on/off — markercluster reads
-          // maxClusterRadius once at creation. 0 disables clustering, which
-          // we use whenever there are fewer than 10 pins to cluster.
-          key={shouldCluster ? "clustered" : "flat"}
-          chunkedLoading
-          maxClusterRadius={shouldCluster ? 50 : 0}
-          showCoverageOnHover={false}
-          spiderfyOnMaxZoom
-          iconCreateFunction={createClusterIcon}
-        >
-          {clusterablePlaces.map((p) => {
-            // When logging a swim, clicking a pickable pin selects it
-            // immediately — no popup button needed.
-            const isPickable =
-              !!onPickExisting && (!canPickExisting || canPickExisting(p));
-
-            return (
-              <Marker
-                key={p.id}
-                ref={(m) => {
-                  if (m) markerRefs.current.set(p.id, m);
-                  else markerRefs.current.delete(p.id);
-                }}
-                position={stablePosition(p.id, p.lat, p.lng)}
-                icon={pinIcon(
-                  hasFreshTemp(p) ? p.waterTemp : null,
-                  pinRingFor(p.lastSwimBorder),
-                  recencyFactor(p.lastSwimAt),
-                )}
-                eventHandlers={{
-                  click: () => {
-                    if (isPickable) {
-                      mapRef.current?.closePopup();
-                      onPickExisting(p);
-                    }
-                  },
-                  popupopen: () => setPopup({ placeId: p.id, sessions: null }),
-                  popupclose: () =>
-                    setPopup((current) =>
-                      current.placeId === p.id
-                        ? { placeId: null, sessions: null }
-                        : current,
-                    ),
-                }}
-              >
-                {/* Only show popup when not in logging mode — clicking a
-                    pin while logging selects it immediately instead. */}
-                {!isPickable ? (
-                  <PlacePopup
-                    place={p}
-                    sessions={popupSessionsFor(p.id)}
-                    linkToSpot={linkToSpot}
-                  />
-                ) : null}
-              </Marker>
-            );
-          })}
-        </MarkerClusterGroup>
-        {/* The active (picked) and focused places render outside the cluster
-            group with the orange highlight icon, so they're never merged into
-            a cluster bubble regardless of zoom level. */}
-        {unclusteredPlaces.map((p) => {
-          const isPickable =
-            !!onPickExisting && (!canPickExisting || canPickExisting(p));
-          return (
-            <Marker
-              key={`active-${p.id}`}
-              ref={(m) => {
-                if (m) markerRefs.current.set(p.id, m);
-                else markerRefs.current.delete(p.id);
-              }}
-              position={stablePosition(p.id, p.lat, p.lng)}
-              icon={activePlaceIcon}
-              eventHandlers={{
-                click: () => {
-                  if (isPickable) {
-                    mapRef.current?.closePopup();
-                    onPickExisting(p);
-                  }
-                },
-                popupopen: () => setPopup({ placeId: p.id, sessions: null }),
-                popupclose: () =>
-                  setPopup((current) =>
-                    current.placeId === p.id
-                      ? { placeId: null, sessions: null }
-                      : current,
-                  ),
-              }}
-            >
-              {!isPickable ? (
-                <PlacePopup
-                  place={p}
-                  sessions={popupSessionsFor(p.id)}
-                  linkToSpot={linkToSpot}
-                />
-              ) : null}
-            </Marker>
-          );
-        })}
-        {pickedAt && !activePlaceId ? (
-          <Marker position={[pickedAt.lat, pickedAt.lng]} icon={newSwimIcon} />
-        ) : null}
-        {onPick ? <ClickToPick onPick={onPick} /> : null}
-      </MapContainer>
-      {/* Spot search — fullscreen only, pinned across the top (the action
-          stack moves down below it while it's visible). */}
-      {fullscreenControl && fullscreen ? (
-        // left-14 keeps clear of Leaflet's zoom control (top-left, ~44px).
-        <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 left-14 z-[650]">
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              ref={searchInputRef}
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && searchResults[0])
-                  pickSearchResult(searchResults[0]);
-              }}
-              placeholder={t("map.search.placeholder")}
-              aria-label={t("map.search.placeholder")}
-              className="w-full rounded-full bg-white/95 py-2.5 pr-9 pl-9 text-sm text-wave-900 shadow-md ring-1 ring-slate-200 outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-wave-400 [&::-webkit-search-cancel-button]:hidden"
-            />
-            {query ? (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label={t("common.close")}
-                className="absolute top-1/2 right-2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-          {query.trim() ? (
-            <ul className="mt-2 max-h-64 overflow-y-auto rounded-2xl bg-white/95 shadow-lg ring-1 ring-slate-200 backdrop-blur">
-              {searchResults.length === 0 ? (
-                <li className="px-3 py-2.5 text-sm text-slate-500">
-                  {t("map.search.no_results")}
-                </li>
-              ) : (
-                searchResults.map((p) => {
-                  const swims = sessionsByPlace.get(p.id)?.length ?? 0;
-                  return (
-                    <li key={p.id}>
-                      <button
-                        type="button"
-                        // pickSearchResult only touches refs inside the click
-                        // handler (allowed) — the compiler just can't prove it.
-                        // react-doctor-disable-next-line react-hooks-js/refs
-                        onClick={() => pickSearchResult(p)}
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-wave-50"
-                      >
-                        <MapPin className="h-3.5 w-3.5 flex-none text-wave-600" />
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-wave-900">
-                          {p.name}
-                        </span>
-                        <span className="flex-none text-[11px] text-slate-500">
-                          {swims === 1
-                            ? t("map.popup.swims_one")
-                            : swims > 0
-                              ? t("map.popup.swims_many", { n: swims })
-                              : t("map.popup.no_swims_yet")}
-                          {hasFreshTemp(p)
-                            ? ` · 💧 ${Math.round(p.waterTemp)}°`
-                            : ""}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })
-              )}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* Stacked action buttons — caller-supplied actions on top, the
-          built-in satellite + fullscreen toggles at the bottom of the stack.
-          With `menuToggles`, the whole stack collapses into one ⋯ button
-          that opens a filter menu (satellite becomes a row in it).
-          In fullscreen the stack drops below the search bar. */}
-      <div
-        className={cn(
-          "absolute right-3 z-[600] flex flex-col items-end gap-2",
-          fullscreen
-            ? "top-[calc(max(env(safe-area-inset-top),0.75rem)+3.5rem)]"
-            : "top-3",
-        )}
-      >
-        {menuToggles && menuToggles.length > 0 ? (
-          <MapFilterMenu
-            ariaLabel={t("map.filters")}
-            toggles={[
-              ...menuToggles,
-              {
-                label: t("map.toggle_satellite"),
-                checked: satellite,
-                onChange: setSatellite,
-                icon: <Layers className="h-3.5 w-3.5" />,
-              },
-            ]}
-          />
-        ) : (
-          <>
-            {topRightActions?.map((a) => (
-              <MapActionButton key={a.label} action={a} />
-            ))}
-            <MapActionButton
-              action={{
-                label: satellite
-                  ? t("map.toggle_terrain")
-                  : t("map.toggle_satellite"),
-                onClick: () => setSatellite((v) => !v),
-                icon: <Layers className="h-3.5 w-3.5" />,
-              }}
-            />
-          </>
-        )}
-      </div>
-
-      {/* Round icon buttons — bottom right, Google Maps style: fullscreen
-          toggle stacked above "locate me". */}
-      <div
-        className={cn(
-          "absolute right-3 z-[600] flex flex-col gap-2",
-          fullscreen
-            ? "bottom-[max(env(safe-area-inset-bottom),1.25rem)]"
-            : "bottom-5",
-        )}
-      >
-        {fullscreenControl ? (
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
-            aria-label={
-              fullscreen ? t("map.exit_fullscreen") : t("map.fullscreen")
-            }
-            title={fullscreen ? t("map.exit_fullscreen") : t("map.fullscreen")}
-          >
-            {fullscreen ? (
-              <Minimize className="h-5 w-5" />
-            ) : (
-              <Maximize className="h-5 w-5" />
-            )}
-          </button>
-        ) : null}
-        {userLocation ? (
-          <button
-            type="button"
-            onClick={() => {
-              const map = mapRef.current;
-              if (map)
-                map.setView([userLocation.lat, userLocation.lng], 13, {
-                  animate: true,
-                });
+      ) : (
+        <>
+          {topRightActions?.map((a) => (
+            <MapActionButton key={a.label} action={a} />
+          ))}
+          <MapActionButton
+            action={{
+              label: satellite
+                ? t("map.toggle_terrain")
+                : t("map.toggle_satellite"),
+              onClick: () => setSatellite((v) => !v),
+              icon: <Layers className="h-3.5 w-3.5" />,
             }}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
-            aria-label={t("map.center_on_me")}
-            title={t("map.center_on_me")}
-          >
-            <LocateFixed className="h-5 w-5" />
-          </button>
-        ) : null}
-      </div>
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Bottom-right round buttons (Google Maps style): the fullscreen toggle
+ * stacked above "locate me".
+ */
+function MapCornerButtons({
+  fullscreenControl,
+  fullscreen,
+  toggleFullscreen,
+  userLocation,
+  mapRef,
+}: {
+  fullscreenControl?: boolean;
+  fullscreen: boolean;
+  toggleFullscreen: () => void;
+  userLocation?: { lat: number; lng: number } | null;
+  mapRef: RefObject<L.Map | null>;
+}) {
+  const t = useT();
+  return (
+    <div
+      className={cn(
+        "absolute right-3 z-[600] flex flex-col gap-2",
+        fullscreen
+          ? "bottom-[max(env(safe-area-inset-bottom),1.25rem)]"
+          : "bottom-5",
+      )}
+    >
+      {fullscreenControl ? (
+        <button
+          type="button"
+          onClick={toggleFullscreen}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+          aria-label={
+            fullscreen ? t("map.exit_fullscreen") : t("map.fullscreen")
+          }
+          title={fullscreen ? t("map.exit_fullscreen") : t("map.fullscreen")}
+        >
+          {fullscreen ? (
+            <Minimize className="h-5 w-5" />
+          ) : (
+            <Maximize className="h-5 w-5" />
+          )}
+        </button>
+      ) : null}
+      {userLocation ? (
+        <button
+          type="button"
+          onClick={() => {
+            const map = mapRef.current;
+            if (map)
+              map.setView([userLocation.lat, userLocation.lng], 13, {
+                animate: true,
+              });
+          }}
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-wave-700 shadow-md ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
+          aria-label={t("map.center_on_me")}
+          title={t("map.center_on_me")}
+        >
+          <LocateFixed className="h-5 w-5" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -1338,10 +1531,7 @@ function PlacePopup({
   linkToSpot: boolean;
 }) {
   const t = useT();
-  const sorted = useMemo(
-    () => [...sessions].toSorted((a, b) => b.date - a.date),
-    [sessions],
-  );
+  const sorted = [...sessions].toSorted((a, b) => b.date - a.date);
   const photoSessions = sorted.filter((s) => s.photoUrl);
   const shown =
     photoSessions.length > POPUP_MAX_PHOTOS

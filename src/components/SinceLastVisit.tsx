@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { reactorUids, reactionAddedAt, fetchUsers } from "@/lib/data";
 import type { SessionDoc } from "@/lib/types";
@@ -291,27 +291,27 @@ function Sheet({
   // sheet would keep rendering the stale snapshot captured at open time.
   const allSessions = useStore((s) => s.allSessions);
   const mySessions = useStore((s) => s.mySessions);
-  const liveById = useMemo(() => {
+  const liveById = (() => {
     const m = new Map<string, SessionDoc>();
     for (const s of allSessions) m.set(s.id, s);
     for (const s of mySessions) m.set(s.id, s);
     return m;
-  }, [allSessions, mySessions]);
+  })();
 
   // Resolve reactor UIDs to display names. Sessions carry their author's name,
   // so the union of sessions is a free directory — but a reactor may not have
   // logged a swim this year, so we also fetch the user docs of any reactor we
   // can't name from sessions alone.
-  const sessionNames = useMemo(() => {
+  const sessionNames = (() => {
     const m = new Map<string, string>();
     for (const s of allSessions) m.set(s.uid, s.displayName);
     for (const s of mySessions) m.set(s.uid, s.displayName);
     return m;
-  }, [allSessions, mySessions]);
+  })();
 
   // Every distinct reactor UID (other than me) referenced by the reaction
   // feed items — the people whose names we need to show.
-  const reactorUidList = useMemo(() => {
+  const reactorUidList = (() => {
     const set = new Set<string>();
     for (const item of shown?.items ?? []) {
       if (item.kind !== "reaction") continue;
@@ -321,7 +321,7 @@ function Sheet({
           if (uid !== myUid) set.add(uid);
     }
     return [...set];
-  }, [shown?.items, myUid]);
+  })();
 
   // Names fetched from user docs for reactors not covered by `sessionNames`.
   const [fetchedNames, setFetchedNames] = useState<Map<string, string>>(
@@ -349,11 +349,11 @@ function Sheet({
     };
   }, [reactorUidList, sessionNames]);
 
-  const nameByUid = useMemo(() => {
+  const nameByUid = (() => {
     const m = new Map(fetchedNames);
     for (const [uid, name] of sessionNames) m.set(uid, name);
     return m;
-  }, [sessionNames, fetchedNames]);
+  })();
 
   // Photo opened full-screen in the lightbox (tapping a card's image).
   const [lightboxFor, setLightboxFor] = useState<SessionDoc | null>(null);

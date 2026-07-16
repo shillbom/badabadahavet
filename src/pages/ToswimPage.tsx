@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { m } from "framer-motion";
 import {
@@ -31,56 +31,44 @@ export default function ToswimPage() {
   const [view, setView] = useState<View>("todo");
   const [search, setSearch] = useState("");
 
-  const placesById = useMemo(() => {
-    const byId = new Map<string, PlacePin>();
-    for (const p of places) byId.set(p.id, p);
-    return byId;
-  }, [places]);
+  const placesById = new Map<string, PlacePin>();
+  for (const p of places) placesById.set(p.id, p);
 
   // First swim date per place — undefined means I haven't swum there yet.
-  const firstSwimAt = useMemo(() => {
-    const byPlace = new Map<string, number>();
-    for (const s of mySessions) {
-      const cur = byPlace.get(s.placeId);
-      if (cur === undefined || s.date < cur) byPlace.set(s.placeId, s.date);
-    }
-    return byPlace;
-  }, [mySessions]);
+  const firstSwimAt = new Map<string, number>();
+  for (const s of mySessions) {
+    const cur = firstSwimAt.get(s.placeId);
+    if (cur === undefined || s.date < cur) firstSwimAt.set(s.placeId, s.date);
+  }
 
-  const entries = useMemo(() => {
-    const list: Array<{
-      placeId: string;
-      place: PlacePin | null;
-      entry: ToswimEntry;
-      doneAt: number | undefined;
-    }> = [];
-    const toswim = profile?.toswim ?? {};
-    for (const [placeId, entry] of Object.entries(toswim)) {
-      list.push({
-        placeId,
-        place: placesById.get(placeId) ?? null,
-        entry,
-        doneAt: firstSwimAt.get(placeId),
-      });
-    }
-    list.sort((a, b) => b.entry.addedAt - a.entry.addedAt);
-    return list;
-  }, [profile?.toswim, placesById, firstSwimAt]);
+  const entries: Array<{
+    placeId: string;
+    place: PlacePin | null;
+    entry: ToswimEntry;
+    doneAt: number | undefined;
+  }> = [];
+  const toswim = profile?.toswim ?? {};
+  for (const [placeId, entry] of Object.entries(toswim)) {
+    entries.push({
+      placeId,
+      place: placesById.get(placeId) ?? null,
+      entry,
+      doneAt: firstSwimAt.get(placeId),
+    });
+  }
+  entries.sort((a, b) => b.entry.addedAt - a.entry.addedAt);
 
   const todo = entries.filter((e) => e.doneAt === undefined);
   const done = entries.filter((e) => e.doneAt !== undefined);
   const visible = view === "todo" ? todo : done;
 
-  const onMyList = useMemo(
-    () => new Set(Object.keys(profile?.toswim ?? {})),
-    [profile?.toswim],
-  );
+  const onMyList = new Set(Object.keys(profile?.toswim ?? {}));
 
-  const searchResults = useMemo(() => {
+  const searchResults = (() => {
     const q = search.trim().toLowerCase();
     if (!q) return [];
     return places.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 12);
-  }, [places, search]);
+  })();
 
   async function onAdd(placeId: string, name: string) {
     if (!user) return;

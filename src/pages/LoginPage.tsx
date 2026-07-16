@@ -29,7 +29,12 @@ import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { assertUsernameClean } from "@/lib/username";
 import { consumeReturnPath } from "@/lib/utils";
 
-export default function LoginPage() {
+type Translate = (k: string, vars?: Record<string, string>) => string;
+
+// All auth-page state, effects, and handlers live here so the page component
+// stays a thin composition of views. React Compiler handles memoization; the
+// hook deliberately avoids useMemo/useCallback.
+function useAuthForm() {
   const {
     login,
     signup,
@@ -201,180 +206,254 @@ export default function LoginPage() {
     }
   }
 
-  if (googleOnboarding) {
-    return (
-      <div className="relative flex min-h-[var(--app-height,100dvh)] flex-col items-center justify-center px-5 py-10">
-        <Ripples />
-        <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 z-10 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate("/about")}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-wave-700 ring-1 ring-wave-200 backdrop-blur-sm hover:bg-white"
-            aria-label={t("nav.about")}
-          >
-            <Info className="h-4 w-4" />
-          </button>
-          <LanguageSwitcher />
-        </div>
-        <m.div
-          initial={{ y: 16, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 220, damping: 22 }}
-          className="z-10 flex flex-col items-center"
-        >
-          <img
-            src="/web-app-manifest-192x192.png"
-            alt="Badligan"
-            width="80"
-            height="80"
-            className="mb-3 h-20 w-20 animate-bob rounded-2xl shadow-lg shadow-wave-700/30"
-          />
-          <h1 className="font-display text-4xl font-black text-wave-900">
-            {t("app.name")}
-          </h1>
-          <p className="mt-1 text-sm text-wave-700">
-            {t("auth.google.onboarding.title")}
-          </p>
-        </m.div>
+  return {
+    t,
+    navigate,
+    mode,
+    setMode,
+    email,
+    setEmail,
+    displayName,
+    setDisplayName,
+    setDisplayNameEdited,
+    password,
+    setPassword,
+    busy,
+    homeCountry,
+    setHomeCountry,
+    acceptedTerms,
+    setAcceptedTerms,
+    termsOpen,
+    setTermsOpen,
+    googleOnboarding,
+    onboardingDisplayName,
+    submit,
+    onGoogleSignIn,
+    onCompleteOnboarding,
+    onForgot,
+  };
+}
 
-        <m.form
-          onSubmit={onCompleteOnboarding}
-          initial={{ y: 24, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{
-            delay: 0.05,
-            type: "spring",
-            stiffness: 200,
-            damping: 22,
-          }}
-          className="glass z-10 mt-8 w-full max-w-sm space-y-4 p-5"
-        >
-          <div className="space-y-1.5">
-            <Label htmlFor="ob-name">
-              <span className="inline-flex items-center gap-1.5">
-                <User className="h-3.5 w-3.5" />{" "}
-                {t("auth.google.onboarding.name")}
-              </span>
-            </Label>
-            <Input
-              id="ob-name"
-              autoComplete="nickname"
-              placeholder={t("auth.handle_placeholder")}
-              value={onboardingDisplayName}
-              onChange={(e) => {
-                setDisplayNameEdited(true);
-                setDisplayName(e.target.value);
-              }}
-            />
-          </div>
+export default function LoginPage() {
+  const form = useAuthForm();
 
-          <div className="space-y-1.5">
-            <Label htmlFor="ob-country">
-              <span className="inline-flex items-center gap-1.5">
-                <Globe className="h-3.5 w-3.5" /> {t("auth.home_country")}
-              </span>
-            </Label>
-            <select
-              id="ob-country"
-              aria-label={t("auth.home_country")}
-              value={homeCountry}
-              onChange={(e) => setHomeCountry(e.target.value, true)}
-              className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"
-            >
-              {COUNTRIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {flagEmoji(c.code)} {c.name}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-slate-500">
-              {t("auth.google.onboarding.hint")}
-            </p>
-          </div>
-
-          <label className="flex items-start gap-2 text-[12px] text-slate-600">
-            <input
-              type="checkbox"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-              className="mt-0.5 h-4 w-4 flex-none rounded border-slate-300 text-wave-600 focus:ring-wave-400"
-            />
-            <span>
-              {t("auth.terms.prefix")}{" "}
-              <button
-                type="button"
-                onClick={() => setTermsOpen(true)}
-                className="font-semibold text-wave-700 underline hover:text-wave-800"
-              >
-                {t("auth.terms.link")}
-              </button>
-              .
-            </span>
-          </label>
-
-          <Button
-            type="submit"
-            loading={busy}
-            size="lg"
-            className="w-full"
-            disabled={!acceptedTerms}
-          >
-            {t("auth.google.onboarding.submit")}
-            <Sparkles className="h-4 w-4" />
-          </Button>
-        </m.form>
-
-        <AnimatePresence>
-          {termsOpen ? (
-            <TermsModal
-              t={t}
-              onAccept={() => {
-                setAcceptedTerms(true);
-                setTermsOpen(false);
-              }}
-              onClose={() => setTermsOpen(false)}
-            />
-          ) : null}
-        </AnimatePresence>
-      </div>
-    );
+  if (form.googleOnboarding) {
+    return <OnboardingView form={form} />;
   }
 
+  return <LoginView form={form} />;
+}
+
+type FormState = ReturnType<typeof useAuthForm>;
+
+// Shared header: logo, app name, and a tagline/subtitle line.
+function AuthHeader({ subtitle }: { subtitle: string }) {
+  const t = useT();
+  return (
+    <m.div
+      initial={{ y: 16, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ type: "spring", stiffness: 220, damping: 22 }}
+      className="z-10 flex flex-col items-center"
+    >
+      <img
+        src="/web-app-manifest-192x192.png"
+        alt="Badligan"
+        width="80"
+        height="80"
+        className="mb-3 h-20 w-20 animate-bob rounded-2xl shadow-lg shadow-wave-700/30"
+      />
+      <h1 className="font-display text-4xl font-black text-wave-900">
+        {t("app.name")}
+      </h1>
+      <p className="mt-1 text-sm text-wave-700">{subtitle}</p>
+    </m.div>
+  );
+}
+
+// Top-right controls (About link + language switcher), shared by both views.
+function TopBar() {
+  const navigate = useNavigate();
+  const t = useT();
+  return (
+    <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 z-10 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={() => navigate("/about")}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-wave-700 ring-1 ring-wave-200 backdrop-blur-sm hover:bg-white"
+        aria-label={t("nav.about")}
+      >
+        <Info className="h-4 w-4" />
+      </button>
+      <LanguageSwitcher />
+    </div>
+  );
+}
+
+// Country <select> reused by signup and onboarding; the hint copy differs.
+function CountryPicker({
+  id,
+  value,
+  onChange,
+  hint,
+}: {
+  id: string;
+  value: string;
+  onChange: (code: string) => void;
+  hint: string;
+}) {
+  const t = useT();
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>
+        <span className="inline-flex items-center gap-1.5">
+          <Globe className="h-3.5 w-3.5" /> {t("auth.home_country")}
+        </span>
+      </Label>
+      <select
+        id={id}
+        aria-label={t("auth.home_country")}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"
+      >
+        {COUNTRIES.map((c) => (
+          <option key={c.code} value={c.code}>
+            {flagEmoji(c.code)} {c.name}
+          </option>
+        ))}
+      </select>
+      <p className="text-[11px] text-slate-500">{hint}</p>
+    </div>
+  );
+}
+
+// Terms checkbox + inline "read the terms" trigger, shared by both forms.
+function TermsCheckbox({
+  accepted,
+  onToggle,
+  onOpen,
+}: {
+  accepted: boolean;
+  onToggle: (checked: boolean) => void;
+  onOpen: () => void;
+}) {
+  const t = useT();
+  return (
+    <label className="flex items-start gap-2 text-[12px] text-slate-600">
+      <input
+        type="checkbox"
+        checked={accepted}
+        onChange={(e) => onToggle(e.target.checked)}
+        className="mt-0.5 h-4 w-4 flex-none rounded border-slate-300 text-wave-600 focus:ring-wave-400"
+      />
+      <span>
+        {t("auth.terms.prefix")}{" "}
+        <button
+          type="button"
+          onClick={onOpen}
+          className="font-semibold text-wave-700 underline hover:text-wave-800"
+        >
+          {t("auth.terms.link")}
+        </button>
+        .
+      </span>
+    </label>
+  );
+}
+
+// Google onboarding step for accounts that lack a homeCountry.
+function OnboardingView({ form }: { form: FormState }) {
+  const { t } = form;
   return (
     <div className="relative flex min-h-[var(--app-height,100dvh)] flex-col items-center justify-center px-5 py-10">
       <Ripples />
-      <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 z-10 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => navigate("/about")}
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-wave-700 ring-1 ring-wave-200 backdrop-blur-sm hover:bg-white"
-          aria-label={t("nav.about")}
-        >
-          <Info className="h-4 w-4" />
-        </button>
-        <LanguageSwitcher />
-      </div>
-      <m.div
-        initial={{ y: 16, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 220, damping: 22 }}
-        className="z-10 flex flex-col items-center"
-      >
-        <img
-          src="/web-app-manifest-192x192.png"
-          alt="Badligan"
-          width="80"
-          height="80"
-          className="mb-3 h-20 w-20 animate-bob rounded-2xl shadow-lg shadow-wave-700/30"
-        />
-        <h1 className="font-display text-4xl font-black text-wave-900">
-          {t("app.name")}
-        </h1>
-        <p className="mt-1 text-sm text-wave-700">{t("app.tagline")}</p>
-      </m.div>
+      <TopBar />
+      <AuthHeader subtitle={t("auth.google.onboarding.title")} />
 
       <m.form
-        onSubmit={submit}
+        onSubmit={form.onCompleteOnboarding}
+        initial={{ y: 24, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{
+          delay: 0.05,
+          type: "spring",
+          stiffness: 200,
+          damping: 22,
+        }}
+        className="glass z-10 mt-8 w-full max-w-sm space-y-4 p-5"
+      >
+        <div className="space-y-1.5">
+          <Label htmlFor="ob-name">
+            <span className="inline-flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5" />{" "}
+              {t("auth.google.onboarding.name")}
+            </span>
+          </Label>
+          <Input
+            id="ob-name"
+            autoComplete="nickname"
+            placeholder={t("auth.handle_placeholder")}
+            value={form.onboardingDisplayName}
+            onChange={(e) => {
+              form.setDisplayNameEdited(true);
+              form.setDisplayName(e.target.value);
+            }}
+          />
+        </div>
+
+        <CountryPicker
+          id="ob-country"
+          value={form.homeCountry}
+          onChange={(code) => form.setHomeCountry(code, true)}
+          hint={t("auth.google.onboarding.hint")}
+        />
+
+        <TermsCheckbox
+          accepted={form.acceptedTerms}
+          onToggle={form.setAcceptedTerms}
+          onOpen={() => form.setTermsOpen(true)}
+        />
+
+        <Button
+          type="submit"
+          loading={form.busy}
+          size="lg"
+          className="w-full"
+          disabled={!form.acceptedTerms}
+        >
+          {t("auth.google.onboarding.submit")}
+          <Sparkles className="h-4 w-4" />
+        </Button>
+      </m.form>
+
+      <AnimatePresence>
+        {form.termsOpen ? (
+          <TermsModal
+            t={t}
+            onAccept={() => {
+              form.setAcceptedTerms(true);
+              form.setTermsOpen(false);
+            }}
+            onClose={() => form.setTermsOpen(false)}
+          />
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// Email/password login + signup form, with the Google sign-in option.
+function LoginView({ form }: { form: FormState }) {
+  const { t } = form;
+  return (
+    <div className="relative flex min-h-[var(--app-height,100dvh)] flex-col items-center justify-center px-5 py-10">
+      <Ripples />
+      <TopBar />
+      <AuthHeader subtitle={t("app.tagline")} />
+
+      <m.form
+        onSubmit={form.submit}
         initial={{ y: 24, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{
@@ -386,8 +465,8 @@ export default function LoginPage() {
         className="glass z-10 mt-8 w-full max-w-sm space-y-4 p-5"
       >
         <SegmentedControl
-          value={mode}
-          onChange={setMode}
+          value={form.mode}
+          onChange={form.setMode}
           options={[
             { value: "login", label: t("auth.login") },
             { value: "signup", label: t("auth.signup") },
@@ -405,12 +484,12 @@ export default function LoginPage() {
             type="email"
             autoComplete="email"
             placeholder={t("auth.email_placeholder")}
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={form.email}
+            onChange={(e) => form.setEmail(e.target.value)}
           />
         </div>
 
-        {mode === "signup" ? (
+        {form.mode === "signup" ? (
           <>
             <div className="space-y-1.5">
               <Label htmlFor="name">
@@ -422,33 +501,16 @@ export default function LoginPage() {
                 id="name"
                 autoComplete="nickname"
                 placeholder={t("auth.handle_placeholder")}
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
+                value={form.displayName}
+                onChange={(e) => form.setDisplayName(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="home-country">
-                <span className="inline-flex items-center gap-1.5">
-                  <Globe className="h-3.5 w-3.5" /> {t("auth.home_country")}
-                </span>
-              </Label>
-              <select
-                id="home-country"
-                aria-label={t("auth.home_country")}
-                value={homeCountry}
-                onChange={(e) => setHomeCountry(e.target.value, true)}
-                className="w-full rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-sm shadow-sm focus:border-wave-400 focus:ring-2 focus:ring-wave-200 focus:outline-none"
-              >
-                {COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {flagEmoji(c.code)} {c.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-slate-500">
-                {t("auth.home_country.hint")}
-              </p>
-            </div>
+            <CountryPicker
+              id="home-country"
+              value={form.homeCountry}
+              onChange={(code) => form.setHomeCountry(code, true)}
+              hint={t("auth.home_country.hint")}
+            />
           </>
         ) : null}
 
@@ -462,55 +524,43 @@ export default function LoginPage() {
             id="password"
             type="password"
             autoComplete={
-              mode === "signup" ? "new-password" : "current-password"
+              form.mode === "signup" ? "new-password" : "current-password"
             }
             placeholder={t("auth.password_placeholder")}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            value={form.password}
+            onChange={(e) => form.setPassword(e.target.value)}
           />
         </div>
 
-        {mode === "signup" ? (
-          <label className="flex items-start gap-2 text-[12px] text-slate-600">
-            <input
-              type="checkbox"
-              checked={acceptedTerms}
-              onChange={(e) => setAcceptedTerms(e.target.checked)}
-              className="mt-0.5 h-4 w-4 flex-none rounded border-slate-300 text-wave-600 focus:ring-wave-400"
-            />
-            <span>
-              {t("auth.terms.prefix")}{" "}
-              <button
-                type="button"
-                onClick={() => setTermsOpen(true)}
-                className="font-semibold text-wave-700 underline hover:text-wave-800"
-              >
-                {t("auth.terms.link")}
-              </button>
-              .
-            </span>
-          </label>
+        {form.mode === "signup" ? (
+          <TermsCheckbox
+            accepted={form.acceptedTerms}
+            onToggle={form.setAcceptedTerms}
+            onOpen={() => form.setTermsOpen(true)}
+          />
         ) : null}
 
         <Button
           type="submit"
-          loading={busy}
+          loading={form.busy}
           size="lg"
           className="w-full"
-          disabled={mode === "signup" && !acceptedTerms}
+          disabled={form.mode === "signup" && !form.acceptedTerms}
         >
-          {mode === "signup" ? t("auth.create_account") : t("auth.dive_in")}
-          {mode === "signup" ? (
+          {form.mode === "signup"
+            ? t("auth.create_account")
+            : t("auth.dive_in")}
+          {form.mode === "signup" ? (
             <Sparkles className="h-4 w-4" />
           ) : (
             <WavesArrowDown className="h-4 w-4" />
           )}
         </Button>
 
-        {mode === "login" ? (
+        {form.mode === "login" ? (
           <button
             type="button"
-            onClick={onForgot}
+            onClick={form.onForgot}
             className="block w-full text-center text-[11px] font-semibold text-wave-700 hover:underline"
           >
             {t("auth.forgot")}
@@ -531,8 +581,8 @@ export default function LoginPage() {
 
         <button
           type="button"
-          onClick={onGoogleSignIn}
-          disabled={busy}
+          onClick={form.onGoogleSignIn}
+          disabled={form.busy}
           className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50"
         >
           <GoogleIcon />
@@ -549,7 +599,7 @@ export default function LoginPage() {
             } catch {
               /* ignore */
             }
-            navigate("/");
+            form.navigate("/");
           }}
           className="block w-full text-center text-[12px] font-semibold text-wave-700 hover:underline"
         >
@@ -558,14 +608,14 @@ export default function LoginPage() {
       </m.form>
 
       <AnimatePresence>
-        {termsOpen ? (
+        {form.termsOpen ? (
           <TermsModal
             t={t}
             onAccept={() => {
-              setAcceptedTerms(true);
-              setTermsOpen(false);
+              form.setAcceptedTerms(true);
+              form.setTermsOpen(false);
             }}
-            onClose={() => setTermsOpen(false)}
+            onClose={() => form.setTermsOpen(false)}
           />
         ) : null}
       </AnimatePresence>
@@ -573,7 +623,7 @@ export default function LoginPage() {
   );
 }
 
-function prettyAuthError(msg: string, t: (k: string) => string) {
+function prettyAuthError(msg: string, t: Translate) {
   if (msg.includes("invalid-credential") || msg.includes("wrong-password"))
     return t("auth.error.wrong_credentials");
   if (msg.includes("user-not-found")) return t("auth.error.user_not_found");
@@ -588,7 +638,7 @@ function TermsModal({
   onAccept,
   onClose,
 }: {
-  t: (k: string) => string;
+  t: Translate;
   onAccept: () => void;
   onClose: () => void;
 }) {

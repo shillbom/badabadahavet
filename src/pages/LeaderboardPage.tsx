@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { m, useInView } from "framer-motion";
 import { Crown, Snowflake, MapPin } from "lucide-react";
 import { useStore } from "@/store/sessions";
@@ -47,9 +47,9 @@ export default function LeaderboardPage() {
   // A sign-out leaves the last subscription value in state briefly, but it
   // must never be rendered to a guest. Deriving this avoids an extra effect
   // render solely to clear state.
-  const visibleRoster = useMemo(() => (user ? roster : []), [user, roster]);
+  const visibleRoster = user ? roster : [];
 
-  const rows = useMemo<Row[]>(() => {
+  const rows: Row[] = (() => {
     const memberFilter: Set<string> | null =
       scope === "global"
         ? null
@@ -71,19 +71,16 @@ export default function LeaderboardPage() {
       });
     }
     return out;
-  }, [visibleRoster, groups, scope, year]);
+  })();
 
   // The global board only shows the podium (top 5) plus your own row with
   // its true rank when you're further down. Group boards are small and
   // personal, so they stay complete.
   const TOP_N = 5;
-  const { top, me } = useMemo(
-    () =>
-      scope === "global"
-        ? splitTopList(rows, user?.uid, TOP_N)
-        : { top: rows, me: null },
-    [rows, scope, user],
-  );
+  const { top, me } =
+    scope === "global"
+      ? splitTopList(rows, user?.uid, TOP_N)
+      : { top: rows, me: null };
 
   // Group rows open the same member-swims sheet as the group view. The
   // global board stays non-interactive (strangers' swims aren't a tap
