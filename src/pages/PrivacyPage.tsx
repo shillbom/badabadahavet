@@ -2,9 +2,33 @@ import { Link } from "react-router";
 import { useT } from "@/lib/i18n";
 import BackButton from "@/components/ui/BackButton";
 
-// External services the app talks to. Names/domains aren't translated; the
-// human description of each lives in i18n (privacy.third.*).
-const THIRD_PARTIES = [
+// External services, split by whether the browser talks to them directly
+// (so they see the user's IP) or we fetch them server-side. Names/domains
+// aren't translated; each description lives in i18n (privacy.third.*).
+const DIRECT_SERVICES = [
+  {
+    key: "privacy.third.maps",
+    label: "openstreetmap.org",
+    href: "https://www.openstreetmap.org/copyright",
+  },
+  {
+    key: "privacy.third.bdc",
+    label: "bigdatacloud.com",
+    href: "https://www.bigdatacloud.com/",
+  },
+  {
+    key: "privacy.third.perspective",
+    label: "perspectiveapi.com",
+    href: "https://perspectiveapi.com/",
+  },
+  {
+    key: "privacy.third.analytics",
+    label: "policies.google.com",
+    href: "https://policies.google.com/privacy",
+  },
+] as const;
+
+const DATA_SOURCES = [
   {
     key: "privacy.third.hav",
     label: "badplatsen.havochvatten.se",
@@ -25,20 +49,12 @@ const THIRD_PARTIES = [
     label: "open-meteo.com",
     href: "https://open-meteo.com/",
   },
-  {
-    key: "privacy.third.maps",
-    label: "openstreetmap.org",
-    href: "https://www.openstreetmap.org/copyright",
-  },
-  {
-    key: "privacy.third.bdc",
-    label: "bigdatacloud.com",
-    href: "https://www.bigdatacloud.com/",
-  },
 ] as const;
 
 // Same public link used on the About page's "created by" line.
 const CREATOR_URL = "https://www.linkedin.com/in/simon-hillbom/";
+// Swedish data-protection authority, for the right to lodge a complaint.
+const IMY_URL = "https://www.imy.se/";
 
 export default function PrivacyPage() {
   const t = useT();
@@ -69,6 +85,10 @@ export default function PrivacyPage() {
         <p>{t("privacy.use.body")}</p>
       </Section>
 
+      <Section title={t("privacy.basis.title")}>
+        <p>{t("privacy.basis.body")}</p>
+      </Section>
+
       <Section title={t("privacy.public.title")}>
         <p>{t("privacy.public.body")}</p>
       </Section>
@@ -89,32 +109,40 @@ export default function PrivacyPage() {
         </p>
       </Section>
 
+      <Section title={t("privacy.retention.title")}>
+        <p>{t("privacy.retention.body")}</p>
+      </Section>
+
       <Section title={t("privacy.cookies.title")}>
         <p>{t("privacy.cookies.body")}</p>
       </Section>
 
       <Section title={t("privacy.third.title")}>
         <p>{t("privacy.third.body")}</p>
-        <ul className="mt-2 list-disc space-y-1.5 pl-5">
-          {THIRD_PARTIES.map((p) => (
-            <li key={p.key}>
-              {t(p.key)}
-              {" — "}
-              <a
-                href={p.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-wave-700 underline hover:text-wave-800"
-              >
-                {p.label}
-              </a>
-            </li>
-          ))}
-        </ul>
+        <p className="mt-3 font-semibold text-slate-600">
+          {t("privacy.third.direct")}
+        </p>
+        <ServiceList items={DIRECT_SERVICES} t={t} />
+        <p className="mt-3 font-semibold text-slate-600">
+          {t("privacy.third.sources")}
+        </p>
+        <ServiceList items={DATA_SOURCES} t={t} />
       </Section>
 
       <Section title={t("privacy.rights.title")}>
         <p>{t("privacy.rights.body")}</p>
+        <p className="mt-2">
+          {t("privacy.rights.complaint")}{" "}
+          <a
+            href={IMY_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-wave-700 underline hover:text-wave-800"
+          >
+            imy.se
+          </a>
+          .
+        </p>
       </Section>
 
       <Section title={t("privacy.safety.title")}>
@@ -143,6 +171,33 @@ export default function PrivacyPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+function ServiceList({
+  items,
+  t,
+}: {
+  items: readonly { key: string; label: string; href: string }[];
+  t: (key: string) => string;
+}) {
+  return (
+    <ul className="mt-1 list-disc space-y-1.5 pl-5">
+      {items.map((p) => (
+        <li key={p.key}>
+          {t(p.key)}
+          {" — "}
+          <a
+            href={p.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-wave-700 underline hover:text-wave-800"
+          >
+            {p.label}
+          </a>
+        </li>
+      ))}
+    </ul>
   );
 }
 

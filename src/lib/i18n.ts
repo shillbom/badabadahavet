@@ -691,42 +691,58 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "privacy.title": "Integritetspolicy",
     "privacy.updated": "Senast uppdaterad 16 juli 2026.",
     "privacy.intro":
-      "Badligan är en liten, vänlig badtävling. Vi samlar in så lite data vi kan, säljer aldrig något och skickar ingen reklam. Här är exakt vad vi lagrar, varför, och hur du blir av med det.",
+      "Badligan är en liten, vänlig badtävling. Vi samlar in så lite data vi kan, säljer aldrig något och skickar ingen reklam. Här är vad vi lagrar, varför, och hur du blir av med det.",
     "privacy.collect.title": "Vad vi samlar in",
     "privacy.collect.account":
       "Kontouppgifter: ditt namn (eller smeknamn), din e-postadress och ditt hemland. Loggar du in med Google hämtas namn och e-post därifrån.",
     "privacy.collect.content":
       "Det du lägger in: dina loggade bad (tid, plats, temperatur), badplatser du skapar, foton du laddar upp, emoji-reaktioner och vilka grupper du är med i.",
     "privacy.collect.technical":
-      "Teknisk data: cookies och localStorage som håller dig inloggad och kommer ihåg dina inställningar. Ingen spårning för reklam och inga analysverktyg från tredje part.",
+      "Teknisk data: cookies och localStorage som håller dig inloggad och kommer ihåg dina inställningar, plus anonym användningsstatistik via Google Analytics for Firebase (t.ex. sidvisningar, enhetstyp och ungefärlig plats baserat på IP-adress). Ingen spårning för reklam.",
     "privacy.use.title": "Hur vi använder datan",
     "privacy.use.body":
-      "Datan används bara för att appen ska fungera: visa dina bad och poäng, räkna fram topplistor och bedrifter, visa badplatser på kartan och låta dig återställa lösenordet. Vi använder den inte till något annat.",
+      "Datan används för att appen ska fungera: visa dina bad och poäng, räkna fram topplistor och bedrifter, visa badplatser på kartan, låta dig återställa lösenordet och för att förstå hur appen används på en övergripande nivå. Vi använder den inte till något annat.",
+    "privacy.basis.title": "Rättslig grund",
+    "privacy.basis.body":
+      "Vi behandlar dina uppgifter för att kunna leverera tjänsten du bett om (avtal), med stöd av ditt samtycke (t.ex. foton du väljer att ladda upp och statistikcookies) och vårt berättigade intresse av att driva och skydda en fungerande app. Du kan återkalla samtycke när som helst genom att ta bort innehållet eller radera kontot.",
     "privacy.public.title": "Vad andra ser",
     "privacy.public.body":
       "Badligan är en öppen app — vem som helst kan skapa ett konto. Ditt visningsnamn, dina bad, badplatser du skapar och din placering på topplistan syns för andra inloggade badare. Ladda inte upp något du vill hålla privat.",
     "privacy.storage.title": "Var datan lagras",
     "privacy.storage.body":
-      "Allt lagras hos Google Firebase (Firestore, Storage och Authentication). Google behandlar datan som vårt personuppgiftsbiträde och kan lagra den på servrar både inom och utanför EU.",
+      "Allt lagras hos Google Firebase (Firestore, Storage och Authentication). Google behandlar uppgifterna som personuppgiftsbiträde. Uppgifter kan lagras eller behandlas utanför EU/EES, och sådana överföringar sker med de skyddsåtgärder som GDPR kräver (t.ex. EU-kommissionens standardavtalsklausuler).",
     "privacy.storage.firebase": "Läs om Firebases integritetshantering på",
+    "privacy.retention.title": "Hur länge vi sparar",
+    "privacy.retention.body":
+      "Vi sparar dina uppgifter så länge du har ett konto. Raderar du kontot tas dina bad, foton och kontouppgifter bort. Enstaka uppgifter kan ligga kvar en kort tid i säkerhetskopior innan de skrivs över.",
     "privacy.cookies.title": "Cookies och lagring",
     "privacy.cookies.body":
-      "Vi använder bara nödvändiga cookies och localStorage för att hålla dig inloggad och komma ihåg dina val (som språk). Inga cookies för reklam eller spårning.",
+      "Vi använder nödvändiga cookies och localStorage för att hålla dig inloggad och komma ihåg dina val (som språk). Google Analytics for Firebase sätter dessutom cookies eller identifierare för anonym användningsstatistik. Inga cookies för reklam.",
     "privacy.third.title": "Tredjepartstjänster",
     "privacy.third.body":
-      "Förutom Google Firebase hämtar appen data från externa källor för att visa badplatser, vattentemperaturer och kartor. De tar emot din IP-adress när din enhet hämtar informationen, men inga kontouppgifter.",
+      "Förutom Google Firebase är några andra tjänster inblandade. Vissa kontaktar din enhet direkt, så de kan se din IP-adress; andra levererar bara data som vi hämtar på våra egna servrar.",
+    "privacy.third.direct":
+      "Tjänster din enhet kontaktar direkt (kan se din IP-adress):",
+    "privacy.third.sources":
+      "Datakällor vi hämtar på servern (din enhet kontaktar dem inte):",
+    "privacy.third.maps": "Kartbilder från OpenStreetMap, CARTO och Esri",
+    "privacy.third.bdc":
+      "BigDataCloud – slår upp vilket land en koordinat ligger i",
+    "privacy.third.perspective":
+      "Google Perspective API – granskar namn och texter du skriver för att fånga stötande innehåll",
+    "privacy.third.analytics":
+      "Google Analytics for Firebase – anonym användningsstatistik",
     "privacy.third.hav":
       "Havs- och vattenmyndigheten – badplatser och vattenkvalitet",
     "privacy.third.eea":
       "Europeiska miljöbyrån (EEA) – badplatser i Danmark och Finland",
     "privacy.third.smhi": "SMHI – vattentemperaturer",
     "privacy.third.meteo": "Open-Meteo – uppskattade vattentemperaturer",
-    "privacy.third.maps":
-      "OpenStreetMap, CARTO och Esri – kartor och satellitbilder",
-    "privacy.third.bdc": "BigDataCloud – slår upp vilket land ett bad ligger i",
     "privacy.rights.title": "Dina rättigheter",
     "privacy.rights.body":
-      "Du kan när som helst se, ändra eller radera dina uppgifter. Raderar du kontot från profilen försvinner dina bad, foton och kontouppgifter. Hör av dig om du vill ha ut en kopia av din data.",
+      "Enligt GDPR har du rätt att få tillgång till, rätta, radera, begränsa och invända mot behandlingen av dina uppgifter, samt rätt till dataportabilitet. Det mesta kan du se, ändra och radera direkt i appen — raderar du kontot från profilen försvinner dina bad, foton och kontouppgifter. Hör av dig om du vill ha ut en kopia av din data.",
+    "privacy.rights.complaint":
+      "Är du missnöjd med hur vi hanterar dina uppgifter kan du klaga hos Integritetsskyddsmyndigheten (IMY),",
     "privacy.safety.title": "Bada på eget ansvar",
     "privacy.safety.body":
       "Vattentemperaturer och badplatsinfo är ungefärliga och kan vara fel. Appen är gjord för kul, inte för säkerhetsbedömning — bada smart och på eget ansvar.",
@@ -1434,42 +1450,58 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "privacy.title": "Privacy policy",
     "privacy.updated": "Last updated 16 July 2026.",
     "privacy.intro":
-      "Badligan is a little, friendly swim competition. We collect as little data as we can, never sell anything and send no marketing. Here's exactly what we store, why, and how to get rid of it.",
+      "Badligan is a little, friendly swim competition. We collect as little data as we can, never sell anything and send no marketing. Here's what we store, why, and how to get rid of it.",
     "privacy.collect.title": "What we collect",
     "privacy.collect.account":
       "Account details: your name (or nickname), your email address and your home country. If you sign in with Google, we get your name and email from there.",
     "privacy.collect.content":
       "What you add: your logged swims (time, place, temperature), swim spots you create, photos you upload, emoji reactions and the groups you join.",
     "privacy.collect.technical":
-      "Technical data: cookies and localStorage that keep you signed in and remember your settings. No advertising tracking and no third-party analytics.",
+      "Technical data: cookies and localStorage that keep you signed in and remember your settings, plus anonymous usage statistics via Google Analytics for Firebase (e.g. page views, device type and approximate location from your IP address). No advertising tracking.",
     "privacy.use.title": "How we use it",
     "privacy.use.body":
-      "We only use your data to make the app work: showing your swims and points, computing leaderboards and achievements, placing swim spots on the map and letting you reset your password. We don't use it for anything else.",
+      "We use your data to make the app work: showing your swims and points, computing leaderboards and achievements, placing swim spots on the map, letting you reset your password, and understanding how the app is used at a high level. We don't use it for anything else.",
+    "privacy.basis.title": "Legal basis",
+    "privacy.basis.body":
+      "We process your data to provide the service you asked for (contract), on the basis of your consent (e.g. photos you choose to upload and statistics cookies) and our legitimate interest in running and protecting a working app. You can withdraw consent at any time by removing the content or deleting your account.",
     "privacy.public.title": "What others can see",
     "privacy.public.body":
       "Badligan is an open app — anyone can create an account. Your display name, your swims, spots you create and your leaderboard position are visible to other signed-in swimmers. Don't upload anything you want to keep private.",
     "privacy.storage.title": "Where your data lives",
     "privacy.storage.body":
-      "Everything is stored on Google Firebase (Firestore, Storage and Authentication). Google processes the data as our processor and may store it on servers both inside and outside the EU.",
+      "Everything is stored on Google Firebase (Firestore, Storage and Authentication). Google processes the data as our processor. Data may be stored or processed outside the EU/EEA, and any such transfers rely on the safeguards required by the GDPR (e.g. the European Commission's Standard Contractual Clauses).",
     "privacy.storage.firebase": "Read about Firebase's privacy practices at",
+    "privacy.retention.title": "How long we keep it",
+    "privacy.retention.body":
+      "We keep your data for as long as you have an account. If you delete your account, your swims, photos and account details are removed. Some data may remain briefly in backups before it's overwritten.",
     "privacy.cookies.title": "Cookies and storage",
     "privacy.cookies.body":
-      "We only use essential cookies and localStorage to keep you signed in and remember your choices (like your language). No advertising or tracking cookies.",
+      "We use essential cookies and localStorage to keep you signed in and remember your choices (like your language). Google Analytics for Firebase also sets cookies or identifiers for anonymous usage statistics. No advertising cookies.",
     "privacy.third.title": "Third-party services",
     "privacy.third.body":
-      "Besides Google Firebase, the app pulls data from external sources to show swim spots, water temperatures and maps. They receive your IP address when your device fetches that information, but no account details.",
+      "Besides Google Firebase, a few other services are involved. Some are contacted by your device directly, so they can see your IP address; others just supply data that we fetch on our own servers.",
+    "privacy.third.direct":
+      "Services your device contacts directly (can see your IP address):",
+    "privacy.third.sources":
+      "Data sources we fetch on the server (your device doesn't contact them):",
+    "privacy.third.maps": "Map tiles from OpenStreetMap, CARTO and Esri",
+    "privacy.third.bdc":
+      "BigDataCloud – looks up which country a coordinate is in",
+    "privacy.third.perspective":
+      "Google Perspective API – screens names and text you write to catch abusive content",
+    "privacy.third.analytics":
+      "Google Analytics for Firebase – anonymous usage statistics",
     "privacy.third.hav":
       "Swedish Agency for Marine and Water Management – swim spots and water quality",
     "privacy.third.eea":
       "European Environment Agency (EEA) – swim spots in Denmark and Finland",
     "privacy.third.smhi": "SMHI – water temperatures",
     "privacy.third.meteo": "Open-Meteo – estimated water temperatures",
-    "privacy.third.maps":
-      "OpenStreetMap, CARTO and Esri – maps and satellite imagery",
-    "privacy.third.bdc": "BigDataCloud – looks up which country a swim is in",
     "privacy.rights.title": "Your rights",
     "privacy.rights.body":
-      "You can view, change or delete your data at any time. Deleting your account from your profile removes your swims, photos and account details. Get in touch if you'd like a copy of your data.",
+      "Under the GDPR you have the right to access, rectify, erase, restrict and object to the processing of your data, plus the right to data portability. You can view, change and delete most of it directly in the app — deleting your account from your profile removes your swims, photos and account details. Get in touch if you'd like a copy of your data.",
+    "privacy.rights.complaint":
+      "If you're unhappy with how we handle your data, you can complain to the Swedish Authority for Privacy Protection (IMY),",
     "privacy.safety.title": "Swim at your own risk",
     "privacy.safety.body":
       "Water temperatures and swim-spot info are approximate and can be wrong. This app is made for fun, not safety assessment — swim smart and at your own risk.",
