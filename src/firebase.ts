@@ -74,23 +74,52 @@ setPersistence(auth, browserLocalPersistence).catch(() => {
   /* ignored — falls back to in-memory */
 });
 
-// Firebase Analytics — only in real (non-emulator) builds, only when the
-// browser supports it (no SSR, not blocked by privacy add-ons, etc.) and
-// only when a measurementId was actually configured. Imported dynamically
-// so the analytics module stays out of the boot-critical firebase chunk.
-if (
+// Firebase Analytics is consent-gated (see lib/consent.ts). Initialising it —
+// which is what sets the analytics cookies and sends the first hit — only
+// happens once the user has explicitly opted in, so nothing is collected by
+// default. The module is imported dynamically so it stays out of the
+// boot-critical firebase chunk.
+
+// True when analytics *could* run here, i.e. asking for consent is meaningful:
+// a real (non-emulator) build with a configured measurementId, in a browser.
+export const analyticsConfigured =
   !useEmulators &&
   typeof window !== "undefined" &&
-  firebaseConfig.measurementId
-) {
-  import("firebase/analytics")
-    .then(async ({ getAnalytics, isSupported }) => {
-      if (await isSupported()) getAnalytics(app);
-      return;
-    })
-    .catch(() => {
-      /* analytics is best-effort — ignore failures */
-    });
+  Boolean(firebaseConfig.measurementId);
+
+let analytics: import("firebase/analytics").Analytics | null = null;
+let analyticsInit = false;
+
+/**
+ * Apply the user's analytics consent choice.
+ *  - granted: initialise analytics once (no-op if already running).
+ *  - denied: if analytics already started this session, stop collecting.
+ *    (Cookies already set clear on their own; a reload won't re-init because
+ *    the stored choice is "denied".)
+ * No-op entirely unless analytics is configured for this environment.
+ */
+export function applyAnalyticsConsent(granted: boolean): void {
+  if (!analyticsConfigured) return;
+  if (granted && !analyticsInit) {
+    analyticsInit = true;
+    import("firebase/analytics")
+      .then(async ({ getAnalytics, isSupported }) => {
+        if (await isSupported()) analytics = getAnalytics(app);
+        return;
+      })
+      .catch(() => {
+        analyticsInit = false; // allow a retry if consent is granted again
+      });
+  } else if (!granted && analytics) {
+    import("firebase/analytics")
+      .then(({ setAnalyticsCollectionEnabled }) => {
+        if (analytics) setAnalyticsCollectionEnabled(analytics, false);
+        return;
+      })
+      .catch(() => {
+        /* best-effort — ignore failures */
+      });
+  }
 }
 
 /**
