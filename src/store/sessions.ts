@@ -404,80 +404,106 @@ export const useStore = create<State>((set, get) => {
         userUnsubs = [];
       };
 
+      // Places are read from the daily-built `placesSummary/current` doc (one
+      // read, always-on for everyone — it powers the map's pins) plus a
+      // bounded `updatedAt > builtAt` delta listener over the `places`
+      // collection that surfaces spots created/edited since that build. The
+      // delta is a live subscription, so we hold it ONLY while signed in —
+      // guests make do with the daily summary and never subscribe to `places`
+      // (one-off reads like getPlace on a spot page are unaffected). lastSwim*
+      // rides in the summary, so a swim never re-streams a place doc. The
+      // merged array is recomputed whenever the summary or the delta fires.
+      let summaryPins: PlacePin[] = [];
+      let deltaDocs: PlaceDoc[] = [];
+      let stopDelta: (() => void) | null = null;
+      let deltaCursor: number | null = null; // builtAt the delta is scoped to
+      let latestBuiltAt = 0; // most recent summary build cursor
+      let summaryLoaded = false; // summary listener has fired at least once
+      let fallbackStarted = false; // one-time full read (missing summary) done
+
+      const applyPlaces = () => {
+        const places = mergeDelta(summaryPins, deltaDocs);
+        const { myUid, mySessions, allSessions, tempsByPlace, profile } = get();
+        set({
+          places,
+          ...derive(
+            myUid ?? "",
+            mySessions,
+            allSessions,
+            places,
+            tempsByPlace,
+            profile?.achievements,
+          ),
+        });
+      };
+
+      // Bring the delta subscription in line with auth + the latest build
+      // cursor: run it only while signed in and after the summary has loaded,
+      // scoped to the current builtAt; tear it down (and drop its docs)
+      // otherwise. Idempotent — called on every auth change and summary
+      // snapshot. On each nightly build the cursor advances and yesterday's
+      // deltas fold into the summary, so the window resets to ~empty.
+      const syncDelta = () => {
+        const wantOn = summaryLoaded && !!auth.currentUser;
+        if (!wantOn) {
+          if (stopDelta) {
+            stopDelta();
+            stopDelta = null;
+            deltaCursor = null;
+            if (deltaDocs.length) {
+              deltaDocs = [];
+              applyPlaces();
+            }
+          }
+          return;
+        }
+        if (stopDelta && deltaCursor === latestBuiltAt) return;
+        stopDelta?.();
+        deltaCursor = latestBuiltAt;
+        deltaDocs = [];
+        stopDelta = watchPlaceChangesSince(latestBuiltAt, (docs) => {
+          deltaDocs = docs;
+          applyPlaces();
+        });
+      };
+
       const startPublic = () => {
         if (publicStarted) return;
         publicStarted = true;
 
-        // Places are read from the daily-built `placesSummary/current` doc
-        // (one read) plus a bounded `updatedAt > builtAt` delta listener that
-        // surfaces spots created/edited since that build — instead of an
-        // always-on listener over the whole ~4k-doc `places` collection.
-        // lastSwim* rides in the summary, so logging a swim no longer
-        // re-streams a place doc to every connected client. The merged array
-        // is recomputed whenever either the summary or the delta fires.
-        let summaryPins: PlacePin[] = [];
-        let deltaDocs: PlaceDoc[] = [];
-        let stopDelta: (() => void) | null = null;
-        // Build cursor the delta listener is currently scoped to; null = not
-        // started. Guards against restarting the delta on the cache-then-server
-        // pair of summary snapshots that share the same builtAt at boot.
-        let deltaCursor: number | null = null;
-
-        const applyPlaces = () => {
-          const places = mergeDelta(summaryPins, deltaDocs);
-          const { myUid, mySessions, allSessions, tempsByPlace, profile } =
-            get();
-          set({
-            places,
-            ...derive(
-              myUid ?? "",
-              mySessions,
-              allSessions,
-              places,
-              tempsByPlace,
-              profile?.achievements,
-            ),
-          });
-        };
-
-        // Point the delta listener at a build cursor, restarting it only when
-        // the cursor actually changed. On each nightly build the cursor
-        // advances and yesterday's deltas fold into the summary, so the window
-        // resets to ~empty.
-        const ensureDelta = (builtAt: number) => {
-          if (deltaCursor === builtAt) return;
-          deltaCursor = builtAt;
-          stopDelta?.();
-          deltaDocs = [];
-          stopDelta = watchPlaceChangesSince(builtAt, (docs) => {
-            deltaDocs = docs;
-            applyPlaces();
-          });
-        };
-
         publicUnsubs = [
+          // placesSummary/current — one doc, always-on for everyone (guests
+          // included). The live `places` delta is a separate subscription
+          // gated on auth by syncDelta().
           watchPlacesSummary(({ pins, builtAt, exists }) => {
+            summaryLoaded = true;
             if (exists) {
               summaryPins = pins;
-              ensureDelta(builtAt);
-              applyPlaces();
-            } else if (deltaCursor === null) {
-              // Pre-rollout / missing summary: one-time full read so the map
-              // isn't blank, and track new spots from now on. Guarded so a
-              // repeated non-existence snapshot can't re-read the collection.
-              ensureDelta(Date.now());
-              getAllPlacesOnce()
-                .then((docs) => {
-                  summaryPins = docs;
-                  applyPlaces();
-                  return;
-                })
-                .catch(() => {
-                  /* leave the pins we have; the delta still updates */
-                });
+              latestBuiltAt = builtAt;
+            } else {
+              // Pre-rollout / missing summary: a one-time full read (not a
+              // subscription) so the map isn't blank; track new spots from now.
+              latestBuiltAt = latestBuiltAt || Date.now();
+              if (!fallbackStarted) {
+                fallbackStarted = true;
+                getAllPlacesOnce()
+                  .then((docs) => {
+                    summaryPins = docs;
+                    applyPlaces();
+                    return;
+                  })
+                  .catch(() => {
+                    /* leave the pins we have; the delta still updates */
+                  });
+              }
             }
+            applyPlaces();
+            syncDelta();
           }),
-          () => stopDelta?.(),
+          () => {
+            stopDelta?.();
+            stopDelta = null;
+          },
           // One doc that only the daily sweep rewrites (~1 read/client/day),
           // so always-on is fine — no lazy refcounting like the community
           // feed. Needed by guests too (the map shows temps signed-out).
@@ -526,6 +552,11 @@ export const useStore = create<State>((set, get) => {
         startPublic();
         // Tear down the previous user's subscriptions on every auth change.
         stopUser();
+        // The `places` delta is a live subscription — hold it only while
+        // signed in. Starts it on sign-in, stops (and drops its docs) on
+        // sign-out; a no-op until the summary has loaded (it starts the delta
+        // itself then).
+        syncDelta();
         if (!u) {
           // Signed out: the sessions rules reject unauthenticated reads, so
           // stop the community feed and drop its data (it restarts on the next

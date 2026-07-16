@@ -85,9 +85,13 @@ place's lightweight display fields (name, lat/lng, naturist flag) plus the
 `lastSwim*` recency glow/border, rebuilt by the daily sweep
 (`scripts/update-places-summary.mjs`) from the sessions — plus a bounded
 `updatedAt > builtAt` delta listener (`watchPlaceChangesSince`) for spots
-created or edited since that build. The store reassembles its `places` array
-(`PlacePin[]`) via `mergeDelta` (`src/lib/places.ts`), and it flows through the
-same `derive()` pipeline. So: never add an always-on listener over `places`,
+created or edited since that build. That delta is a live subscription, so it
+runs **only while signed in** (gated by `syncDelta()` on auth changes) — guests
+make do with the daily summary and never subscribe to `places` (one-off reads
+like `getPlace` on a spot page still work for them). The store reassembles its
+`places` array (`PlacePin[]`) via `mergeDelta` (`src/lib/places.ts`), and it
+flows through the same `derive()` pipeline. So: never add an always-on listener
+over `places`,
 never write `lastSwim*`/`waterTemp*` onto place docs (`logSession` /
 `removeSession` don't — the summary derives the last swim from sessions), and
 stamp `updatedAt` on any new place write so the delta catches it. The full
