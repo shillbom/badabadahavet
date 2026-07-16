@@ -517,7 +517,15 @@ export default function LoginPage() {
           </button>
         ) : (
           <p className="rounded-xl bg-wave-50 px-3 py-2 text-center text-[11px] leading-snug text-wave-800 ring-1 ring-wave-200">
-            🔒 {t("auth.privacy_note")}
+            🔒 {t("auth.privacy_note")}{" "}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-wave-700 underline hover:text-wave-800"
+            >
+              {t("auth.privacy_link")}
+            </a>
           </p>
         )}
 

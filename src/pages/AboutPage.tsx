@@ -155,6 +155,12 @@ export default function AboutPage() {
 
       <Section title={t("about.privacy.title")}>
         <p>{t("about.privacy.body")}</p>
+        <Link
+          to="/privacy"
+          className="mt-2 inline-block font-semibold text-wave-700 underline hover:text-wave-800"
+        >
+          {t("about.privacy.link")} →
+        </Link>
       </Section>
 
       <Section title={t("about.tech.title")}>
