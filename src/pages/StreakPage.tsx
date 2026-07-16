@@ -40,7 +40,7 @@ export default function StreakPage() {
   const sessions = useStore((s) => s.mySessions);
   const streak = useStore((s) => s.myStats.streak);
 
-  const today = dayStartMs(Date.now());
+  const [today] = useState(() => dayStartMs(Date.now()));
   const [rulesOpen, setRulesOpen] = useState(false);
 
   const firstDay = useMemo(() => {

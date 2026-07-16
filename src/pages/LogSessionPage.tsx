@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
 import {
@@ -162,17 +155,14 @@ export default function LogSessionPage() {
   // Geolocate once just for sorting search results by distance — works
   // even in "pick" mode where coords aren't auto-set from geolocation.
   // Initialised above with a fallback; here we override with the real position.
-  const updateUserLastState = useEffectEvent(async () => {
-    const pos = await getPosition();
-    if (!pos) return;
-    const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    setSearchOrigin(loc);
-    if (user) await updateUserLastLocation(user.uid, loc.lat, loc.lng);
-  });
-
   useEffect(() => {
-    updateUserLastState();
-  }, []);
+    void getPosition().then(async (pos) => {
+      if (!pos) return;
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setSearchOrigin(loc);
+      if (user) await updateUserLastLocation(user.uid, loc.lat, loc.lng);
+    });
+  }, [user]);
 
   // Once we know the user's location, fly the map there at a close zoom
   // (runs once per page load — subsequent changes are handled by keepCenteredOn).
@@ -408,6 +398,7 @@ export default function LogSessionPage() {
         )
       ) {
         toast.error(t("log.error.too_soon"));
+        setBusy(false);
         return;
       }
       const myBorder = resolveBorder(
@@ -467,9 +458,8 @@ export default function LogSessionPage() {
       } else {
         toast.error(t("log.error.generic"));
       }
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   const dateObj = new Date(date);

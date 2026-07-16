@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
@@ -99,8 +99,8 @@ export default function GroupsPage() {
   const [groupName, setGroupName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
-  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
-  const openGroup = groups.find((group) => group.id === openGroupId) ?? null;
+  const [openGroup, setOpenGroup] = useState<GroupDoc | null>(null);
+  const [groupSheetOpen, setGroupSheetOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Pending join confirmation: the group preview returned by lookupGroupByCode.
@@ -112,14 +112,8 @@ export default function GroupsPage() {
     code: string;
   } | null>(null);
 
-  // Keep the last preview so the confirm sheet still has content to render
-  // while it animates closed. Written from an effect (after commit), not
-  // during render, which must stay pure.
-  const lastJoinRef = useRef(pendingJoin);
-  useEffect(() => {
-    if (pendingJoin) lastJoinRef.current = pendingJoin;
-  }, [pendingJoin]);
-  const join = pendingJoin ?? lastJoinRef.current;
+  const [lastJoin, setLastJoin] = useState<typeof pendingJoin>(null);
+  const join = pendingJoin ?? lastJoin;
 
   // Trigger a group lookup, then show the confirmation dialog.
   async function lookupAndConfirm(code: string) {
@@ -132,19 +126,18 @@ export default function GroupsPage() {
       const preview = await lookupGroupByCode(code.trim());
       if (!preview) {
         toast.error(t("groups.join.not_found"));
-        return;
-      }
-      // Already a member? Tell them immediately without showing the dialog.
-      if (groups.some((g) => g.id === preview.id)) {
+      } else if (groups.some((g) => g.id === preview.id)) {
+        // Already a member? Tell them immediately without showing the dialog.
         toast.info(t("groups.join.already_member"));
-        return;
+      } else {
+        const join = { ...preview, code: code.trim().toUpperCase() };
+        setLastJoin(join);
+        setPendingJoin(join);
       }
-      setPendingJoin({ ...preview, code: code.trim().toUpperCase() });
     } catch {
       toast.error(t("groups.join.error.generic"));
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   // Actually join after the user confirmed in the dialog.
@@ -164,9 +157,8 @@ export default function GroupsPage() {
       }
     } catch {
       toast.error(t("groups.join.error.generic"));
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   // Auto-trigger confirmation from ?join=CODE deep-link on mount.
@@ -204,9 +196,8 @@ export default function GroupsPage() {
             : "groups.create.error.generic",
         ),
       );
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   async function onJoin(e: React.SubmitEvent<HTMLFormElement>) {
@@ -248,7 +239,7 @@ export default function GroupsPage() {
     try {
       await leaveGroup({ groupId, uid: user.uid });
       toast.success(t("groups.left", { name }));
-      if (openGroupId === groupId) setOpenGroupId(null);
+      if (openGroup?.id === groupId) setGroupSheetOpen(false);
     } catch {
       toast.error(t("groups.leave.error.generic"));
     }
@@ -313,7 +304,10 @@ export default function GroupsPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -4, scale: 0.97 }}
                 className="glass flex cursor-pointer items-center gap-3 p-3 transition-colors hover:bg-white/60"
-                onClick={() => setOpenGroupId(g.id)}
+                onClick={() => {
+                  setOpenGroup(g);
+                  setGroupSheetOpen(true);
+                }}
               >
                 <EmojiAvatar emoji={g.emoji ?? "👥"} />
                 <div className="min-w-0 flex-1">
@@ -372,9 +366,10 @@ export default function GroupsPage() {
 
       <GroupDetailSheet
         group={openGroup}
+        open={groupSheetOpen}
         myUid={user?.uid ?? ""}
         places={places}
-        onClose={() => setOpenGroupId(null)}
+        onClose={() => setGroupSheetOpen(false)}
         onLeave={() => {
           if (openGroup) onLeave(openGroup.id, openGroup.name);
         }}
@@ -427,12 +422,14 @@ export default function GroupsPage() {
 
 function GroupDetailSheet({
   group,
+  open,
   myUid,
   places,
   onClose,
   onLeave,
 }: {
   group: GroupDoc | null;
+  open: boolean;
   myUid: string;
   places: PlaceWithTemp[];
   onClose: () => void;
@@ -440,13 +437,7 @@ function GroupDetailSheet({
 }) {
   const t = useT();
 
-  // Keep the last group around so the sheet still renders content while it
-  // animates closed. Written from an effect (after commit), not during render.
-  const lastRef = useRef<GroupDoc | null>(group);
-  useEffect(() => {
-    if (group) lastRef.current = group;
-  }, [group]);
-  const shown = group ?? lastRef.current;
+  const shown = group;
 
   const [allSessions, setAllSessions] = useState<SessionDoc[]>([]);
   const [sortBy, setSortBy] = useState<"points" | "recent" | "streak">(
@@ -460,20 +451,24 @@ function GroupDetailSheet({
   // sessions listener or re-fetch every member's profile.
   const membersKey = useMemo(() => group?.members.join("\n"), [group?.members]);
 
-  const membersChanged = useEffectEvent(async () => {
-    if (!group) return;
-
-    setProfilesState((current) => ({ ...current, loading: true }));
-    const users = await fetchUsers(group.members);
-    setProfilesState({ profiles: users, loading: false });
-  });
+  const [{ profiles, loading: loadingProfiles }, setProfilesState] = useState<{
+    profiles: UserDoc[];
+    loading: boolean;
+  }>({ profiles: [], loading: true });
 
   useEffect(() => {
     if (!group) return;
+    let active = true;
 
-    membersChanged();
+    void fetchUsers(group.members).then((users) => {
+      if (active) setProfilesState({ profiles: users, loading: false });
+    });
 
-    return watchMemberSessions(group.members, setAllSessions);
+    const unsubscribe = watchMemberSessions(group.members, setAllSessions);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [membersKey]);
 
@@ -496,10 +491,6 @@ function GroupDetailSheet({
     }
   }
   const isLeader = shown?.createdBy === myUid;
-  const [{ profiles, loading: loadingProfiles }, setProfilesState] = useState<{
-    profiles: UserDoc[];
-    loading: boolean;
-  }>({ profiles: [], loading: true });
   const [memberSelection, setMemberSelection] = useState<{
     member: UserDoc | null;
     key: number;
@@ -518,10 +509,6 @@ function GroupDetailSheet({
     top: number;
     left: number;
   } | null>(null);
-
-  useEffect(() => {
-    if (shown) setNameInput(shown.name);
-  }, [shown, shown?.name]);
 
   const memberStats = useMemo(() => {
     const members = shown?.members ?? [];
@@ -646,9 +633,8 @@ function GroupDetailSheet({
             : "groups.detail.rename.error",
         ),
       );
-    } finally {
-      setSavingMeta(false);
     }
+    setSavingMeta(false);
   }
 
   async function saveEmoji(emoji: string) {
@@ -817,7 +803,7 @@ function GroupDetailSheet({
 
   return (
     <>
-      <BottomSheet open={!!group} onClose={onClose} size="large" title={header}>
+      <BottomSheet open={open} onClose={onClose} size="large" title={header}>
         {shown ? (
           <div className="px-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
             <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">

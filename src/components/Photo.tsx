@@ -45,15 +45,14 @@ export default function Photo({
 }: PhotoProps) {
   const [loaded, setLoaded] = useState(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
-  const [nearView, setNearView] = useState(false);
+  const [nearView, setNearView] = useState(
+    () => typeof IntersectionObserver === "undefined",
+  );
   useEffect(() => {
     if (fit === "contain") return; // lightbox: always eager
     const el = boxRef.current;
     if (!el) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setNearView(true);
-      return;
-    }
+    if (typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {

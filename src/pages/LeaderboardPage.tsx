@@ -40,12 +40,14 @@ export default function LeaderboardPage() {
   // read user docs (rules), so the board is empty until signed in.
   const [roster, setRoster] = useState<UserDoc[]>([]);
   useEffect(() => {
-    if (!user) {
-      setRoster([]);
-      return;
-    }
+    if (!user) return;
     return watchUsersByYearScore(year, setRoster);
   }, [user, year]);
+
+  // A sign-out leaves the last subscription value in state briefly, but it
+  // must never be rendered to a guest. Deriving this avoids an extra effect
+  // render solely to clear state.
+  const visibleRoster = useMemo(() => (user ? roster : []), [user, roster]);
 
   const rows = useMemo<Row[]>(() => {
     const memberFilter: Set<string> | null =
@@ -55,7 +57,7 @@ export default function LeaderboardPage() {
     // One pass: skip non-members and build each row inline, instead of
     // filtering the roster and then mapping the survivors.
     const out: Row[] = [];
-    for (const u of roster) {
+    for (const u of visibleRoster) {
       if (memberFilter && !memberFilter.has(u.uid)) continue;
       // Achievements persisted on the profile drive the border — richer
       // than the old live computation (all-time, not just this year).
@@ -69,7 +71,7 @@ export default function LeaderboardPage() {
       });
     }
     return out;
-  }, [roster, groups, scope, year]);
+  }, [visibleRoster, groups, scope, year]);
 
   // The global board only shows the podium (top 5) plus your own row with
   // its true rank when you're further down. Group boards are small and

@@ -1243,6 +1243,14 @@ function shareEscape(value) {
     .replace(/'/g, "&#39;");
 }
 
+/** Serialize a value for an inline script without allowing HTML breakout. */
+function shareScriptJson(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
+}
+
 /** Collapse whitespace and clip to `max` chars on a word boundary, adding an
  *  ellipsis — keeps long spot descriptions / notes from overflowing the card. */
 function shareTruncate(value, max) {
@@ -1426,7 +1434,7 @@ export const spotPreview = onRequest(
   <body>
     <p>Öppnar Badligan…</p>
     <script>
-      location.replace(${JSON.stringify(appPath)});
+      location.replace(${shareScriptJson(appPath)});
     </script>
   </body>
 </html>`;

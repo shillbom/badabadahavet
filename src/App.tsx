@@ -28,6 +28,7 @@ import { rememberReturnPath } from "@/lib/utils";
 
 // How often a long-lived (kept-open) session re-checks for a new deploy.
 const UPDATE_CHECK_MS = 60 * 60 * 1000; // hourly
+const preloadMapPage = () => import("@/pages/MapPage");
 
 /** Navigate to /login while saving the current path so post-login can return. */
 function LoginRedirect() {
@@ -73,7 +74,7 @@ export default function App() {
   useEffect(() => {
     let alive = true;
     const ready = () => alive && setContentReady(true);
-    import("@/pages/MapPage").then(ready, ready);
+    preloadMapPage().then(ready, ready);
     return () => {
       alive = false;
     };

@@ -44,6 +44,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [displayNameEdited, setDisplayNameEdited] = useState(false);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const setLocale = useLocale((s) => s.setLocale);
@@ -62,13 +63,11 @@ export default function LoginPage() {
     setLocale(code === "SE" ? "sv" : "en");
   }
 
-  // Pre-fill display name from Google account when entering onboarding.
-  useEffect(() => {
-    if (googleOnboarding && user?.displayName && !displayName) {
-      setDisplayName(user.displayName);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [googleOnboarding]);
+  // Until the user edits it, Google onboarding displays the account name
+  // directly. This avoids copying a prop into state in an effect.
+  const onboardingDisplayName = displayNameEdited
+    ? displayName
+    : (user?.displayName ?? "");
 
   // Ask for geolocation immediately on mount (not just in signup mode)
   // so we can flip the UI to the user's likely language before they've
@@ -138,9 +137,8 @@ export default function LoginPage() {
         const msg = (err as Error).message ?? "";
         toast.error(prettyAuthError(msg, t));
       }
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   async function onGoogleSignIn() {
@@ -165,28 +163,27 @@ export default function LoginPage() {
     try {
       // Only a name the user typed themselves needs checking — the
       // fallback is the Google account name.
-      if (displayName.trim()) {
-        await assertUsernameClean(displayName);
-        await assertTextAllowed(displayName);
+      if (onboardingDisplayName.trim()) {
+        await assertUsernameClean(onboardingDisplayName);
+        await assertTextAllowed(onboardingDisplayName);
       }
-      await completeGoogleOnboarding(displayName, homeCountry);
+      await completeGoogleOnboarding(onboardingDisplayName, homeCountry);
       toast.success(
         t("auth.welcome", {
-          name: displayName.trim() || user?.displayName || "",
+          name: onboardingDisplayName.trim(),
         }),
       );
       navigate(consumeReturnPath(), { replace: true });
     } catch (err) {
       if (err instanceof ModerationError) {
         toast.error(t("moderation.name_rejected"));
-        return;
+      } else {
+        console.error("completeGoogleOnboarding error:", err);
+        const msg = (err as Error).message ?? "";
+        toast.error(prettyAuthError(msg, t));
       }
-      console.error("completeGoogleOnboarding error:", err);
-      const msg = (err as Error).message ?? "";
-      toast.error(prettyAuthError(msg, t));
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   async function onForgot() {
@@ -263,8 +260,11 @@ export default function LoginPage() {
               id="ob-name"
               autoComplete="nickname"
               placeholder={t("auth.handle_placeholder")}
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
+              value={onboardingDisplayName}
+              onChange={(e) => {
+                setDisplayNameEdited(true);
+                setDisplayName(e.target.value);
+              }}
             />
           </div>
 

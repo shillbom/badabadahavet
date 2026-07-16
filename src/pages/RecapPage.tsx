@@ -276,9 +276,8 @@ export default function RecapPage() {
       else if (result === "failed") toast.error(t("recap.share.error"));
     } catch {
       toast.error(t("recap.share.error"));
-    } finally {
-      setSharing(false);
     }
+    setSharing(false);
   }
 
   const slide = slides[idx];
@@ -532,16 +531,15 @@ function AchievementsSlide({
 const CONFETTI_EMOJIS = ["🌊", "💧", "❄️", "✨", "⭐", "🐬"];
 
 function ConfettiBackdrop() {
-  // Memoize so positions/timing don't re-randomize on every slide navigation.
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: 30 }, (_, i) => ({
-        key: i,
-        left: Math.random() * 100,
-        delay: Math.random() * 4,
-        duration: 5 + Math.random() * 4,
-      })),
-    [],
+  // Generate positions/timing once per mount so slide navigation cannot
+  // reshuffle the animation, while keeping render deterministic.
+  const [pieces] = useState(() =>
+    Array.from({ length: 30 }, (_, i) => ({
+      key: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 4,
+      duration: 5 + Math.random() * 4,
+    })),
   );
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">

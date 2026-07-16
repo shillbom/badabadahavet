@@ -50,9 +50,8 @@ export default function AdminUsersPage() {
       setBanned(await fetchBannedUsers());
     } catch {
       toast.error(t("admin.users.ban.error"));
-    } finally {
-      setBusyUid(null);
     }
+    setBusyUid(null);
   }
 
   return (

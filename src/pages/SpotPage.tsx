@@ -82,6 +82,28 @@ export function SpotView({
   variant?: "page" | "sheet";
   onClose?: () => void;
 }) {
+  // Changing spots is a full data-context change. A keyed remount resets the
+  // subscriptions and live-reading state before the new spot can render,
+  // without an extra effect-driven reset.
+  return (
+    <SpotViewContent
+      key={placeId}
+      placeId={placeId}
+      variant={variant}
+      onClose={onClose}
+    />
+  );
+}
+
+function SpotViewContent({
+  placeId,
+  variant = "page",
+  onClose,
+}: {
+  placeId: string;
+  variant?: "page" | "sheet";
+  onClose?: () => void;
+}) {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const isAdmin = useIsAdmin();
@@ -120,7 +142,6 @@ export function SpotView({
       return;
     });
     const unsub = watchPlaceSessions(placeId, setSessions);
-    setLiveTemp(undefined);
     const unsubTemp = watchPlaceTemp(placeId, setLiveTemp);
     return () => {
       cancelled = true;
@@ -625,10 +646,19 @@ function WaterTempCard({
   reading: TempReading | null;
   t: (key: string, vars?: Record<string, string | number>) => string;
 }) {
-  if (!reading) return null;
-  if (Date.now() - reading.at > WEEK_MS) return null;
+  const [now, setNow] = useState(() => Date.now());
 
-  const ageMs = Date.now() - reading.at;
+  // The displayed age changes while the card stays open. Keep the clock in an
+  // effect rather than reading it during render, which keeps renders pure.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  if (!reading) return null;
+  if (now - reading.at > WEEK_MS) return null;
+
+  const ageMs = now - reading.at;
   const ageHrs = Math.floor(ageMs / (60 * 60 * 1000));
   const ageMins = Math.floor(ageMs / 60_000);
   const ageLabel =
@@ -842,9 +872,8 @@ function SpotInfoCard({
             : "spot.info.error",
         ),
       );
-    } finally {
-      setBusy(false);
     }
+    setBusy(false);
   }
 
   if (editing) {
