@@ -157,6 +157,14 @@ function recapToShow(mode: "visit" | "month"): Activity | null {
  * devices rather than reset per browser.
  */
 export default function SinceLastVisit() {
+  // Reset all recap state on identity change by remounting the inner component
+  // (React's canonical key-prop reset) rather than clearing each piece from an
+  // effect. myUid only changes on login/logout, so the remount is rare.
+  const myUid = useStore((s) => s.myUid);
+  return <SinceLastVisitForUser key={myUid ?? "signed-out"} />;
+}
+
+function SinceLastVisitForUser() {
   const myUid = useStore((s) => s.myUid);
   const loading = useStore((s) => s.loading);
   const lastSeenResolved = useStore((s) => s.lastSeenResolved);
@@ -202,12 +210,7 @@ export default function SinceLastVisit() {
   );
   const feedReady = !feedNeeded || allSessionsReady;
 
-  // Reset when the signed-in user changes (incl. logout).
-  useEffect(() => {
-    doneRef.current = false;
-    setDigestDone(false);
-    setActivity(null);
-  }, [myUid]);
+  // (Per-user reset is handled by remounting via `key` in the wrapper above.)
 
   // Once auth + data have settled, decide the since-last-visit recap exactly
   // once. The timer resets on each data change so we don't fire on a
@@ -243,8 +246,12 @@ export default function SinceLastVisit() {
   // so the recap isn't built from an empty snapshot.
   useEffect(() => {
     if (!monthPending || !feedReady) return;
-    // Two independent updates (neither reads the other's result); React batches
-    // them into a single render, so this isn't a costly update chain.
+    // Legitimate effect, not a prop mirror: it runs once the external recap
+    // trigger has arrived AND the community feed has finished loading — an
+    // async condition that can't be derived during render or handled in the
+    // button's click handler. The two updates are independent (neither reads
+    // the other) and React batches them into a single render.
+    // react-doctor-disable-next-line react-hooks-js/set-state-in-effect
     setHandledRecapToken(recapToken);
     // react-doctor-disable-next-line react-doctor/no-chain-state-updates
     setActivity(recapToShow("month"));

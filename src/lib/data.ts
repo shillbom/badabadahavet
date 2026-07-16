@@ -835,7 +835,9 @@ export async function adminDeletePlace(placeId: string) {
     query(sessionsCol, where("placeId", "==", placeId)),
   );
   // removeSession fixes each owner's score; do them sequentially to avoid
-  // hammering the function with a burst.
+  // hammering the function with a burst. The serialization is intentional, so
+  // the awaited-in-loop is by design, not an oversight.
+  // react-doctor-disable-next-line react-doctor/async-await-in-loop
   for (const s of sessions.docs) await removeSession(s.id);
   await deleteDoc(doc(placesCol, placeId));
 }
