@@ -20,6 +20,7 @@ import Layout from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toast";
 import UpdatePrompt from "@/components/UpdatePrompt";
 import SinceLastVisit from "@/components/SinceLastVisit";
+import ConsentBanner from "@/components/ConsentBanner";
 import { CelebrationOverlay } from "@/components/Celebration";
 import { celebrate } from "@/components/celebrationStore";
 import { FullSplash } from "@/components/Splash";
@@ -182,6 +183,7 @@ export default function App() {
       />
       <CelebrationOverlay />
       {!booting && !googleOnboarding ? <SinceLastVisit /> : null}
+      {!booting && !googleOnboarding ? <ConsentBanner /> : null}
       {booting ? null : googleOnboarding ? (
         <Suspense fallback={<FullSplash />}>
           <Routes>

@@ -1,5 +1,7 @@
 import { Link } from "react-router";
 import { useT } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
+import { consentRelevant, useConsent } from "@/lib/consent";
 import BackButton from "@/components/ui/BackButton";
 
 // External services, split by whether the browser talks to them directly
@@ -115,6 +117,14 @@ export default function PrivacyPage() {
 
       <Section title={t("privacy.cookies.title")}>
         <p>{t("privacy.cookies.body")}</p>
+        {consentRelevant ? (
+          <label className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-wave-50/70 px-3 py-2 ring-1 ring-wave-100">
+            <span className="text-[13px] font-medium text-slate-700">
+              {t("consent.toggle.label")}
+            </span>
+            <AnalyticsToggle />
+          </label>
+        ) : null}
       </Section>
 
       <Section title={t("privacy.third.title")}>
@@ -169,6 +179,36 @@ export default function PrivacyPage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+// A plain on/off switch bound to the analytics consent choice, so the user can
+// grant or withdraw it any time (an undecided choice reads as off).
+function AnalyticsToggle() {
+  const t = useT();
+  const choice = useConsent((s) => s.analytics);
+  const setAnalytics = useConsent((s) => s.setAnalytics);
+  const on = choice === "granted";
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={t("consent.toggle.label")}
+      onClick={() => setAnalytics(!on)}
+      className={cn(
+        "relative inline-flex h-6 w-11 flex-none items-center rounded-full transition-colors",
+        "focus-visible:ring-2 focus-visible:ring-wave-500 focus-visible:ring-offset-2 focus-visible:outline-none",
+        on ? "bg-wave-600" : "bg-slate-300",
+      )}
+    >
+      <span
+        className={cn(
+          "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
+          on ? "translate-x-5" : "translate-x-0.5",
+        )}
+      />
+    </button>
   );
 }
 

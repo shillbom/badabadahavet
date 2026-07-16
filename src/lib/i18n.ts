@@ -688,6 +688,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.privacy.body":
       "Vi samlar så lite data vi kan, säljer aldrig något och skickar ingen reklam. Din e-post används bara för att återställa lösenordet, och du kan radera kontot när som helst.",
     "about.privacy.link": "Läs hela integritetspolicyn",
+    "consent.title": "Anonym statistik",
+    "consent.body":
+      "Vi vill gärna mäta hur appen används (via Google Analytics for Firebase) för att göra den bättre. Det är helt frivilligt och innehåller inga bad eller kontouppgifter. Nödvändiga cookies används oavsett.",
+    "consent.learn": "Läs mer",
+    "consent.accept": "Tillåt statistik",
+    "consent.decline": "Bara nödvändiga",
+    "consent.toggle.label": "Anonym användningsstatistik",
     "privacy.title": "Integritetspolicy",
     "privacy.updated": "Senast uppdaterad 16 juli 2026.",
     "privacy.intro":
@@ -698,7 +705,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "privacy.collect.content":
       "Det du lägger in: dina loggade bad (tid, plats, temperatur), badplatser du skapar, foton du laddar upp, emoji-reaktioner och vilka grupper du är med i.",
     "privacy.collect.technical":
-      "Teknisk data: cookies och localStorage som håller dig inloggad och kommer ihåg dina inställningar, plus anonym användningsstatistik via Google Analytics for Firebase (t.ex. sidvisningar, enhetstyp och ungefärlig plats baserat på IP-adress). Ingen spårning för reklam.",
+      "Teknisk data: cookies och localStorage som håller dig inloggad och kommer ihåg dina inställningar, plus anonym användningsstatistik via Google Analytics for Firebase om du tillåter det (t.ex. sidvisningar, enhetstyp och ungefärlig plats baserat på IP-adress). Ingen spårning för reklam.",
     "privacy.use.title": "Hur vi använder datan",
     "privacy.use.body":
       "Datan används för att appen ska fungera: visa dina bad och poäng, räkna fram topplistor och bedrifter, visa badplatser på kartan, låta dig återställa lösenordet och för att förstå hur appen används på en övergripande nivå. Vi använder den inte till något annat.",
@@ -717,7 +724,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Vi sparar dina uppgifter så länge du har ett konto. Raderar du kontot tas dina bad, foton och kontouppgifter bort. Enstaka uppgifter kan ligga kvar en kort tid i säkerhetskopior innan de skrivs över.",
     "privacy.cookies.title": "Cookies och lagring",
     "privacy.cookies.body":
-      "Vi använder nödvändiga cookies och localStorage för att hålla dig inloggad och komma ihåg dina val (som språk). Google Analytics for Firebase sätter dessutom cookies eller identifierare för anonym användningsstatistik. Inga cookies för reklam.",
+      "Vi använder nödvändiga cookies och localStorage för att hålla dig inloggad och komma ihåg dina val (som språk). Om du tillåter det sätter Google Analytics for Firebase dessutom cookies eller identifierare för anonym användningsstatistik — du kan ändra det valet när som helst nedan. Inga cookies för reklam.",
     "privacy.third.title": "Tredjepartstjänster",
     "privacy.third.body":
       "Förutom Google Firebase är några andra tjänster inblandade. Vissa kontaktar din enhet direkt, så de kan se din IP-adress; andra levererar bara data som vi hämtar på våra egna servrar.",
@@ -1447,6 +1454,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "about.privacy.body":
       "We collect as little data as we can, never sell anything and send no marketing. Your email is only used to reset your password, and you can delete your account any time.",
     "about.privacy.link": "Read the full privacy policy",
+    "consent.title": "Anonymous statistics",
+    "consent.body":
+      "We'd like to measure how the app is used (via Google Analytics for Firebase) to make it better. It's entirely optional and includes no swims or account details. Essential cookies are used either way.",
+    "consent.learn": "Learn more",
+    "consent.accept": "Allow statistics",
+    "consent.decline": "Only necessary",
+    "consent.toggle.label": "Anonymous usage statistics",
     "privacy.title": "Privacy policy",
     "privacy.updated": "Last updated 16 July 2026.",
     "privacy.intro":
@@ -1457,7 +1471,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "privacy.collect.content":
       "What you add: your logged swims (time, place, temperature), swim spots you create, photos you upload, emoji reactions and the groups you join.",
     "privacy.collect.technical":
-      "Technical data: cookies and localStorage that keep you signed in and remember your settings, plus anonymous usage statistics via Google Analytics for Firebase (e.g. page views, device type and approximate location from your IP address). No advertising tracking.",
+      "Technical data: cookies and localStorage that keep you signed in and remember your settings, plus anonymous usage statistics via Google Analytics for Firebase if you allow it (e.g. page views, device type and approximate location from your IP address). No advertising tracking.",
     "privacy.use.title": "How we use it",
     "privacy.use.body":
       "We use your data to make the app work: showing your swims and points, computing leaderboards and achievements, placing swim spots on the map, letting you reset your password, and understanding how the app is used at a high level. We don't use it for anything else.",
@@ -1476,7 +1490,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "We keep your data for as long as you have an account. If you delete your account, your swims, photos and account details are removed. Some data may remain briefly in backups before it's overwritten.",
     "privacy.cookies.title": "Cookies and storage",
     "privacy.cookies.body":
-      "We use essential cookies and localStorage to keep you signed in and remember your choices (like your language). Google Analytics for Firebase also sets cookies or identifiers for anonymous usage statistics. No advertising cookies.",
+      "We use essential cookies and localStorage to keep you signed in and remember your choices (like your language). If you allow it, Google Analytics for Firebase also sets cookies or identifiers for anonymous usage statistics — you can change that choice any time below. No advertising cookies.",
     "privacy.third.title": "Third-party services",
     "privacy.third.body":
       "Besides Google Firebase, a few other services are involved. Some are contacted by your device directly, so they can see your IP address; others just supply data that we fetch on our own servers.",
