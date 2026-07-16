@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { List as ListIcon, Map as MapIcon, MapPin } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
@@ -58,12 +58,12 @@ export default function MemberSwimsSheet({
   onClose,
   zBase = 1300,
 }: Props) {
-  // Keep the closing frame populated while the sheet slides away.
-  const lastMemberRef = useRef<UserDoc | null>(null);
-  useEffect(() => {
-    if (member) lastMemberRef.current = member;
-  }, [member]);
-  const shown = member ?? lastMemberRef.current;
+  // Keep the closing frame populated while the sheet slides away. Held in
+  // state (not a ref) since it drives render; updated during render via
+  // React's "storing info from previous renders" pattern so the compiler can
+  // track it without a ref being read mid-render.
+  const [shown, setShown] = useState<UserDoc | null>(member);
+  if (member && member !== shown) setShown(member);
 
   return (
     <MemberSwimsSheetContent

@@ -33,14 +33,20 @@ export default function DiscoRays() {
     >
       {/* Ray fans centred on the mirror ball. 250vmax so the swept disc
           covers every corner of the tallest phone viewport. */}
+      {/* Intentionally slow: these are ambient, infinitely-looping laser sweeps
+          (the rule's own "ambient loop" exception), not interaction feedback. A
+          sub-1s rotation of a full-viewport ray fan would be a strobe / seizure
+          hazard, so the long period is deliberate. */}
       <div
         className="absolute top-16 left-1/2 h-[250vmax] w-[250vmax] -translate-x-1/2 -translate-y-1/2 animate-laser-spin"
+        // react-doctor-disable-next-line react-doctor/no-long-transition-duration
         style={{ background: RAYS_BACK, animationDuration: "26s" }}
       />
       <div
         className="absolute top-16 left-1/2 h-[250vmax] w-[250vmax] -translate-x-1/2 -translate-y-1/2 animate-laser-spin"
         style={{
           background: RAYS_FRONT,
+          // react-doctor-disable-next-line react-doctor/no-long-transition-duration
           animationDuration: "18s",
           animationDirection: "reverse",
         }}

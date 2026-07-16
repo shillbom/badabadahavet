@@ -634,6 +634,10 @@ export default function SwimMap({
   } else if (inViewCount < CLUSTER_OFF) {
     shouldCluster = false;
   } else {
+    // Deliberate: inside the hysteresis band we hold the previous decision, so
+    // the cluster group doesn't remount as you pan over the edge (see the note
+    // above). This ref read is the mechanism, not a bug — keep it.
+    // react-doctor-disable-next-line react-hooks-js/refs
     shouldCluster = clusteringRef.current;
   }
   useEffect(() => {
@@ -851,6 +855,9 @@ export default function SwimMap({
                     <li key={p.id}>
                       <button
                         type="button"
+                        // pickSearchResult only touches refs inside the click
+                        // handler (allowed) — the compiler just can't prove it.
+                        // react-doctor-disable-next-line react-hooks-js/refs
                         onClick={() => pickSearchResult(p)}
                         className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition hover:bg-wave-50"
                       >

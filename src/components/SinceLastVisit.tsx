@@ -169,9 +169,11 @@ export default function SinceLastVisit() {
   const recapToken = useRecapTrigger((s) => s.token);
 
   const [activity, setActivity] = useState<Activity | null>(null);
-  const handledRecapTokenRef = useRef(0);
-  const monthPending =
-    recapToken !== 0 && recapToken !== handledRecapTokenRef.current;
+  // Which manual-recap token we've already acted on. State (not a ref) because
+  // `monthPending` — derived from it — is a render input that gates the feed
+  // acquisition and the effect below.
+  const [handledRecapToken, setHandledRecapToken] = useState(0);
+  const monthPending = recapToken !== 0 && recapToken !== handledRecapToken;
   const doneRef = useRef(false);
   // State mirror of doneRef, so the feed acquisition below can react to it.
   const [digestDone, setDigestDone] = useState(false);
@@ -241,7 +243,10 @@ export default function SinceLastVisit() {
   // so the recap isn't built from an empty snapshot.
   useEffect(() => {
     if (!monthPending || !feedReady) return;
-    handledRecapTokenRef.current = recapToken;
+    // Two independent updates (neither reads the other's result); React batches
+    // them into a single render, so this isn't a costly update chain.
+    setHandledRecapToken(recapToken);
+    // react-doctor-disable-next-line react-doctor/no-chain-state-updates
     setActivity(recapToShow("month"));
   }, [monthPending, feedReady, recapToken]);
 
@@ -267,11 +272,11 @@ function Sheet({
 
   // Keep the last activity around so the sheet still has content to render
   // while it animates closed (`open` flips to false before the sheet unmounts).
-  const lastRef = useRef<Activity | null>(activity);
-  useEffect(() => {
-    if (activity) lastRef.current = activity;
-  }, [activity]);
-  const shown = activity ?? lastRef.current;
+  // Held in state (not a ref) because it feeds render; updated during render via
+  // React's "storing info from previous renders" pattern so the compiler can
+  // track it without a ref being read mid-render.
+  const [shown, setShown] = useState<Activity | null>(activity);
+  if (activity && activity !== shown) setShown(activity);
 
   // The recap list is frozen when the sheet opens, but reaction state should
   // stay live: reacting writes to Firestore, which updates the store, and we
