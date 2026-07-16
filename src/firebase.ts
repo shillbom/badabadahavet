@@ -10,6 +10,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager,
   connectFirestoreEmulator,
+  CACHE_SIZE_UNLIMITED,
 } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
 import {
@@ -44,9 +45,13 @@ export const auth = getAuth(app);
 // community feed from the server. Multi-tab manager so a second open tab
 // shares the cache instead of failing to acquire it; browsers without
 // IndexedDB fall back to the in-memory cache with a console warning.
+// Cache size is unbounded: the default 40 MB LRU can evict the year's
+// community feed + place data, forcing cold re-reads on the next boot —
+// exactly the reads the persistent cache exists to avoid.
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager(),
+    cacheSizeBytes: CACHE_SIZE_UNLIMITED,
   }),
 });
 export const storage = getStorage(app);

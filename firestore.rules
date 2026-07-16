@@ -136,16 +136,19 @@ service cloud.firestore {
                     && request.resource.data.firstSwumAt is number;
 
       // Creator can rename (only — hasOnly keeps server-owned fields like
-      // waterTemp and the moderated `info` out of reach); admins can
-      // change anything (still can't move a pin out of bounds because of
-      // the basic shape).
+      // waterTemp and the moderated `info` out of reach); the rename may also
+      // carry `updatedAt`, the numeric cursor the placesSummary delta listener
+      // reads. Admins can change anything (still can't move a pin out of
+      // bounds because of the basic shape).
       allow update: if (
         signedIn()
         && resource.data.createdBy == request.auth.uid
-        && changedKeys().hasOnly(['name'])
+        && changedKeys().hasOnly(['name', 'updatedAt'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 80
+        && (!('updatedAt' in request.resource.data)
+            || request.resource.data.updatedAt is number)
       ) || isAdminUser();
 
       // Only admins can delete.
@@ -271,6 +274,15 @@ service cloud.firestore {
       allow write: if false;
     }
     match /placeTemps/{placeId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Every place's lightweight map fields in one doc, rebuilt by the daily
+    // sweep (scripts/update-places-summary.mjs via the Admin SDK, which
+    // bypasses these rules). World-readable so the map works signed-out;
+    // clients read this instead of the whole `places` collection.
+    match /placesSummary/{docId} {
       allow read: if true;
       allow write: if false;
     }

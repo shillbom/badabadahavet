@@ -551,6 +551,10 @@ export const setPlaceInfo = onCall(
       updates.nudeSource = "user";
     }
     if (Object.keys(updates).length > 0) {
+      // Advance the delta cursor so the edit (notably a naturist-flag toggle,
+      // which the map reads) reaches every client before the next nightly
+      // placesSummary build. See PlacesSummaryDoc in src/lib/types.ts.
+      updates.updatedAt = Date.now();
       await placeRef.update(updates);
     }
     return {

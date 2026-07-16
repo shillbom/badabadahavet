@@ -1,5 +1,5 @@
 import type {
-  PlaceDoc,
+  PlacePin,
   PlaceTempDoc,
   PlaceWithTemp,
   TempReading,
@@ -63,13 +63,13 @@ export function qualityToMap(
 
 /**
  * Merge the summary readings onto the places array by id. Places without a
- * reading pass through as the same object (a PlaceDoc is a valid
+ * reading pass through as the same object (a PlacePin is a valid
  * PlaceWithTemp), and an empty temps map returns the input array itself —
  * so downstream reference-equality memos only churn where a temp actually
  * exists.
  */
 export function mergePlaceTemps(
-  places: PlaceDoc[],
+  places: PlacePin[],
   temps: Map<string, TempReading>,
 ): PlaceWithTemp[] {
   if (temps.size === 0) return places;

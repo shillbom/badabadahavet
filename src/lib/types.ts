@@ -111,9 +111,10 @@ export type PlaceTempDoc = Partial<TempReading> & {
 };
 
 /** A place with its current reading merged in — the shape `derive()` hands
- *  to the map/UI, field-compatible with the pre-split PlaceDoc so temp
- *  consumers (pins, popups, nudge) didn't have to change. */
-export type PlaceWithTemp = PlaceDoc & {
+ *  to the map/UI. Built on the lightweight PlacePin (the map, pickers and
+ *  search only read display fields); the full PlaceDoc is fetched on demand
+ *  by SpotPage. Temp consumers (pins, popups, nudge) read waterTemp* here. */
+export type PlaceWithTemp = PlacePin & {
   /** Latest measured water temperature in °C (if known). */
   waterTemp?: number;
   /** Epoch ms — when waterTemp was sampled. */
@@ -182,6 +183,57 @@ export type PlaceDoc = {
   lastSwimBy?: string;
   /** Border id (see lib/borders.ts) of that last swimmer; "none" = no frame. */
   lastSwimBorder?: string;
+  /** Epoch ms of the last create/rename/info write to this doc (wall-clock,
+   *  not the swim date). The cursor for watchPlaceChangesSince — the bounded
+   *  delta listener that surfaces spots created or edited since the daily
+   *  placesSummary was built. Absent on docs predating the snapshot pattern;
+   *  those are already in the summary, so their exclusion from the delta is
+   *  correct. */
+  updatedAt?: number;
+};
+
+/** A place reduced to the fields the always-on map, pickers and search
+ *  actually read. This is what the store's `places` array holds — rehydrated
+ *  from placesSummary/current (+ the recent-changes delta) instead of the full
+ *  ~4k-doc `places` collection. The heavy fields (info, provenance,
+ *  createdBy…) are fetched on demand by SpotPage via getPlace. */
+export type PlacePin = {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  /** Naturist flag — present (true) only for naturist spots. */
+  nude?: boolean;
+  /** Denormalised "last swim here": the pin's recency glow + border frame. */
+  lastSwimAt?: number;
+  lastSwimBorder?: string;
+};
+
+/** One place's map-display fields, packed into placesSummary/current. Field
+ *  names are single letters because thousands ride in one doc (same doc-size
+ *  budget as TempReading): n = name, la = lat, lo = lng, u = naturist (present
+ *  only when true), s = lastSwimAt, b = lastSwimBorder (present only when the
+ *  place has a known last swim; b omitted when "none"). */
+export type PlaceSummaryEntry = {
+  n: string;
+  la: number;
+  lo: number;
+  u?: true;
+  s?: number;
+  b?: string;
+};
+
+/** placesSummary/current — every place's lightweight map fields keyed by
+ *  placeId, rebuilt by the daily sweep (scripts/update-places-summary.mjs).
+ *  Clients read this single doc plus a bounded `updatedAt > builtAt` delta on
+ *  `places` instead of an always-on listener over the whole (~4k-doc)
+ *  collection, which re-streamed every place edit (and every swim's lastSwim*
+ *  stamp) to every client. `builtAt` is the cursor for that delta. `entries`
+ *  is index-exempt in firestore.indexes.json for the same reason tempSummary's
+ *  maps are (the 40k-index-entries-per-document cap). */
+export type PlacesSummaryDoc = {
+  builtAt: number;
+  entries: Record<string, PlaceSummaryEntry>;
 };
 
 export type SessionDoc = {

@@ -19,11 +19,13 @@ import {
   deleteAccountData,
   ensureUserDoc,
   finalizeGoogleProfile,
+  getAllPlacesOnce,
   recordAchievements,
   setupUserDoc,
   touchLastSeen,
   watchAllSessions,
-  watchPlaces,
+  watchPlaceChangesSince,
+  watchPlacesSummary,
   watchTempSummary,
   watchUserGroups,
   watchUserSessions,
@@ -35,9 +37,11 @@ import {
 import { computeMyStats, type MyStats } from "@/lib/stats";
 import { computeStreak } from "@/lib/streak";
 import { mergePlaceTemps } from "@/lib/temps";
+import { mergeDelta } from "@/lib/places";
 import type {
   GroupDoc,
   PlaceDoc,
+  PlacePin,
   PlaceWithTemp,
   SessionDoc,
   TempReading,
@@ -93,7 +97,11 @@ type State = {
   /** True while the community-feed listener is live and has delivered at
    *  least one snapshot, i.e. `allSessions` can be trusted. */
   allSessionsReady: boolean;
-  places: PlaceDoc[];
+  /** Every place's lightweight map fields, read from the daily-built
+   *  `placesSummary/current` doc plus the bounded recent-changes delta —
+   *  NOT the whole `places` collection. The full doc (info, provenance) is
+   *  fetched on demand by SpotPage via getPlace. */
+  places: PlacePin[];
   /** Latest water temperature per place id, from the single
    *  `tempSummary/current` doc (rebuilt by the daily sweep). Kept off the
    *  place docs so temp churn never re-streams the `places` collection. */
@@ -399,22 +407,77 @@ export const useStore = create<State>((set, get) => {
       const startPublic = () => {
         if (publicStarted) return;
         publicStarted = true;
-        publicUnsubs = [
-          watchPlaces((places) => {
-            const { myUid, mySessions, allSessions, tempsByPlace, profile } =
-              get();
-            set({
+
+        // Places are read from the daily-built `placesSummary/current` doc
+        // (one read) plus a bounded `updatedAt > builtAt` delta listener that
+        // surfaces spots created/edited since that build — instead of an
+        // always-on listener over the whole ~4k-doc `places` collection.
+        // lastSwim* rides in the summary, so logging a swim no longer
+        // re-streams a place doc to every connected client. The merged array
+        // is recomputed whenever either the summary or the delta fires.
+        let summaryPins: PlacePin[] = [];
+        let deltaDocs: PlaceDoc[] = [];
+        let stopDelta: (() => void) | null = null;
+        // Build cursor the delta listener is currently scoped to; null = not
+        // started. Guards against restarting the delta on the cache-then-server
+        // pair of summary snapshots that share the same builtAt at boot.
+        let deltaCursor: number | null = null;
+
+        const applyPlaces = () => {
+          const places = mergeDelta(summaryPins, deltaDocs);
+          const { myUid, mySessions, allSessions, tempsByPlace, profile } =
+            get();
+          set({
+            places,
+            ...derive(
+              myUid ?? "",
+              mySessions,
+              allSessions,
               places,
-              ...derive(
-                myUid ?? "",
-                mySessions,
-                allSessions,
-                places,
-                tempsByPlace,
-                profile?.achievements,
-              ),
-            });
+              tempsByPlace,
+              profile?.achievements,
+            ),
+          });
+        };
+
+        // Point the delta listener at a build cursor, restarting it only when
+        // the cursor actually changed. On each nightly build the cursor
+        // advances and yesterday's deltas fold into the summary, so the window
+        // resets to ~empty.
+        const ensureDelta = (builtAt: number) => {
+          if (deltaCursor === builtAt) return;
+          deltaCursor = builtAt;
+          stopDelta?.();
+          deltaDocs = [];
+          stopDelta = watchPlaceChangesSince(builtAt, (docs) => {
+            deltaDocs = docs;
+            applyPlaces();
+          });
+        };
+
+        publicUnsubs = [
+          watchPlacesSummary(({ pins, builtAt, exists }) => {
+            if (exists) {
+              summaryPins = pins;
+              ensureDelta(builtAt);
+              applyPlaces();
+            } else if (deltaCursor === null) {
+              // Pre-rollout / missing summary: one-time full read so the map
+              // isn't blank, and track new spots from now on. Guarded so a
+              // repeated non-existence snapshot can't re-read the collection.
+              ensureDelta(Date.now());
+              getAllPlacesOnce()
+                .then((docs) => {
+                  summaryPins = docs;
+                  applyPlaces();
+                  return;
+                })
+                .catch(() => {
+                  /* leave the pins we have; the delta still updates */
+                });
+            }
           }),
+          () => stopDelta?.(),
           // One doc that only the daily sweep rewrites (~1 read/client/day),
           // so always-on is fine — no lazy refcounting like the community
           // feed. Needed by guests too (the map shows temps signed-out).
@@ -658,7 +721,7 @@ type DeriveMemo = {
   uid: string;
   mySessions: SessionDoc[];
   allSessions: SessionDoc[];
-  places: PlaceDoc[];
+  places: PlacePin[];
   temps: Map<string, TempReading>;
   myStats: MyStats;
   sessionsByPlace: Map<string, SessionDoc[]>;
@@ -681,7 +744,7 @@ function derive(
   uid: string,
   mySessions: SessionDoc[],
   allSessions: SessionDoc[],
-  places: PlaceDoc[],
+  places: PlacePin[],
   temps: Map<string, TempReading>,
   persistedAchievements?: Record<string, number>,
 ) {
