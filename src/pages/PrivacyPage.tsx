@@ -51,8 +51,8 @@ const DATA_SOURCES = [
   },
 ] as const;
 
-// Same public link used on the About page's "created by" line.
-const CREATOR_URL = "https://www.linkedin.com/in/simon-hillbom/";
+// Public contact for privacy / data-subject requests.
+const CONTACT_EMAIL = "simon.hillbom@gmail.com";
 // Swedish data-protection authority, for the right to lodge a complaint.
 const IMY_URL = "https://www.imy.se/";
 
@@ -154,12 +154,10 @@ export default function PrivacyPage() {
         <p className="mt-2">
           {t("privacy.contact.body")}{" "}
           <a
-            href={CREATOR_URL}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={`mailto:${CONTACT_EMAIL}`}
             className="font-semibold text-wave-700 underline hover:text-wave-800"
           >
-            Simon Hillbom
+            {CONTACT_EMAIL}
           </a>
           .
         </p>

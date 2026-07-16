@@ -749,7 +749,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "privacy.contact.title": "Personuppgiftsansvarig och kontakt",
     "privacy.controller":
       "Personuppgiftsansvarig för Badligan är Simon Hillbom, som ensam bestämmer varför och hur dina personuppgifter behandlas.",
-    "privacy.contact.body": "Frågor om din integritet? Hör av dig till",
+    "privacy.contact.body": "Frågor om din integritet? Mejla oss på",
     "privacy.back": "Om Badligan",
     "about.tech.title": "Teknik",
     "about.tech.body":
@@ -1508,7 +1508,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "privacy.contact.title": "Data controller and contact",
     "privacy.controller":
       "The data controller (personuppgiftsansvarig) for Badligan is Simon Hillbom, who alone decides why and how your personal data is processed.",
-    "privacy.contact.body": "Questions about your privacy? Reach out to",
+    "privacy.contact.body": "Questions about your privacy? Email us at",
     "privacy.back": "About Badligan",
     "about.tech.title": "Tech",
     "about.tech.body":
