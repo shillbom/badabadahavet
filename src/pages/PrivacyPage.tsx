@@ -122,7 +122,8 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title={t("privacy.contact.title")}>
-        <p>
+        <p>{t("privacy.controller")}</p>
+        <p className="mt-2">
           {t("privacy.contact.body")}{" "}
           <a
             href={CREATOR_URL}

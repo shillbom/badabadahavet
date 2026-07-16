@@ -730,7 +730,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "privacy.safety.title": "Bada på eget ansvar",
     "privacy.safety.body":
       "Vattentemperaturer och badplatsinfo är ungefärliga och kan vara fel. Appen är gjord för kul, inte för säkerhetsbedömning — bada smart och på eget ansvar.",
-    "privacy.contact.title": "Kontakt",
+    "privacy.contact.title": "Personuppgiftsansvarig och kontakt",
+    "privacy.controller":
+      "Personuppgiftsansvarig för Badligan är Simon Hillbom, som ensam bestämmer varför och hur dina personuppgifter behandlas.",
     "privacy.contact.body": "Frågor om din integritet? Hör av dig till",
     "privacy.back": "Om Badligan",
     "about.tech.title": "Teknik",
@@ -1471,7 +1473,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "privacy.safety.title": "Swim at your own risk",
     "privacy.safety.body":
       "Water temperatures and swim-spot info are approximate and can be wrong. This app is made for fun, not safety assessment — swim smart and at your own risk.",
-    "privacy.contact.title": "Contact",
+    "privacy.contact.title": "Data controller and contact",
+    "privacy.controller":
+      "The data controller (personuppgiftsansvarig) for Badligan is Simon Hillbom, who alone decides why and how your personal data is processed.",
     "privacy.contact.body": "Questions about your privacy? Reach out to",
     "privacy.back": "About Badligan",
     "about.tech.title": "Tech",
