@@ -1,44 +1,29 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
 import {
   Map as MapIcon,
   Trophy,
   Plus,
   ListChecks,
-  LogIn,
-  History,
-  Info,
   UsersRound,
-  WavesLadder,
 } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
-import { useIsAdmin } from "@/lib/adminMode";
-import { openRecap } from "@/components/recapTrigger";
-import { cn, rememberReturnPath } from "@/lib/utils";
-import { buttonClasses } from "@/components/ui/buttonStyles";
+import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
+import TopBar from "@/components/TopBar";
 import SwimNudge from "@/components/SwimNudge";
 import DiscoRays from "@/components/DiscoRays";
 
 export default function Layout() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const t = useT();
-  const isAdmin = useIsAdmin();
   const myStats = useStore((s) => s.myStats);
 
   const [nudgeOpen, setNudgeOpen] = useState(false);
-
-  const groupCount = useStore((s) => s.groups.length);
-  const groupSubtitle =
-    groupCount === 0
-      ? t("layout.solo_swimmer")
-      : groupCount === 1
-        ? t("layout.groups_one")
-        : t("layout.groups_many", { n: groupCount });
 
   // Hide the bottom nav + FAB on full-screen story-style routes so they
   // don't fight with the slide content.
@@ -67,135 +52,25 @@ export default function Layout() {
   // the bottom padding so it doesn't create dead scroll space below the map.
   const isMapPage = location.pathname === "/";
 
-  // Desktop: the phone-column shell relaxes per route. The map gets the
-  // whole viewport (maps want space), story-style recap stays phone-shaped,
-  // and everything else widens to a comfortable reading column.
+  // Desktop: the top bar always spans the full viewport; it's the phone
+  // content column below it that relaxes per route. The map gets the whole
+  // viewport (maps want space), story-style recap stays phone-shaped, and
+  // everything else widens to a comfortable reading column.
   const isRecap = location.pathname.startsWith("/recap");
-  const shellWidth = isMapPage
+  const contentWidth = isMapPage
     ? "max-w-md lg:max-w-none"
     : isRecap
       ? "max-w-md"
       : "max-w-md lg:max-w-2xl";
 
   return (
-    <div
-      className={cn(
-        "relative mx-auto flex h-[var(--app-height,100dvh)] w-full flex-col overflow-hidden md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm",
-        shellWidth,
-      )}
-    >
-      <header className="sticky top-0 z-[1000] px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3">
-        {/* Backdrop fade — a blurred white gradient that extends past the
-            header and is masked to dissolve into the content, so there's no
-            hard blur/colour seam. Content above stays fully crisp. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[calc(100%+1.75rem)] bg-gradient-to-b from-white/90 via-white/55 to-transparent [mask-image:linear-gradient(to_bottom,black,black_45%,transparent)] backdrop-blur-sm [-webkit-mask-image:linear-gradient(to_bottom,black,black_45%,transparent)]"
-        />
-        <div className="flex items-center justify-between">
-          {isGuest ? (
-            <Link
-              to="/login"
-              onClick={rememberReturnPath}
-              className="flex items-center gap-2"
-            >
-              <m.div
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ type: "spring", stiffness: 220, damping: 22 }}
-                className="flex items-center gap-2"
-              >
-                <span className="text-2xl">🌊</span>
-                <div>
-                  <div className="font-display text-base leading-none font-bold text-wave-900">
-                    {t("layout.guest")}
-                  </div>
-                  <div className="text-[11px] text-wave-700/70">
-                    {t("layout.guest.subtitle")}
-                  </div>
-                </div>
-              </m.div>
-            </Link>
-          ) : (
-            <Link to="/profile" className="flex items-center gap-2">
-              <m.div
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ type: "spring", stiffness: 220, damping: 22 }}
-                className="flex items-center gap-2"
-              >
-                <span className="text-2xl">{profile?.emoji ?? "🌊"}</span>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="font-display text-base leading-none font-bold text-wave-900">
-                      {profile?.displayName ?? t("layout.swimmer")}
-                    </div>
-                    {isAdmin ? (
-                      <span
-                        className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[9px] font-bold tracking-widest text-white uppercase shadow"
-                        title={t("admin.label")}
-                      >
-                        {t("admin.label")}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="text-[11px] text-wave-700/70">
-                    {groupSubtitle}
-                  </div>
-                </div>
-              </m.div>
-            </Link>
-          )}
-          {isGuest ? (
-            <Link
-              to="/login"
-              onClick={rememberReturnPath}
-              className={buttonClasses("primary", "xs")}
-            >
-              <LogIn className="h-3.5 w-3.5" />
-              {t("layout.sign_in")}
-            </Link>
-          ) : (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setNudgeOpen(true)}
-                aria-label={t("map.nudge.button")}
-                title={t("map.nudge.button")}
-                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
-              >
-                <WavesLadder className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={openRecap}
-                aria-label={t("sincevisit.open")}
-                title={t("sincevisit.open")}
-                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
-              >
-                <History className="h-4 w-4" />
-              </button>
-              <Link
-                to="/about"
-                aria-label={t("about.title")}
-                title={t("about.title")}
-                className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"
-              >
-                <Info className="h-4 w-4" />
-              </Link>
-            </div>
-          )}
-        </div>
-      </header>
+    <div className="relative mx-auto flex h-[var(--app-height,100dvh)] w-full flex-col overflow-hidden">
+      <TopBar onNudge={() => setNudgeOpen(true)} />
 
       <main
         className={cn(
           "relative flex flex-1 flex-col overflow-x-hidden",
-          isMapPage
-            ? "overflow-hidden"
-            : hideChrome
-              ? "overflow-y-auto pb-4"
-              : "overflow-y-auto pb-32",
+          isMapPage ? "overflow-hidden" : "overflow-y-auto",
         )}
       >
         {/* Per-page entrance animations live in each page; we no longer
@@ -206,7 +81,15 @@ export default function Layout() {
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-          className={isMapPage ? "flex min-h-0 flex-1 flex-col" : undefined}
+          className={cn(
+            "mx-auto w-full md:border-x md:border-white/60 md:bg-white/30 md:shadow-[0_0_40px_-10px_rgba(2,100,160,0.18)] md:backdrop-blur-sm",
+            contentWidth,
+            isMapPage
+              ? "flex min-h-0 flex-1 flex-col"
+              : hideChrome
+                ? "min-h-full pb-4"
+                : "min-h-full pb-32",
+          )}
         >
           <Suspense
             fallback={
