@@ -213,6 +213,10 @@ export default function App() {
               <Route path="groups" element={protectedRoute(<Pages.Groups />)} />
               <Route path="log" element={protectedRoute(<Pages.Log />)} />
               <Route
+                path="swim/:sessionId/edit"
+                element={protectedRoute(<Pages.EditSwim />)}
+              />
+              <Route
                 path="achievements"
                 element={protectedRoute(<Pages.Achievements />)}
               />

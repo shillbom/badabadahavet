@@ -239,6 +239,13 @@ function SpotViewContent({
     }
   }
 
+  function onEditSession(id: string) {
+    // Close the sheet first when embedded — the edit page is a full route
+    // and the sheet would otherwise stay open on top of it.
+    if (variant === "sheet") onClose?.();
+    navigate(`/swim/${id}/edit`);
+  }
+
   async function onAdminDeleteSession(id: string) {
     if (!window.confirm(t("admin.delete_session.confirm"))) return;
     try {
@@ -275,7 +282,18 @@ function SpotViewContent({
   }
 
   return (
-    <div className="px-4 pt-2 pb-12">
+    // The sheet variant's scroll body runs to the very bottom of the screen
+    // (no Layout padding below it), so it needs its own clearance over the
+    // safe area / home indicator — otherwise the "log a swim here" CTA ends
+    // up hidden behind the bottom bar. The page variant keeps the smaller
+    // padding; Layout's pb-32 already clears the fixed nav + FAB there.
+    <div
+      className={
+        variant === "sheet"
+          ? "px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.75rem)+3.5rem)]"
+          : "px-4 pt-2 pb-12"
+      }
+    >
       <SpotHeader
         place={place}
         sessions={sessions}
@@ -354,6 +372,7 @@ function SpotViewContent({
         isGuest={isGuest}
         isAdmin={isAdmin}
         onShareSession={onShareSession}
+        onEditSession={onEditSession}
         onAdminDeleteSession={onAdminDeleteSession}
       />
 
@@ -647,6 +666,7 @@ function SpotRecentDips({
   isGuest,
   isAdmin,
   onShareSession,
+  onEditSession,
   onAdminDeleteSession,
 }: {
   sessions: SessionDoc[];
@@ -656,6 +676,7 @@ function SpotRecentDips({
   isGuest: boolean;
   isAdmin: boolean;
   onShareSession: (s: SessionDoc) => void;
+  onEditSession: (id: string) => void;
   onAdminDeleteSession: (id: string) => void;
 }) {
   const t = useT();
@@ -703,7 +724,18 @@ function SpotRecentDips({
               >
                 <Share2 className="h-3 w-3" />
               </button>
-              {!isGuest && isAdmin ? (
+              {s.uid === myUid ? (
+                <button
+                  type="button"
+                  onClick={() => onEditSession(s.id)}
+                  className="rounded-full bg-white/80 p-1 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+                  aria-label={t("swim.edit")}
+                  title={t("swim.edit")}
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              ) : null}
+              {!isGuest && isAdmin && s.uid !== myUid ? (
                 <button
                   type="button"
                   onClick={() => onAdminDeleteSession(s.id)}

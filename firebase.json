@@ -48,6 +48,10 @@
         "function": { "functionId": "removeSession", "region": "europe-west1" }
       },
       {
+        "source": "/api/updateSession",
+        "function": { "functionId": "updateSession", "region": "europe-west1" }
+      },
+      {
         "source": "/api/deleteAccount",
         "function": { "functionId": "deleteAccount", "region": "europe-west1" }
       },

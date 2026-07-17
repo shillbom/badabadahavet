@@ -1,6 +1,12 @@
 import { m } from "framer-motion";
 import { Link, useSearchParams } from "react-router";
-import { ChevronRight, MapPin, Snowflake, Sparkles } from "lucide-react";
+import {
+  ChevronRight,
+  MapPin,
+  Pencil,
+  Snowflake,
+  Sparkles,
+} from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useT } from "@/lib/i18n";
 import { computeStreak } from "@/lib/streak";
@@ -186,6 +192,16 @@ export default function HistoryPage() {
                 </Link>
               }
               points={s.points}
+              aside={
+                <Link
+                  to={`/swim/${s.id}/edit`}
+                  className="rounded-full bg-white/80 p-1.5 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+                  aria-label={t("swim.edit")}
+                  title={t("swim.edit")}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Link>
+              }
               date={s.date}
               note={s.note}
             >
