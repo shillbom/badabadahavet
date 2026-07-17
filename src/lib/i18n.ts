@@ -459,6 +459,20 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.error.image_too_large": "Bilden är för stor — välj en mindre bild.",
     "log.error.image_failed": "Kunde inte läsa bilden — prova en annan.",
 
+    "swim.edit": "Redigera bad",
+    "swim.edit.title": "Redigera bad",
+    "swim.edit.place_hint":
+      "Platsen kan inte ändras — logga ett nytt bad för en annan plats.",
+    "swim.edit.save": "Spara ändringar",
+    "swim.edit.saved": "Ändringarna sparades",
+    "swim.edit.error": "Kunde inte spara ändringarna",
+    "swim.edit.delete": "Ta bort badet",
+    "swim.edit.delete_confirm":
+      "Ta bort det här badet? Poängen räknas om och badet försvinner ur flödet.",
+    "swim.edit.deleted": "Badet togs bort",
+    "swim.edit.delete_error": "Kunde inte ta bort badet",
+    "swim.edit.not_found": "Badet hittades inte",
+
     "spot.first_dipped": "första doppet {date}",
     "spot.scope.everyone": "🌍 Alla",
     "spot.stat.swims": "Bad",
@@ -1222,6 +1236,20 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.error.image_too_large":
       "That image is too large — pick a smaller one.",
     "log.error.image_failed": "Couldn't read that image — try another.",
+
+    "swim.edit": "Edit swim",
+    "swim.edit.title": "Edit swim",
+    "swim.edit.place_hint":
+      "The spot can't be changed — log a new swim for a different spot.",
+    "swim.edit.save": "Save changes",
+    "swim.edit.saved": "Changes saved",
+    "swim.edit.error": "Couldn't save the changes",
+    "swim.edit.delete": "Delete this swim",
+    "swim.edit.delete_confirm":
+      "Delete this swim? Your points will be recalculated and the swim disappears from the feed.",
+    "swim.edit.deleted": "Swim deleted",
+    "swim.edit.delete_error": "Couldn't delete the swim",
+    "swim.edit.not_found": "Swim not found",
 
     "spot.first_dipped": "first dipped {date}",
     "spot.scope.everyone": "🌍 Everyone",

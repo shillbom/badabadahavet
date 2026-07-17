@@ -26,10 +26,12 @@ export default function Layout() {
   const [nudgeOpen, setNudgeOpen] = useState(false);
 
   // Hide the bottom nav + FAB on full-screen story-style routes so they
-  // don't fight with the slide content.
+  // don't fight with the slide content — and on the swim log/edit forms,
+  // whose submit buttons would otherwise sit behind them.
   const hideChrome =
     location.pathname.startsWith("/recap") ||
-    location.pathname.startsWith("/log");
+    location.pathname.startsWith("/log") ||
+    location.pathname.startsWith("/swim/");
 
   const isGuest = !user;
 

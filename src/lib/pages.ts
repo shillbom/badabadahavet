@@ -37,6 +37,10 @@ const PAGES = [
     load: withStaleReload(() => import("@/pages/LeaderboardPage")),
   },
   { key: "Log", load: withStaleReload(() => import("@/pages/LogSessionPage")) },
+  {
+    key: "EditSwim",
+    load: withStaleReload(() => import("@/pages/EditSwimPage")),
+  },
   { key: "Groups", load: withStaleReload(() => import("@/pages/GroupsPage")) },
   { key: "Spot", load: withStaleReload(() => import("@/pages/SpotPage")) },
   {

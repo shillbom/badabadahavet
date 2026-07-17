@@ -374,6 +374,47 @@ export type LoggedSession = {
   isWinter: boolean;
 };
 
+type UploadedPhoto = { url: string; path: string; thumb: string | undefined };
+
+/**
+ * Compress and upload a swim photo to Storage, returning the pieces the
+ * session functions store (download URL, storage path, inline LQIP thumb).
+ * Shared by createSession and updateSession.
+ */
+async function uploadSessionPhoto(
+  uid: string,
+  file: File,
+): Promise<UploadedPhoto> {
+  // Compress first, then derive the tiny inline placeholder from the
+  // already-downscaled file. Doing it sequentially (rather than decoding
+  // the full-resolution original twice in parallel) keeps peak memory low
+  // so large photos don't OOM the tab. `compressImage` throws an
+  // ImageProcessingError for images too big to handle; we let that
+  // propagate so the caller can show a specific message.
+  const compressed = await compressImage(file);
+  const thumb = await makeThumbDataUrl(compressed);
+  const ext = compressed.name.split(".").pop()?.toLowerCase() ?? "jpg";
+  const path = `sessions/${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const r = storageRef(storage, path);
+  await uploadBytes(r, compressed, {
+    contentType: compressed.type || "image/jpeg",
+    // The path is unique per upload and the object is never rewritten, so
+    // browsers/CDNs may cache the download URL forever — saves re-fetching
+    // photos that the service-worker cache has evicted.
+    cacheControl: "public, max-age=31536000, immutable",
+  });
+  const url = await getDownloadURL(r);
+  return { url, path, thumb };
+}
+
+/** Surface the functions' moderation rejection as a ModerationError so
+ *  callers show the specific "text rejected" message. */
+function rethrowModeration(err: unknown): never {
+  const details = (err as { details?: { reason?: string } })?.details;
+  if (details?.reason === "moderation") throw new ModerationError();
+  throw err;
+}
+
 /**
  * Log a swim. The session doc and the user's score are written server-side
  * by the `logSession` Cloud Function (clients can't write either directly),
@@ -397,26 +438,10 @@ export async function createSession(opts: {
   let photoPath: string | undefined;
   let photoThumb: string | undefined;
   if (opts.photoFile) {
-    // Compress first, then derive the tiny inline placeholder from the
-    // already-downscaled file. Doing it sequentially (rather than decoding
-    // the full-resolution original twice in parallel) keeps peak memory low
-    // so large photos don't OOM the tab. `compressImage` throws an
-    // ImageProcessingError for images too big to handle; we let that
-    // propagate so the caller can show a specific message.
-    const compressed = await compressImage(opts.photoFile);
-    const thumb = await makeThumbDataUrl(compressed);
-    photoThumb = thumb;
-    const ext = compressed.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    photoPath = `sessions/${opts.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const r = storageRef(storage, photoPath);
-    await uploadBytes(r, compressed, {
-      contentType: compressed.type || "image/jpeg",
-      // The path is unique per upload and the object is never rewritten, so
-      // browsers/CDNs may cache the download URL forever — saves re-fetching
-      // photos that the service-worker cache has evicted.
-      cacheControl: "public, max-age=31536000, immutable",
-    });
-    photoUrl = await getDownloadURL(r);
+    const uploaded = await uploadSessionPhoto(opts.uid, opts.photoFile);
+    photoUrl = uploaded.url;
+    photoPath = uploaded.path;
+    photoThumb = uploaded.thumb;
   }
 
   const callable = cloudFn<
@@ -454,9 +479,62 @@ export async function createSession(opts: {
     // The function's authoritative moderation check flags its rejection
     // via details — surface it as the same error the client-side
     // pre-checks throw so callers show one specific message.
-    const details = (err as { details?: { reason?: string } })?.details;
-    if (details?.reason === "moderation") throw new ModerationError();
-    throw err;
+    rethrowModeration(err);
+  }
+}
+
+export type SessionEdits = {
+  /** New swim timestamp (ms epoch). Omit to keep the current one. */
+  date?: number;
+  /** New note text. Omit to keep, null (or blank) to clear. */
+  note?: string | null;
+  /** New photo file to upload, null to remove the photo, omit to keep. */
+  photoFile?: File | null;
+};
+
+/**
+ * Edit a swim's date, note, or photo via the `updateSession` Cloud Function,
+ * which recomputes points/isWinter and the owner's per-year score server-side
+ * (sessions stay client-unwritable). A new photo is uploaded to Storage here
+ * first — the function stores its URL/path and cleans up the old object.
+ */
+export async function updateSession(
+  session: SessionDoc,
+  edits: SessionEdits,
+): Promise<void> {
+  let photo: { url: string; path: string; thumb?: string } | null | undefined;
+  if (edits.photoFile === null) photo = null;
+  else if (edits.photoFile) {
+    const uploaded = await uploadSessionPhoto(session.uid, edits.photoFile);
+    photo = {
+      url: uploaded.url,
+      path: uploaded.path,
+      // Key-by-key for the same reason as below: undefined would encode
+      // as null, which is fine here but sloppy — just omit a missing thumb.
+      ...(uploaded.thumb !== undefined ? { thumb: uploaded.thumb } : {}),
+    };
+  }
+
+  const callable = cloudFn<
+    {
+      sessionId: string;
+      date?: number;
+      note?: string | null;
+      photo?: { url: string; path: string; thumb?: string } | null;
+    },
+    { ok: true; points: number; isWinter: boolean }
+  >("updateSession");
+  try {
+    // Build the payload key-by-key: the Functions client encodes `undefined`
+    // as null, and null means "clear" server-side — absent means "keep".
+    await callable({
+      sessionId: session.id,
+      ...(edits.date !== undefined ? { date: edits.date } : {}),
+      ...(edits.note !== undefined ? { note: edits.note } : {}),
+      ...(photo !== undefined ? { photo } : {}),
+    });
+  } catch (err) {
+    rethrowModeration(err);
   }
 }
 

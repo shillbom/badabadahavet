@@ -1041,6 +1041,225 @@ export const removeSession = onCall(
 );
 
 /**
+ * Callable: edit a swim. Owner only — the editable fields are the date, the
+ * note, and the photo (place and coordinates are fixed; log a new swim for a
+ * different spot). Recomputes what depends on the date — isWinter, points,
+ * and the owner's per-year score/stats (both years when the edit crosses a
+ * year boundary) — inside a transaction, same self-healing recompute as
+ * logSession/removeSession. A replaced/removed photo's storage object is
+ * cleaned up best-effort afterwards.
+ *
+ *   data: { sessionId: string,
+ *           date?: number,                       // omit = keep
+ *           note?: string | null,                // omit = keep, null = clear
+ *           photo?: { url, path, thumb? } | null // omit = keep, null = remove
+ *         }
+ *   returns: { ok: true, points: number, isWinter: boolean }
+ */
+export const updateSession = onCall(
+  {
+    region: PROJECT_REGION,
+    cors: true,
+    invoker: "public",
+    maxInstances: 10,
+    memory: "256MiB",
+    timeoutSeconds: 30,
+    secrets: [perspectiveApiKey],
+  },
+  async (req) => {
+    if (!req.auth) {
+      throw new HttpsError("unauthenticated", "Sign in required.");
+    }
+    const callerUid = req.auth.uid;
+    const d = req.data ?? {};
+    const sessionId = d.sessionId;
+    if (typeof sessionId !== "string" || !sessionId) {
+      throw new HttpsError("invalid-argument", "sessionId is required.");
+    }
+
+    // date: omitted = keep. Same bounds as logSession.
+    let newDate = null;
+    if (d.date !== undefined) {
+      if (
+        typeof d.date !== "number" ||
+        d.date < 946684800000 || // 2000-01-01
+        d.date > Date.now() + 86400000
+      ) {
+        throw new HttpsError("invalid-argument", "date looks invalid.");
+      }
+      newDate = d.date;
+    }
+
+    // note: omitted = keep, null (or blank) = clear, string = replace.
+    const hasNote = d.note !== undefined;
+    let note = null;
+    if (hasNote && d.note !== null) {
+      if (typeof d.note !== "string" || d.note.length > 2000) {
+        throw new HttpsError("invalid-argument", "note looks invalid.");
+      }
+      note = d.note.trim().slice(0, 500) || null;
+    }
+
+    // photo: omitted = keep, null = remove, { url, path, thumb? } = replace
+    // (the client uploads the new object to Storage first, like logSession).
+    const hasPhoto = d.photo !== undefined;
+    let photo = null;
+    if (hasPhoto && d.photo !== null) {
+      const p = d.photo;
+      if (
+        typeof p !== "object" ||
+        typeof p.url !== "string" ||
+        !p.url ||
+        typeof p.path !== "string" ||
+        !p.path
+      ) {
+        throw new HttpsError("invalid-argument", "photo looks invalid.");
+      }
+      if (
+        p.thumb !== undefined &&
+        p.thumb !== null &&
+        (typeof p.thumb !== "string" || p.thumb.length > 4000)
+      ) {
+        throw new HttpsError("invalid-argument", "photoThumb looks invalid.");
+      }
+      photo = {
+        url: p.url,
+        path: p.path,
+        thumb: typeof p.thumb === "string" ? p.thumb : null,
+      };
+    }
+
+    if (newDate === null && !hasNote && !hasPhoto) {
+      throw new HttpsError("invalid-argument", "Nothing to update.");
+    }
+
+    // Authoritative moderation of a changed note — same as logSession
+    // (fails open on outages, outside the transaction).
+    const modKey = perspectiveApiKey.value();
+    if (note && modKey && !(await checkTextAllowed(note, modKey))) {
+      logger.info("updateSession rejected by moderation", { uid: callerUid });
+      throw new HttpsError("invalid-argument", "Text rejected by moderation.", {
+        reason: "moderation",
+      });
+    }
+
+    const db = getFirestore();
+    const sessionRef = db.collection("sessions").doc(sessionId);
+    const userRef = db.collection("users").doc(callerUid);
+    const yearQuery = (year) => {
+      const [yStart, yEnd] = yearBounds(year);
+      return (
+        db
+          .collection("sessions")
+          .where("uid", "==", callerUid)
+          .where("date", ">=", yStart)
+          .where("date", "<", yEnd)
+          // Reuse the existing (uid, date DESC) index — see logSession.
+          .orderBy("date", "desc")
+      );
+    };
+
+    const result = await db.runTransaction(async (tx) => {
+      // ── reads (all before any writes) ──
+      const sessionSnap = await tx.get(sessionRef);
+      if (!sessionSnap.exists) {
+        throw new HttpsError("not-found", "Session not found.");
+      }
+      const session = sessionSnap.data();
+      if (session.uid !== callerUid) {
+        throw new HttpsError(
+          "permission-denied",
+          "Not allowed to edit this session.",
+        );
+      }
+
+      const date = newDate ?? session.date;
+      const year = swimYear(date);
+      const oldYear = swimYear(session.date);
+      const [userSnap, yearSnap, oldYearSnap] = await Promise.all([
+        tx.get(userRef),
+        tx.get(yearQuery(year)),
+        year === oldYear ? null : tx.get(yearQuery(oldYear)),
+      ]);
+
+      // ── compute ──
+      const isWinter = isWinterMonth(date);
+      const points = swimPoints(session.isUniqueForUser === true, isWinter);
+      // The session as it will be after the edit — feeds yearStats (which
+      // only reads date-independent flags plus isWinter, so photo/note
+      // changes don't matter here, but keep it faithful anyway).
+      const updatedSession = { ...session, date, isWinter, points };
+      if (hasNote) {
+        if (note) updatedSession.note = note;
+        else delete updatedSession.note;
+      }
+
+      const updates = { date, isWinter, points };
+      if (hasNote) {
+        updates.note = note ?? FieldValue.delete();
+      }
+      let removedPhotoPath = null;
+      if (hasPhoto) {
+        if (photo) {
+          updates.photoUrl = photo.url;
+          updates.photoPath = photo.path;
+          updates.photoThumb = photo.thumb ?? FieldValue.delete();
+        } else {
+          updates.photoUrl = FieldValue.delete();
+          updates.photoPath = FieldValue.delete();
+          updates.photoThumb = FieldValue.delete();
+        }
+        if (session.photoPath && session.photoPath !== photo?.path) {
+          removedPhotoPath = session.photoPath;
+        }
+      }
+
+      // ── writes ──
+      tx.update(sessionRef, updates);
+      if (userSnap.exists) {
+        // Recompute from the year's sessions (excluding this one's stored
+        // copy, folding the edited version back in) so the totals self-heal
+        // — and both years stay right when the edit crosses a boundary.
+        const userUpdates = {
+          [`scores.${year}`]: Math.max(
+            0,
+            sumYearPoints(yearSnap, sessionId) + points,
+          ),
+          [`statsByYear.${year}`]: yearStats(yearSnap, {
+            excludeId: sessionId,
+            extra: updatedSession,
+          }),
+        };
+        if (oldYearSnap) {
+          userUpdates[`scores.${oldYear}`] = Math.max(
+            0,
+            sumYearPoints(oldYearSnap, sessionId),
+          );
+          userUpdates[`statsByYear.${oldYear}`] = yearStats(oldYearSnap, {
+            excludeId: sessionId,
+          });
+        }
+        tx.update(userRef, userUpdates);
+      }
+
+      return { points, isWinter, removedPhotoPath };
+    });
+
+    // Best-effort cleanup of the replaced/removed photo, outside the
+    // transaction — same as removeSession.
+    if (result.removedPhotoPath) {
+      try {
+        await getStorage().bucket().file(result.removedPhotoPath).delete();
+      } catch (e) {
+        logger.warn("photo delete failed", { sessionId, error: String(e) });
+      }
+    }
+
+    return { ok: true, points: result.points, isWinter: result.isWinter };
+  },
+);
+
+/**
  * Wipe every trace of a user's data: their sessions (and photos), their
  * group memberships (transferring ownership or deleting the group as
  * needed), and their user doc. Shared by the "delete my account" flow and
