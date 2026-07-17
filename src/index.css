@@ -251,17 +251,10 @@
 .app-splash__panel {
   --tilt: -45deg; /* shared by the water line and the wordmark */
   position: relative;
-  width: 100%;
-  max-width: 28rem; /* mirrors the app's mobile column (max-w-md) */
+  width: 100%; /* full viewport — matches the app's full-width top bar */
   height: 100%;
   overflow: hidden;
   background: linear-gradient(180deg, #eff9ff 0%, #def1ff 46%, #b6e4ff 100%);
-}
-@media (min-width: 768px) {
-  .app-splash__panel {
-    border-left: 1px solid rgba(255, 255, 255, 0.6);
-    border-right: 1px solid rgba(255, 255, 255, 0.6);
-  }
 }
 /* Wrapper the intro/exit slide moves as one; the inner water carries the tilt
    + oversize so the entrance can translate in plain panel-relative units. */
@@ -336,21 +329,30 @@
   background: #007ec6; /* wave-600 */
   animation: app-splash-roll 7s linear infinite reverse;
 }
-/* Wordmark, tilted to match the water line and resting just above it. */
+/* Wordmark, tilted to match the water line and resting just above it.
+   The word itself is SVG "liquid type" (see Splash.tsx): a faint ghost of the
+   text under a copy filled by a travelling-wave pattern. */
 .app-splash__word {
   position: absolute;
   left: 50%;
   bottom: 50%;
   translate: -50% 0;
   rotate: var(--tilt);
-  white-space: nowrap;
   font-family: "Caveat Brush", "Bricolage Grotesque", system-ui, sans-serif;
-  font-size: clamp(3.5rem, 20vw, 5.25rem);
-  line-height: 1;
-  color: #0264a0; /* wave-700 */
-  text-shadow:
-    0 2px 0 rgba(255, 255, 255, 0.65),
-    0 12px 26px rgba(11, 72, 109, 0.22);
+}
+.app-splash__word svg {
+  display: block;
+  /* Phone floor ≈ the old clamp(3.5rem,20vw,5.25rem) wordmark footprint;
+     the vw term lets it grow into the now-fullscreen splash on desktop. */
+  width: clamp(15rem, 38vw, 34rem);
+  overflow: visible;
+  filter: drop-shadow(0 12px 26px rgba(11, 72, 109, 0.22));
+}
+/* Frosted "empty glass" under the liquid fill — white so the word stays
+   legible where it overlaps the dark water line. */
+.app-splash__word-ghost {
+  fill: #fff;
+  fill-opacity: 0.75;
 }
 @keyframes app-splash-roll {
   from {
@@ -422,5 +424,14 @@
   .app-splash--leaving .app-splash__waves,
   .app-splash--leaving .app-splash__word {
     animation: none;
+  }
+  /* SMIL inside the wave <pattern> can't be paused from CSS — swap the
+     liquid layer for the solid ghost instead. */
+  .app-splash__word-liquid {
+    display: none;
+  }
+  .app-splash__word-ghost {
+    fill: #0264a0; /* wave-700, the old static wordmark colour */
+    fill-opacity: 1;
   }
 }

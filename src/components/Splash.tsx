@@ -24,7 +24,65 @@ function SplashArt() {
           <span className="app-splash__wave" />
         </div>
       </div>
-      <div className="app-splash__word">Badligan</div>
+      {/* "Liquid type" wordmark: a ghost of the word with a second copy filled
+          by a travelling-wave <pattern>, so the letters read as half-full of
+          water. SMIL keeps it dependency-free (see file header). Two splashes
+          can briefly coexist (BootSplash over the Suspense FullSplash); the
+          duplicated SVG ids are benign because the defs are identical. */}
+      <div className="app-splash__word" role="img" aria-label="Badligan">
+        <svg viewBox="0 0 240 68" aria-hidden="true">
+          <defs>
+            <linearGradient id="splash-liquid" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#019eea" />
+              <stop offset="1" stopColor="#0264a0" />
+            </linearGradient>
+            <pattern
+              id="splash-wave"
+              x="0"
+              y="0"
+              width="100%"
+              height="100%"
+              patternUnits="userSpaceOnUse"
+            >
+              {/* Wavelength 40; one loop translates exactly one wavelength so
+                  the crests scroll seamlessly. The extra -80 of path keeps the
+                  left edge covered at full translation. */}
+              <path
+                d="M-80 32 Q-70 28.5 -60 32 T-40 32 T-20 32 T0 32 T20 32 T40 32 T60 32 T80 32 T100 32 T120 32 T140 32 T160 32 T180 32 T200 32 T220 32 T240 32 T260 32 V68 H-80 Z"
+                fill="url(#splash-liquid)"
+              >
+                <animateTransform
+                  attributeName="transform"
+                  type="translate"
+                  from="0,0"
+                  to="40,0"
+                  dur="2.6s"
+                  repeatCount="indefinite"
+                />
+              </path>
+            </pattern>
+          </defs>
+          <text
+            className="app-splash__word-ghost"
+            textAnchor="middle"
+            x="120"
+            y="50"
+            fontSize="56"
+          >
+            Badligan
+          </text>
+          <text
+            className="app-splash__word-liquid"
+            textAnchor="middle"
+            x="120"
+            y="50"
+            fontSize="56"
+            fill="url(#splash-wave)"
+          >
+            Badligan
+          </text>
+        </svg>
+      </div>
     </div>
   );
 }
