@@ -605,6 +605,37 @@ export function watchMemberSessions(
 }
 
 /**
+ * One-shot: the uid of whoever swam most recently among `uids` (any year),
+ * or null when none of them has ever logged a swim. One limit(1) query per
+ * 30-uid chunk (the `in` cap) — a handful of doc reads, not a feed — using
+ * the same (uid, date DESC) composite index as the member-session queries.
+ * Drives the leaderboard's default-to-the-freshest-group tab choice.
+ */
+export async function fetchLatestSwimUid(
+  uids: string[],
+): Promise<string | null> {
+  if (uids.length === 0) return null;
+  const chunks: string[][] = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+  let best: SessionDoc | null = null;
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const snap = await getDocs(
+        query(
+          sessionsCol,
+          where("uid", "in", chunk),
+          orderBy("date", "desc"),
+          limit(1),
+        ),
+      );
+      const s = snap.docs[0]?.data() as SessionDoc | undefined;
+      if (s && (best === null || s.date > best.date)) best = s;
+    }),
+  );
+  return best ? (best as SessionDoc).uid : null;
+}
+
+/**
  * Subscribe to every swim logged during a calendar year (defaults to the
  * current year). Personal history and per-place history are *not* time-
  * bounded — only "global" queries fan out across all users.
