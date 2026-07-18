@@ -30,7 +30,7 @@ export default function TopBar({ onNudge }: { onNudge: () => void }) {
   const isGuest = !user;
 
   return (
-    <header className="sticky top-0 z-[1000] px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3">
+    <header className="sticky top-0 z-[1000] flex-none px-4 pt-[max(env(safe-area-inset-top),0.75rem)] pb-3">
       {/* Backdrop fade — a blurred white gradient that extends past the
           header and is masked to dissolve into the content, so there's no
           hard blur/colour seam. Content above stays fully crisp. */}

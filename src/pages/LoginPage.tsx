@@ -1,6 +1,8 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { m, AnimatePresence } from "framer-motion";
 import {
+  Eye,
+  EyeOff,
   Globe,
   Info,
   Lock,
@@ -51,6 +53,7 @@ function useAuthForm() {
   const [displayName, setDisplayName] = useState("");
   const [displayNameEdited, setDisplayNameEdited] = useState(false);
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const setLocale = useLocale((s) => s.setLocale);
   const [homeCountry, dispatchHomeCountry] = useReducer(
@@ -218,6 +221,8 @@ function useAuthForm() {
     setDisplayNameEdited,
     password,
     setPassword,
+    showPassword,
+    setShowPassword,
     busy,
     homeCountry,
     setHomeCountry,
@@ -383,7 +388,7 @@ function OnboardingView({ form }: { form: FormState }) {
         }}
         className="glass z-10 mt-8 w-full max-w-sm space-y-4 p-5"
       >
-        <div className="space-y-1.5">
+        <div className="relative space-y-1.5">
           <Label htmlFor="ob-name">
             <span className="inline-flex items-center gap-1.5">
               <User className="h-3.5 w-3.5" />{" "}
@@ -522,14 +527,36 @@ function LoginView({ form }: { form: FormState }) {
           </Label>
           <Input
             id="password"
-            type="password"
+            type={form.showPassword ? "text" : "password"}
             autoComplete={
               form.mode === "signup" ? "new-password" : "current-password"
             }
             placeholder={t("auth.password_placeholder")}
             value={form.password}
             onChange={(e) => form.setPassword(e.target.value)}
+            className="pr-11"
           />
+          <button
+            type="button"
+            onClick={() => form.setShowPassword(!form.showPassword)}
+            className="absolute right-2.5 bottom-2.5 rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100"
+            aria-label={
+              form.showPassword
+                ? t("auth.hide_password")
+                : t("auth.show_password")
+            }
+            title={
+              form.showPassword
+                ? t("auth.hide_password")
+                : t("auth.show_password")
+            }
+          >
+            {form.showPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
         </div>
 
         {form.mode === "signup" ? (

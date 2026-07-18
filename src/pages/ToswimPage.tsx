@@ -91,7 +91,7 @@ export default function ToswimPage() {
   }
 
   return (
-    <div className="px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1rem)]">
+    <div className="px-4 pt-2">
       <div className="mb-3 flex items-center gap-2">
         <ListChecks className="h-5 w-5 text-wave-700" />
         <h2 className="font-display text-2xl font-black text-wave-900">

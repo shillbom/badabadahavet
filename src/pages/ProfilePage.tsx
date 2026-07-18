@@ -8,6 +8,8 @@ import {
   ChevronRight,
   Clock,
   Compass,
+  Eye,
+  EyeOff,
   Flame,
   History as HistoryIcon,
   Info,
@@ -95,7 +97,7 @@ export default function ProfilePage() {
   const actions = useProfileActions(user?.uid);
 
   return (
-    <div className="px-4 pt-2 pb-12">
+    <div className="px-4 pt-2">
       <div className="mb-5 flex items-center gap-2">
         <BackButton />
         <h2 className="font-display text-2xl font-black text-wave-900">
@@ -114,6 +116,7 @@ export default function ProfilePage() {
       />
 
       <ProfileSettings
+        user={user}
         homeCountry={profile?.homeCountry}
         onPickHomeCountry={actions.pickHomeCountry}
       />
@@ -485,16 +488,25 @@ function ProfileHeader({
 
 /** Home country + language selectors. */
 function ProfileSettings({
+  user,
   homeCountry,
   onPickHomeCountry,
 }: {
+  user: ReturnType<typeof useAuth>["user"];
   homeCountry: string | undefined;
   onPickHomeCountry: (next: string) => void;
 }) {
   const t = useT();
   const locale = useLocale((s) => s.locale);
   const setLocale = useLocale((s) => s.setLocale);
-  const { user } = useAuth();
+  const { changePassword } = useAuth();
+  const hasPasswordProvider =
+    user?.providerData?.some((p) => p.providerId === "password") ?? false;
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [nextPassword, setNextPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNextPassword, setShowNextPassword] = useState(false);
+  const [savingPassword, startSavingPassword] = useTransition();
 
   async function pickLocale(next: "sv" | "en") {
     setLocale(next);
@@ -505,6 +517,42 @@ function ProfileSettings({
         // non-fatal; local pref is already updated
       }
     }
+  }
+
+  async function submitPassword(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!currentPassword) {
+      toast.error(t("profile.password.current_required"));
+      return;
+    }
+    if (nextPassword.length < 6) {
+      toast.error(t("auth.error.weak_password"));
+      return;
+    }
+    startSavingPassword(async () => {
+      try {
+        await changePassword(currentPassword, nextPassword);
+        setCurrentPassword("");
+        setNextPassword("");
+        setShowCurrentPassword(false);
+        setShowNextPassword(false);
+        toast.success(t("profile.password.saved"));
+      } catch (err) {
+        const msg = (err as Error).message ?? "";
+        if (
+          msg.includes("wrong-password") ||
+          msg.includes("invalid-credential")
+        ) {
+          toast.error(t("profile.password.current_wrong"));
+          return;
+        }
+        if (msg.includes("requires-recent-login")) {
+          toast.error(t("profile.password.relogin"));
+          return;
+        }
+        toast.error(t("profile.save_error"));
+      }
+    });
   }
 
   return (
@@ -563,6 +611,89 @@ function ProfileSettings({
           </button>
         </div>
       </div>
+
+      {hasPasswordProvider ? (
+        <div className="mx-auto mb-4 w-full max-w-sm rounded-2xl border border-slate-200 bg-white/70 p-3 shadow-sm">
+          <h3 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            {t("profile.password.title")}
+          </h3>
+          <form onSubmit={submitPassword} className="space-y-2">
+            <div className="relative">
+              <Input
+                type={showCurrentPassword ? "text" : "password"}
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder={t("profile.password.current")}
+                className="h-10 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword((v) => !v)}
+                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100"
+                aria-label={
+                  showCurrentPassword
+                    ? t("auth.hide_password")
+                    : t("auth.show_password")
+                }
+                title={
+                  showCurrentPassword
+                    ? t("auth.hide_password")
+                    : t("auth.show_password")
+                }
+              >
+                {showCurrentPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+
+            <div className="relative">
+              <Input
+                type={showNextPassword ? "text" : "password"}
+                autoComplete="new-password"
+                value={nextPassword}
+                onChange={(e) => setNextPassword(e.target.value)}
+                placeholder={t("profile.password.new")}
+                className="h-10 pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowNextPassword((v) => !v)}
+                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1.5 text-slate-500 transition hover:bg-slate-100"
+                aria-label={
+                  showNextPassword
+                    ? t("auth.hide_password")
+                    : t("auth.show_password")
+                }
+                title={
+                  showNextPassword
+                    ? t("auth.hide_password")
+                    : t("auth.show_password")
+                }
+              >
+                {showNextPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
+              size="sm"
+              loading={savingPassword}
+              disabled={!currentPassword || !nextPassword}
+            >
+              {t("profile.password.save")}
+            </Button>
+          </form>
+        </div>
+      ) : null}
     </>
   );
 }

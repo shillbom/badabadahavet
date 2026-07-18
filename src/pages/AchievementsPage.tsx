@@ -37,7 +37,7 @@ export default function AchievementsPage() {
   });
 
   return (
-    <div className="px-4 pt-2 pb-12">
+    <div className="px-4 pt-2">
       <div className="mb-3 flex items-center gap-2">
         <BackButton />
         <div>

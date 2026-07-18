@@ -55,7 +55,7 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="px-4 pt-2 pb-12">
+    <div className="px-4 pt-2">
       <div className="mb-4 flex items-center gap-2">
         <BackButton />
         <h2 className="font-display text-2xl font-black text-wave-900">

@@ -16,6 +16,7 @@ export function useAuth() {
   const completeGoogleOnboarding = useStore((s) => s.completeGoogleOnboarding);
   const logout = useStore((s) => s.logout);
   const resetPassword = useStore((s) => s.resetPassword);
+  const changePassword = useStore((s) => s.changePassword);
   const deleteAccount = useStore((s) => s.deleteAccount);
   return {
     user,
@@ -28,6 +29,7 @@ export function useAuth() {
     completeGoogleOnboarding,
     logout,
     resetPassword,
+    changePassword,
     deleteAccount,
   };
 }

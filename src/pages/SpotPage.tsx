@@ -283,15 +283,13 @@ function SpotViewContent({
 
   return (
     // The sheet variant's scroll body runs to the very bottom of the screen
-    // (no Layout padding below it), so it needs its own clearance over the
-    // safe area / home indicator — otherwise the "log a swim here" CTA ends
-    // up hidden behind the bottom bar. The page variant keeps the smaller
-    // padding; Layout's bottom padding already clears the fixed nav + FAB.
+    // (outside Layout), so it needs its own clearance over the safe area /
+    // home indicator. The page variant is cleared by Layout's chrome row.
     <div
       className={
         variant === "sheet"
           ? "px-4 pt-2 pb-[calc(max(env(safe-area-inset-bottom),0.75rem)+3.5rem)]"
-          : "px-4 pt-2 pb-12"
+          : "px-4 pt-2"
       }
     >
       <SpotHeader
