@@ -11,6 +11,9 @@ import {
   GoogleAuthProvider,
   signInWithRedirect,
   signInWithPopup,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
   type User,
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -157,6 +160,10 @@ type State = {
   ) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  changePassword: (
+    currentPassword: string,
+    nextPassword: string,
+  ) => Promise<void>;
   deleteAccount: () => Promise<void>;
 
   // ── Bootstrap ─────────────────────────────────────────────────────────
@@ -351,6 +358,15 @@ export const useStore = create<State>((set, get) => {
 
     resetPassword: async (email) =>
       await sendPasswordResetEmail(auth, email.trim().toLowerCase()),
+
+    changePassword: async (currentPassword, nextPassword) => {
+      const current = auth.currentUser;
+      const email = current?.email;
+      if (!current || !email) throw new Error("not signed in");
+      const credential = EmailAuthProvider.credential(email, currentPassword);
+      await reauthenticateWithCredential(current, credential);
+      await updatePassword(current, nextPassword);
+    },
 
     deleteAccount: async () => {
       const current = auth.currentUser;
