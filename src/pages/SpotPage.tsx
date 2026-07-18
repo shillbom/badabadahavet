@@ -286,7 +286,7 @@ function SpotViewContent({
     // (no Layout padding below it), so it needs its own clearance over the
     // safe area / home indicator — otherwise the "log a swim here" CTA ends
     // up hidden behind the bottom bar. The page variant keeps the smaller
-    // padding; Layout's pb-32 already clears the fixed nav + FAB there.
+    // padding; Layout's bottom padding already clears the fixed nav + FAB.
     <div
       className={
         variant === "sheet"

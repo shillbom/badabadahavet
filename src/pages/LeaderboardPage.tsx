@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { m, useInView } from "framer-motion";
-import { Crown, Snowflake, MapPin } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Crown,
+  Snowflake,
+  MapPin,
+} from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc, UserDoc, YearStats } from "@/lib/types";
-import { watchMemberSessions, watchUsersByYearScore } from "@/lib/data";
+import {
+  fetchLatestSwimUid,
+  watchMemberSessions,
+  watchUsersByYearScore,
+} from "@/lib/data";
 import { splitTopList } from "@/lib/leaderboard";
 import { resolveBorder, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
@@ -23,6 +33,9 @@ type Row = {
   stats: YearStats | null;
 };
 
+/** First season the app was live — the year picker never goes below this. */
+const MIN_YEAR = 2026;
+
 export default function LeaderboardPage() {
   const groups = useStore((s) => s.groups);
   const { user } = useAuth();
@@ -30,8 +43,67 @@ export default function LeaderboardPage() {
 
   const t = useT();
 
-  const year = new Date().getFullYear();
-  const [scope, setScope] = useState<string>("global");
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(currentYear);
+
+  // `scope` is the user's explicit choice; null means "not chosen yet", in
+  // which case we fall back to the computed default group (freshest swim)
+  // and finally to global. Group ids are validated against the live group
+  // list so leaving a group can't strand the board on a dead scope.
+  const [scope, setScope] = useState<string | null>(null);
+  const [defaultScope, setDefaultScope] = useState<string | null>(null);
+
+  // Default tab: the group whose members swam most recently. One cheap
+  // one-shot lookup (limit-1 query per 30 members) across the union of all
+  // group members; when the freshest swimmer is in several of my groups —
+  // or nobody has swum yet — the biggest group wins.
+  const groupsKey = groups
+    .map((g) => g.id)
+    .toSorted()
+    .join("\n");
+  useEffect(() => {
+    if (!user || groups.length === 0) return;
+    let active = true;
+    const memberUnion = new Set<string>();
+    for (const g of groups) for (const uid of g.members) memberUnion.add(uid);
+    void fetchLatestSwimUid([...memberUnion]).then((latestUid) => {
+      if (!active) return;
+      const withSwimmer = latestUid
+        ? groups.filter((g) => g.members.includes(latestUid))
+        : [];
+      const pool = withSwimmer.length > 0 ? withSwimmer : groups;
+      const biggest = pool.toSorted(
+        (a, b) => b.members.length - a.members.length,
+      )[0];
+      setDefaultScope(biggest.id);
+    });
+    return () => {
+      active = false;
+    };
+    // Keyed on membership content, same trick as GroupsPage.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, groupsKey]);
+
+  const validGroupIds = new Set(groups.map((g) => g.id));
+  const effectiveScope =
+    scope && (scope === "global" || validGroupIds.has(scope))
+      ? scope
+      : defaultScope && validGroupIds.has(defaultScope)
+        ? defaultScope
+        : "global";
+
+  // Where the 🌍 toggle returns to when switched off: the last group scope
+  // that was actually shown (falls back to the default group).
+  const lastGroupScopeRef = useRef<string | null>(null);
+  if (effectiveScope !== "global") lastGroupScopeRef.current = effectiveScope;
+  const toggleGlobal = () => {
+    if (effectiveScope !== "global") {
+      setScope("global");
+      return;
+    }
+    const back = lastGroupScopeRef.current ?? defaultScope ?? groups[0]?.id;
+    if (back && validGroupIds.has(back)) setScope(back);
+  };
 
   // The whole board is one query over user docs: the server-maintained
   // yearly score provides membership and order, and the doc carries
@@ -51,9 +123,9 @@ export default function LeaderboardPage() {
 
   const rows: Row[] = (() => {
     const memberFilter: Set<string> | null =
-      scope === "global"
+      effectiveScope === "global"
         ? null
-        : new Set(groups.find((g) => g.id === scope)?.members ?? []);
+        : new Set(groups.find((g) => g.id === effectiveScope)?.members ?? []);
     // One pass: skip non-members and build each row inline, instead of
     // filtering the roster and then mapping the survivors.
     const out: Row[] = [];
@@ -78,7 +150,7 @@ export default function LeaderboardPage() {
   // personal, so they stay complete.
   const TOP_N = 5;
   const { top, me } =
-    scope === "global"
+    effectiveScope === "global"
       ? splitTopList(rows, user?.uid, TOP_N)
       : { top: rows, me: null };
 
@@ -86,7 +158,7 @@ export default function LeaderboardPage() {
   // global board stays non-interactive (strangers' swims aren't a tap
   // target). Sessions are subscribed per clicked member — one year-bounded
   // single-uid query — instead of preloading the whole scope.
-  const isGroupScope = scope !== "global";
+  const isGroupScope = effectiveScope !== "global";
   const places = useStore((s) => s.placesWithTemps);
   const [memberSelection, setMemberSelection] = useState<{
     member: UserDoc | null;
@@ -97,33 +169,49 @@ export default function LeaderboardPage() {
   const selectedUid = selectedMember?.uid;
   useEffect(() => {
     if (!selectedUid) return;
-    return watchMemberSessions([selectedUid], setMemberSessions);
-  }, [selectedUid]);
+    return watchMemberSessions([selectedUid], setMemberSessions, year);
+  }, [selectedUid, year]);
 
   return (
     <div className="px-4 pt-2">
-      <div className="mb-3 flex items-end justify-between">
+      <div className="mb-3 flex items-end justify-between gap-2">
         <h2 className="font-display text-2xl font-black text-wave-900">
           {t("leaderboard.title")}
         </h2>
-        <span className="chip">{t("leaderboard.year_only", { year })}</span>
+        <div className="flex flex-none items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleGlobal}
+            data-active={effectiveScope === "global"}
+            aria-pressed={effectiveScope === "global"}
+            aria-label={t("leaderboard.global_toggle")}
+            title={t("leaderboard.global_toggle")}
+            className="chip data-[active=true]:bg-wave-600 data-[active=true]:text-white data-[active=true]:ring-wave-700"
+          >
+            <span className="text-sm">🌍</span>
+            {t("leaderboard.scope.global")}
+          </button>
+          <YearPicker
+            year={year}
+            min={MIN_YEAR}
+            max={Math.max(currentYear, MIN_YEAR)}
+            onChange={setYear}
+          />
+        </div>
       </div>
 
-      <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 py-1">
-        <ScopeChip
-          label={t("leaderboard.scope.global")}
-          active={scope === "global"}
-          onClick={() => setScope("global")}
-        />
-        {groups.map((g) => (
-          <ScopeChip
-            key={g.id}
-            label={`${g.emoji ?? "👥"} ${g.name}`}
-            active={scope === g.id}
-            onClick={() => setScope(g.id)}
-          />
-        ))}
-      </div>
+      {groups.length > 0 ? (
+        <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 py-1">
+          {groups.map((g) => (
+            <ScopeChip
+              key={g.id}
+              label={`${g.emoji ?? "👥"} ${g.name}`}
+              active={effectiveScope === g.id}
+              onClick={() => setScope(g.id)}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <ol className="space-y-2">
         {top.map((r, i) => (
@@ -350,6 +438,50 @@ function podiumStyle(rank: number): {
     medalClass: "bg-slate-100 text-slate-500",
     cardClass: "",
   };
+}
+
+/**
+ * Season stepper: ‹ 2026 ›. Bounded by the app's first season (min) and the
+ * current year (max) — with one season live both arrows render disabled,
+ * and new years light up on their own each January.
+ */
+function YearPicker({
+  year,
+  min,
+  max,
+  onChange,
+}: {
+  year: number;
+  min: number;
+  max: number;
+  onChange: (year: number) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="chip gap-0.5 px-1">
+      <button
+        type="button"
+        onClick={() => onChange(year - 1)}
+        disabled={year <= min}
+        aria-label={t("leaderboard.year_prev")}
+        className="rounded-full p-0.5 text-wave-700 hover:bg-wave-100 disabled:text-slate-300 disabled:hover:bg-transparent"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      <span className="min-w-9 text-center text-sm font-semibold tabular-nums">
+        {year}
+      </span>
+      <button
+        type="button"
+        onClick={() => onChange(year + 1)}
+        disabled={year >= max}
+        aria-label={t("leaderboard.year_next")}
+        className="rounded-full p-0.5 text-wave-700 hover:bg-wave-100 disabled:text-slate-300 disabled:hover:bg-transparent"
+      >
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
 }
 
 function ScopeChip({

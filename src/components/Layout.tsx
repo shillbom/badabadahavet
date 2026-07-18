@@ -90,7 +90,11 @@ export default function Layout() {
               ? "flex min-h-0 flex-1 flex-col"
               : hideChrome
                 ? "min-h-full pb-4"
-                : "min-h-full pb-32",
+                : // Clear the fixed bottom nav + the FAB poking above it, plus
+                  // the home-indicator inset the nav itself grows by on iOS —
+                  // otherwise the end of long pages (e.g. the groups list)
+                  // hides behind the bar.
+                  "min-h-full pb-[calc(env(safe-area-inset-bottom)+9rem)]",
           )}
         >
           <Suspense
