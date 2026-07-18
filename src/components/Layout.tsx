@@ -84,8 +84,8 @@ export default function Layout() {
             isMapPage
               ? "flex min-h-0 flex-1 flex-col"
               : hideChrome
-                ? "min-h-full pb-4"
-                : "min-h-full",
+                ? "min-h-full shrink-0 pb-4"
+                : "min-h-full shrink-0",
           )}
         >
           <Suspense
