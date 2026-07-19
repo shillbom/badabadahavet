@@ -22,7 +22,7 @@ import {
   watchMemberSessions,
   watchUsersByYearScore,
 } from "@/lib/data";
-import { splitTopList } from "@/lib/leaderboard";
+import { splitTopList, yearPickerBounds } from "@/lib/leaderboard";
 import { resolveBorder, type Border } from "@/lib/borders";
 import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
@@ -38,9 +38,6 @@ type Row = {
    *  statsByYear backfill ran (renders as a placeholder). */
   stats: YearStats | null;
 };
-
-/** First season the app was live — the year picker never goes below this. */
-const MIN_YEAR = 2026;
 
 export default function LeaderboardPage() {
   const groups = useStore((s) => s.groups);
@@ -120,8 +117,7 @@ export default function LeaderboardPage() {
           </button>
           <YearPicker
             year={year}
-            min={MIN_YEAR}
-            max={Math.max(currentYear, MIN_YEAR)}
+            {...yearPickerBounds(year, currentYear)}
             onChange={setYear}
           />
         </div>
@@ -605,13 +601,15 @@ function podiumStyle(rank: number): {
  */
 function YearPicker({
   year,
-  min,
-  max,
+  canGoBack,
+  canGoForward,
   onChange,
 }: {
   year: number;
   min: number;
   max: number;
+  canGoBack: boolean;
+  canGoForward: boolean;
   onChange: (year: number) => void;
 }) {
   const t = useT();
@@ -620,7 +618,7 @@ function YearPicker({
       <button
         type="button"
         onClick={() => onChange(year - 1)}
-        disabled={year <= min}
+        disabled={!canGoBack}
         aria-label={t("leaderboard.year_prev")}
         className="rounded-full p-0.5 text-wave-700 hover:bg-wave-100 disabled:text-slate-300 disabled:hover:bg-transparent"
       >
@@ -632,7 +630,7 @@ function YearPicker({
       <button
         type="button"
         onClick={() => onChange(year + 1)}
-        disabled={year >= max}
+        disabled={!canGoForward}
         aria-label={t("leaderboard.year_next")}
         className="rounded-full p-0.5 text-wave-700 hover:bg-wave-100 disabled:text-slate-300 disabled:hover:bg-transparent"
       >

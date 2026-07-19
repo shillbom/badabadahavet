@@ -22,6 +22,20 @@ export function yearBounds(year) {
   return [Date.UTC(year, 0, 1), Date.UTC(year + 1, 0, 1)];
 }
 
+// The contest's first season. Swims can only be logged/edited for the current
+// season, so anything before this is historical and locked.
+export const FIRST_YEAR = 2026;
+
+/** The current season (UTC year). */
+export function currentYear() {
+  return new Date().getUTCFullYear();
+}
+
+/** Start-of-current-season timestamp (ms, UTC) — the earliest loggable date. */
+export function currentYearStart() {
+  return Date.UTC(currentYear(), 0, 1);
+}
+
 /** Points a single swim earns. */
 export function swimPoints(isUniqueForUser, isWinter) {
   return (

@@ -30,6 +30,7 @@ import {
   PLACE_RADIUS_METERS,
   isWinterMonth,
   previewPoints,
+  currentSeasonStart,
 } from "@/lib/scoring";
 import { resolveBorder } from "@/lib/borders";
 import {
@@ -147,6 +148,12 @@ export default function LogSessionPage() {
     const ts = mode === "now" ? Date.now() : new Date(date).getTime();
     if (Number.isNaN(ts)) {
       toast.error(t("log.error.date"));
+      return;
+    }
+    // Only the current season is loggable: no back-dating into a past
+    // year, no logging into the future.
+    if (ts < currentSeasonStart() || ts > Date.now()) {
+      toast.error(t("log.error.date_range"));
       return;
     }
     setBusy(true);
@@ -986,6 +993,8 @@ function WhenField({
         type="datetime-local"
         lang={inputLang}
         value={date}
+        min={toLocalInput(new Date(currentSeasonStart()))}
+        max={toLocalInput(new Date())}
         onChange={(e) => updateLocation({ date: e.target.value })}
         disabled={mode === "now"}
         readOnly={mode === "now"}

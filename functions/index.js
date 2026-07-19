@@ -12,6 +12,8 @@ import {
   swimPoints,
   sumYearPoints,
   yearStats,
+  currentYear,
+  currentYearStart,
 } from "./scoring.js";
 import { leaderboardEntry, applyToTop, removeFromTop } from "./leaderboard.js";
 import { checkTextAllowed } from "./moderation.js";
@@ -807,10 +809,13 @@ export const logSession = onCall(
     }
     if (
       typeof date !== "number" ||
-      date < 946684800000 || // 2000-01-01
-      date > Date.now() + 86400000
+      !Number.isFinite(date) ||
+      date < currentYearStart() || // no logging into past seasons
+      date > Date.now() // no logging into the future
     ) {
-      throw new HttpsError("invalid-argument", "date looks invalid.");
+      throw new HttpsError("invalid-argument", "date looks invalid.", {
+        reason: "date-range",
+      });
     }
     const note =
       typeof d.note === "string" && d.note.trim()
@@ -1015,6 +1020,17 @@ export const removeSession = onCall(
           "Not allowed to remove this session.",
         );
       }
+      // The owner can't remove a swim from a past season (locked); an admin
+      // still may, for moderation.
+      if (isOwner && swimYear(session.date) < currentYear()) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Past seasons are locked.",
+          {
+            reason: "season-locked",
+          },
+        );
+      }
 
       const ownerRef = db.collection("users").doc(ownerUid);
       const ownerSnap = await tx.get(ownerRef);
@@ -1120,10 +1136,13 @@ export const updateSession = onCall(
     if (d.date !== undefined) {
       if (
         typeof d.date !== "number" ||
-        d.date < 946684800000 || // 2000-01-01
-        d.date > Date.now() + 86400000
+        !Number.isFinite(d.date) ||
+        d.date < currentYearStart() || // can't move a swim into a past season
+        d.date > Date.now() // ...or the future
       ) {
-        throw new HttpsError("invalid-argument", "date looks invalid.");
+        throw new HttpsError("invalid-argument", "date looks invalid.", {
+          reason: "date-range",
+        });
       }
       newDate = d.date;
     }
@@ -1208,6 +1227,16 @@ export const updateSession = onCall(
         throw new HttpsError(
           "permission-denied",
           "Not allowed to edit this session.",
+        );
+      }
+      // Past seasons are locked — a swim from a previous year can't be edited.
+      if (swimYear(session.date) < currentYear()) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Past seasons are locked.",
+          {
+            reason: "season-locked",
+          },
         );
       }
 

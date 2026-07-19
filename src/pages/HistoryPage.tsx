@@ -1,4 +1,5 @@
 import { m } from "framer-motion";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import {
   ChevronRight,
@@ -9,6 +10,7 @@ import {
 } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useT } from "@/lib/i18n";
+import { currentYear, swimYear } from "@/lib/scoring";
 import { computeStreak } from "@/lib/streak";
 import { dayStartMs } from "@/lib/date";
 import Photo from "@/components/Photo";
@@ -27,8 +29,16 @@ export default function HistoryPage() {
   const t = useT();
   const [params] = useSearchParams();
   const view = params.get("view");
+  const [showOlder, setShowOlder] = useState(false);
 
-  const filtered = view === "streak" ? streakSessions(sessions) : sessions;
+  // The default list only shows the current season; older swims (from past,
+  // now-locked years) stay hidden behind a "show older" button.
+  const cy = currentYear();
+  const currentSeasonSessions = sessions.filter((s) => swimYear(s.date) === cy);
+  const hasOlder = sessions.length > currentSeasonSessions.length;
+  const defaultList = showOlder ? sessions : currentSeasonSessions;
+
+  const filtered = view === "streak" ? streakSessions(sessions) : defaultList;
 
   const spots = (() => {
     if (view !== "spots") return [];
@@ -165,7 +175,9 @@ export default function HistoryPage() {
         </ul>
       ) : filtered.length === 0 ? (
         <p className="rounded-2xl bg-white/70 px-4 py-6 text-center text-sm text-slate-500 ring-1 ring-slate-200/60">
-          {t("history.streak.empty")}
+          {view === "streak"
+            ? t("history.streak.empty")
+            : t("history.season.empty")}
         </p>
       ) : (
         <ul className="space-y-2">
@@ -194,14 +206,16 @@ export default function HistoryPage() {
               }
               points={s.points}
               aside={
-                <Link
-                  to={`/swim/${s.id}/edit`}
-                  className="rounded-full bg-white/80 p-1.5 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
-                  aria-label={t("swim.edit")}
-                  title={t("swim.edit")}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Link>
+                swimYear(s.date) === cy ? (
+                  <Link
+                    to={`/swim/${s.id}/edit`}
+                    className="rounded-full bg-white/80 p-1.5 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+                    aria-label={t("swim.edit")}
+                    title={t("swim.edit")}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Link>
+                ) : undefined
               }
               date={s.date}
               note={s.note}
@@ -230,6 +244,18 @@ export default function HistoryPage() {
           ))}
         </ul>
       )}
+
+      {!view && hasOlder && !showOlder ? (
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => setShowOlder(true)}
+            className="rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-wave-700 ring-1 ring-slate-200 hover:bg-white"
+          >
+            {t("history.load_more")}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

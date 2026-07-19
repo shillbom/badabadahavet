@@ -81,3 +81,27 @@ export function startOfYear(year: number): number {
 export function endOfYear(year: number): number {
   return new Date(year + 1, 0, 1).getTime() - 1;
 }
+
+// The contest's first season. Swims can only be logged/edited for the current
+// season; anything before this is historical and locked.
+export const FIRST_YEAR = 2026;
+
+// Season boundaries below are computed in UTC to match the server
+// (functions/scoring.js) exactly — otherwise, in the small local-vs-UTC window
+// around New Year, the client could allow a swim the server rejects (or hide an
+// edit the server would still permit).
+
+/** The UTC year a swim belongs to. */
+export function swimYear(d: number | Date): number {
+  return new Date(d).getUTCFullYear();
+}
+
+/** The current season (UTC year). */
+export function currentYear(): number {
+  return new Date().getUTCFullYear();
+}
+
+/** Start-of-current-season timestamp (ms, UTC) — the earliest loggable date. */
+export function currentSeasonStart(): number {
+  return Date.UTC(currentYear(), 0, 1);
+}
