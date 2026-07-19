@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m } from "framer-motion";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -52,15 +52,16 @@ export default function Lightbox({
     }
   }
 
-  const go = useCallback(
-    (delta: number) => {
-      const next = index + delta;
-      if (next < 0 || next >= photos.length) return;
-      setDir(delta);
-      setIndex(next);
-    },
-    [index, photos.length],
-  );
+  // Plain function — the React Compiler memoizes it automatically. A manual
+  // useCallback here trips `preserve-manual-memoization`: the compiler's
+  // inferred deps (the setters) don't match hand-written ones, so it bails on
+  // optimizing the whole component.
+  const go = (delta: number) => {
+    const next = index + delta;
+    if (next < 0 || next >= photos.length) return;
+    setDir(delta);
+    setIndex(next);
+  };
 
   // Keyboard navigation while open. The handler reads fresh `go`/`onClose`
   // via an Effect Event so the listener subscribes once per open instead of
