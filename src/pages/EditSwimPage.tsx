@@ -11,7 +11,13 @@ import { toast } from "@/components/ui/toastStore";
 import { removeSession, updateSession, type SessionEdits } from "@/lib/data";
 import { checkImageFile, ImageProcessingError } from "@/lib/image";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
-import { isWinterMonth, previewPoints } from "@/lib/scoring";
+import {
+  currentSeasonStart,
+  currentYear,
+  isWinterMonth,
+  previewPoints,
+  swimYear,
+} from "@/lib/scoring";
 import { useLocale, useT } from "@/lib/i18n";
 
 /** The photo edit state: keep what's stored, remove it, or replace it. */
@@ -69,6 +75,10 @@ export default function EditSwimPage() {
   // re-streamed session (e.g. a reaction landing) doesn't clobber edits.
   const dateValue = date ?? toLocalInput(new Date(session.date));
   const noteValue = note ?? session.note ?? "";
+  // Past seasons are locked: a swim from a previous year can no longer be
+  // edited or deleted (the updateSession/removeSession functions enforce this
+  // too — this just keeps the UI honest).
+  const locked = swimYear(session.date) < currentYear();
 
   const parsedDate = new Date(dateValue).getTime();
   const isWinterSwim =
@@ -124,6 +134,7 @@ export default function EditSwimPage() {
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!session) return;
+    if (locked) return;
     const ts = new Date(dateValue).getTime();
     if (Number.isNaN(ts)) {
       toast.error(t("log.error.date"));
@@ -173,6 +184,7 @@ export default function EditSwimPage() {
 
   async function onDelete() {
     if (!session) return;
+    if (locked) return;
     if (!window.confirm(t("swim.edit.delete_confirm"))) return;
     setDeleting(true);
     try {
@@ -197,6 +209,11 @@ export default function EditSwimPage() {
       </div>
 
       <div className="space-y-4">
+        {locked ? (
+          <div className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
+            {t("swim.edit.locked_year")}
+          </div>
+        ) : null}
         <div className="rounded-2xl bg-white/70 p-3 ring-1 ring-white/60">
           <div className="flex items-center gap-2 text-sm text-slate-700">
             <MapPin className="h-3.5 w-3.5 shrink-0 text-wave-600" />
@@ -216,6 +233,9 @@ export default function EditSwimPage() {
             type="datetime-local"
             lang={inputLang}
             value={dateValue}
+            min={toLocalInput(new Date(currentSeasonStart()))}
+            max={toLocalInput(new Date())}
+            disabled={locked}
             onChange={(e) => setDate(e.target.value)}
           />
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
@@ -244,6 +264,7 @@ export default function EditSwimPage() {
             id="note"
             rows={2}
             value={noteValue}
+            disabled={locked}
             onChange={(e) => setNote(e.target.value)}
             placeholder={t("log.field.note.placeholder")}
           />
@@ -297,14 +318,20 @@ export default function EditSwimPage() {
           />
         </div>
 
-        <Button type="submit" loading={busy} size="lg" className="w-full">
+        <Button
+          type="submit"
+          loading={busy}
+          disabled={locked}
+          size="lg"
+          className="w-full"
+        >
           {t("swim.edit.save")}
         </Button>
 
         <div className="pt-2 text-center">
           <button
             type="button"
-            disabled={busy || deleting}
+            disabled={busy || deleting || locked}
             onClick={onDelete}
             className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-50 disabled:opacity-60"
           >

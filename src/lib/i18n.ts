@@ -365,6 +365,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "history.chip.winter": "vinter",
     "history.streak.empty":
       "Ingen aktiv streak just nu — bada idag eller igår för att starta en.",
+    "history.season.empty": "Inga bad den här säsongen än.",
+    "history.load_more": "Visa äldre bad",
     "history.spots.count_one": "1 bad",
     "history.spots.count_many": "{n} bad",
     "history.back": "Alla bad",
@@ -527,11 +529,14 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "Vi behöver en plats — tryck på kartan eller tillåt platsdelning.",
     "log.error.name": "Ge platsen ett namn.",
     "log.error.date": "Datumet ser inte rätt ut.",
+    "log.error.date_range": "Datumet måste vara inom årets säsong.",
     "log.error.image_too_large": "Bilden är för stor — välj en mindre bild.",
     "log.error.image_failed": "Kunde inte läsa bilden — prova en annan.",
 
     "swim.edit": "Redigera bad",
     "swim.edit.title": "Redigera bad",
+    "swim.edit.locked_year":
+      "Tidigare säsonger är låsta – det här badet kan inte längre ändras.",
     "swim.edit.place_hint":
       "Platsen kan inte ändras — logga ett nytt bad för en annan plats.",
     "swim.edit.save": "Spara ändringar",
@@ -1158,6 +1163,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "history.chip.winter": "winter",
     "history.streak.empty":
       "No active streak — swim today or yesterday to start one.",
+    "history.season.empty": "No swims this season yet.",
+    "history.load_more": "Show older swims",
     "history.spots.count_one": "1 swim",
     "history.spots.count_many": "{n} swims",
     "history.back": "All swims",
@@ -1317,12 +1324,15 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.error.location": "Need a location — tap the map or allow GPS.",
     "log.error.name": "Give the spot a name.",
     "log.error.date": "That date doesn't look right.",
+    "log.error.date_range": "The date must be within this year's season.",
     "log.error.image_too_large":
       "That image is too large — pick a smaller one.",
     "log.error.image_failed": "Couldn't read that image — try another.",
 
     "swim.edit": "Edit swim",
     "swim.edit.title": "Edit swim",
+    "swim.edit.locked_year":
+      "Past seasons are locked — this swim can no longer be edited.",
     "swim.edit.place_hint":
       "The spot can't be changed — log a new swim for a different spot.",
     "swim.edit.save": "Save changes",
