@@ -15,6 +15,7 @@ import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
+import { WhenField } from "@/components/SwimDatePicker";
 import { toast } from "@/components/ui/toastStore";
 import { celebrate } from "@/components/celebrationStore";
 import {
@@ -25,6 +26,7 @@ import {
 import { checkImageFile, ImageProcessingError } from "@/lib/image";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { reverseGeocodeCountry } from "@/lib/geocode";
+import { toLocalInput } from "@/lib/date";
 import { getPosition, haversineMeters } from "@/lib/utils";
 import {
   PLACE_RADIUS_METERS,
@@ -81,6 +83,57 @@ const NOW_FALLBACK_ACCURACY_METERS = 500;
 // How long to wait for a trustworthy fix before deciding with what we have.
 const NOW_FIX_DEADLINE_MS = 10_000;
 
+// Horizontal "swipe" between the two mode panels: the incoming panel slides in
+// from the side you're heading towards (right when moving now→pick, left when
+// moving back), and the outgoing panel slides off the opposite edge. `dir` is
+// +1 for a forward move and -1 for a backward one, passed through as the
+// AnimatePresence custom value.
+const modeSwipe = {
+  enter: (dir: number) => ({ x: dir > 0 ? 36 : -36, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (dir: number) => ({ x: dir > 0 ? -36 : 36, opacity: 0 }),
+};
+
+// The "now vs. pick a time" segmented control plus its explanatory hint.
+function ModeSelector({
+  mode,
+  onChange,
+}: {
+  mode: Mode;
+  onChange: (next: Mode) => void;
+}) {
+  const t = useT();
+  return (
+    <>
+      <SegmentedControl
+        value={mode}
+        onChange={onChange}
+        options={[
+          {
+            value: "now",
+            label: (
+              <>
+                <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
+              </>
+            ),
+          },
+          {
+            value: "pick",
+            label: (
+              <>
+                <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
+              </>
+            ),
+          },
+        ]}
+      />
+      <p className="mt-2 px-1 text-center text-[11px] text-slate-500">
+        {mode === "now" ? t("log.mode.now.hint") : t("log.mode.pick.hint")}
+      </p>
+    </>
+  );
+}
+
 export default function LogSessionPage() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -132,6 +185,16 @@ export default function LogSessionPage() {
   const { photoFileRef, photoPreview, photoInput, onPhotoChange, clearPhoto } =
     usePhotoUpload();
   const [busy, setBusy] = useState(false);
+  // Capture "now" once per mount instead of reading the clock during render —
+  // Date.now() in the render body is impure and blocks React Compiler from
+  // memoizing this component. A fixed baseline is plenty for validating that
+  // the chosen swim time isn't in the future.
+  const [nowMs] = useState(() => Date.now());
+  // Direction of the last mode change (+1 forward, -1 back) driving the swipe,
+  // plus a flag that clips horizontal overflow only while the panels slide so a
+  // scrollbar never flashes — and the calendar popover isn't clipped at rest.
+  const [swipeDir, setSwipeDir] = useState(0);
+  const [swiping, setSwiping] = useState(false);
 
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -245,6 +308,14 @@ export default function LogSessionPage() {
 
   const dateObj = new Date(date);
   const isWinterSwim = isWinterMonth(dateObj);
+  // Only the current season is loggable: from the start of this year up to
+  // now. iOS Safari ignores the picker's min/max, so we validate here and
+  // gate the submit button on it ("now" mode is always valid — it's now).
+  const dateValid =
+    mode === "now" ||
+    (!Number.isNaN(dateObj.getTime()) &&
+      dateObj.getTime() >= currentSeasonStart() &&
+      dateObj.getTime() <= nowMs);
   // "New spot" = a place the user hasn't logged before. A brand-new pin
   // (no pickedPlaceId) is always new; a picked existing place is new only
   // if it's not already in the user's own history.
@@ -264,117 +335,112 @@ export default function LogSessionPage() {
         <span className="w-8" />
       </div>
 
-      <SegmentedControl
-        value={mode}
+      <ModeSelector
+        mode={mode}
         onChange={(next) => {
+          if (next === mode) return;
+          // Segments are ordered [now, pick]; moving to "pick" swipes forward.
+          setSwipeDir(next === "pick" ? 1 : -1);
+          setSwiping(true);
           setIntentionalNow(next === "now");
           updateLocation({ mode: next });
         }}
-        options={[
-          {
-            value: "now",
-            label: (
-              <>
-                <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
-              </>
-            ),
-          },
-          {
-            value: "pick",
-            label: (
-              <>
-                <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
-              </>
-            ),
-          },
-        ]}
       />
 
-      <p className="mt-2 px-1 text-center text-[11px] text-slate-500">
-        {mode === "now" ? t("log.mode.now.hint") : t("log.mode.pick.hint")}
-      </p>
+      <div className={swiping ? "overflow-hidden" : undefined}>
+        <AnimatePresence mode="wait" custom={swipeDir}>
+          <m.div
+            key={mode}
+            custom={swipeDir}
+            variants={modeSwipe}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onAnimationComplete={() => setSwiping(false)}
+            className="mt-4 space-y-4"
+          >
+            {mode === "pick" ? (
+              <PlaceSearch
+                search={search}
+                searchMatches={searchMatches}
+                coords={coords}
+                searchOrigin={searchOrigin}
+                updateLocation={updateLocation}
+                swimMapRef={swimMapRef}
+              />
+            ) : null}
 
-      <AnimatePresence mode="wait">
-        <m.div
-          key={mode}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          className="mt-4 space-y-4"
-        >
-          {mode === "pick" ? (
-            <PlaceSearch
-              search={search}
-              searchMatches={searchMatches}
-              coords={coords}
+            <LogMap
+              places={places}
+              sessionsByPlace={sessionsByPlace}
+              preselectedPlace={preselectedPlace}
               searchOrigin={searchOrigin}
+              mode={mode}
+              coords={coords}
+              pickedPlaceId={pickedPlaceId}
+              myLocation={myLocation}
               updateLocation={updateLocation}
               swimMapRef={swimMapRef}
             />
-          ) : null}
 
-          <LogMap
-            places={places}
-            sessionsByPlace={sessionsByPlace}
-            preselectedPlace={preselectedPlace}
-            searchOrigin={searchOrigin}
-            mode={mode}
-            coords={coords}
-            pickedPlaceId={pickedPlaceId}
-            myLocation={myLocation}
-            updateLocation={updateLocation}
-            swimMapRef={swimMapRef}
-          />
-
-          <LocationBadge
-            coords={coords}
-            mode={mode}
-            pickedPlaceId={pickedPlaceId}
-            suggestion={suggestion}
-            locating={locating}
-          />
-
-          <SpotNameField
-            coords={coords}
-            pickedPlaceId={pickedPlaceId}
-            name={name}
-            suggestion={suggestion}
-            updateLocation={updateLocation}
-          />
-
-          <WhenField
-            date={date}
-            inputLang={inputLang}
-            mode={mode}
-            isNewSpot={isNewSpot}
-            isWinterSwim={isWinterSwim}
-            pointsPreview={pointsPreview}
-            updateLocation={updateLocation}
-          />
-
-          <div className="space-y-1.5">
-            <Label htmlFor="note">{t("log.field.note")}</Label>
-            <Textarea
-              id="note"
-              rows={2}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t("log.field.note.placeholder")}
+            <LocationBadge
+              coords={coords}
+              mode={mode}
+              pickedPlaceId={pickedPlaceId}
+              suggestion={suggestion}
+              locating={locating}
             />
-          </div>
 
-          <PhotoField
-            photoPreview={photoPreview}
-            photoInput={photoInput}
-            onPhotoChange={onPhotoChange}
-            clearPhoto={clearPhoto}
-          />
+            <SpotNameField
+              coords={coords}
+              pickedPlaceId={pickedPlaceId}
+              name={name}
+              suggestion={suggestion}
+              updateLocation={updateLocation}
+            />
 
-          <Button type="submit" loading={busy} size="lg" className="w-full">
-            {t("log.save")} <Sparkles className="h-4 w-4" />
-          </Button>
-        </m.div>
-      </AnimatePresence>
+            <WhenField
+              date={date}
+              inputLang={inputLang}
+              mode={mode}
+              isNewSpot={isNewSpot}
+              isWinterSwim={isWinterSwim}
+              pointsPreview={pointsPreview}
+              dateValid={dateValid}
+              updateLocation={updateLocation}
+            />
+
+            <div className="space-y-1.5">
+              <Label htmlFor="note">{t("log.field.note")}</Label>
+              <Textarea
+                id="note"
+                rows={2}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={t("log.field.note.placeholder")}
+              />
+            </div>
+
+            <PhotoField
+              photoPreview={photoPreview}
+              photoInput={photoInput}
+              onPhotoChange={onPhotoChange}
+              clearPhoto={clearPhoto}
+            />
+
+            <Button
+              type="submit"
+              loading={busy}
+              disabled={!dateValid}
+              size="lg"
+              className="w-full"
+            >
+              {t("log.save")} <Sparkles className="h-4 w-4" />
+            </Button>
+          </m.div>
+        </AnimatePresence>
+      </div>
     </form>
   );
 }
@@ -967,66 +1033,6 @@ function SpotNameField({
   );
 }
 
-function WhenField({
-  date,
-  inputLang,
-  mode,
-  isNewSpot,
-  isWinterSwim,
-  pointsPreview,
-  updateLocation,
-}: {
-  date: string;
-  inputLang: string;
-  mode: Mode;
-  isNewSpot: boolean;
-  isWinterSwim: boolean;
-  pointsPreview: number;
-  updateLocation: UpdateLocation;
-}) {
-  const t = useT();
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor="date">{t("log.field.when")}</Label>
-      <Input
-        id="date"
-        type="datetime-local"
-        lang={inputLang}
-        value={date}
-        min={toLocalInput(new Date(currentSeasonStart()))}
-        max={toLocalInput(new Date())}
-        onChange={(e) => updateLocation({ date: e.target.value })}
-        disabled={mode === "now"}
-        readOnly={mode === "now"}
-        className={mode === "now" ? "bg-slate-100 text-slate-500" : undefined}
-      />
-      {mode === "now" ? (
-        <div className="text-[11px] text-slate-500">
-          {t("log.field.when.now_hint")}
-        </div>
-      ) : null}
-      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        <div className="chip bg-wave-100 text-wave-800 ring-wave-200">
-          💧 {t("log.points.swim")}
-        </div>
-        {isNewSpot ? (
-          <div className="chip bg-emerald-100 text-emerald-800 ring-emerald-200">
-            ✨ {t("log.points.new_spot")}
-          </div>
-        ) : null}
-        {isWinterSwim ? (
-          <div className="chip bg-sky-100 text-sky-800 ring-sky-200">
-            ❄️ {t("log.points.winter")}
-          </div>
-        ) : null}
-        <span className="ml-auto font-display text-sm font-black text-wave-700">
-          {t("log.points.total", { n: pointsPreview })}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function PhotoField({
   photoPreview,
   photoInput,
@@ -1083,10 +1089,4 @@ function PhotoField({
 function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
-}
-
-const pad = (n: number) => n.toString().padStart(2, "0");
-
-function toLocalInput(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

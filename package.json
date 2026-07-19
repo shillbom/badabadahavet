@@ -41,6 +41,7 @@
     "lucide-react": "^1.25.0",
     "pixi.js": "^8.19.0",
     "react": "^19.2.7",
+    "react-day-picker": "^10.0.1",
     "react-dom": "^19.2.7",
     "react-leaflet": "^5.0.0",
     "react-leaflet-cluster": "^4.1.3",

@@ -4,6 +4,13 @@
 export const DAY_MS = 86_400_000;
 export const WEEK_MS = 7 * DAY_MS;
 
+const pad = (n: number) => n.toString().padStart(2, "0");
+
+/** Format a Date as a local `YYYY-MM-DDTHH:mm` datetime-local string. */
+export function toLocalInput(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Local midnight of the day containing `ts`. */
 export function dayStartMs(ts: number): number {
   const d = new Date(ts);
