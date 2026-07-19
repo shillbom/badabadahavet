@@ -631,7 +631,11 @@ function SpotPhotoStrip({
           key={s.id}
           className="relative h-24 w-24 flex-none overflow-hidden rounded-xl ring-1 ring-white/60"
         >
-          <SwimPhoto session={s} className="h-full w-full" />
+          <SwimPhoto
+            session={s}
+            sessions={photoSessions}
+            className="h-full w-full"
+          />
           <span className="pointer-events-none absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold text-white">
             {s.displayName}
           </span>
@@ -696,6 +700,7 @@ function SpotRecentDips({
             s.photoUrl ? (
               <SwimPhoto
                 session={s}
+                sessions={sessions}
                 className="h-14 w-14 flex-none rounded-lg ring-1 ring-wave-200 ring-inset"
               />
             ) : undefined

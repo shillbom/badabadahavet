@@ -356,7 +356,13 @@ function Sheet({
   })();
 
   // Photo opened full-screen in the lightbox (tapping a card's image).
-  const [lightboxFor, setLightboxFor] = useState<SessionDoc | null>(null);
+  const [lightboxId, setLightboxId] = useState<string | null>(null);
+
+  // Every swim currently listed (with its live data), so the lightbox can
+  // swipe between the ones that have a photo.
+  const lightboxSessions = (shown?.items ?? []).map(
+    (item) => liveById.get(item.session.id) ?? item.session,
+  );
 
   // Place opened in a bottom sheet (tapping a card's place name).
   const [spotFor, setSpotFor] = useState<string | null>(null);
@@ -425,7 +431,7 @@ function Sheet({
                         s.photoUrl ? (
                           <button
                             type="button"
-                            onClick={() => setLightboxFor(s)}
+                            onClick={() => setLightboxId(s.id)}
                             className="flex-none"
                             aria-label={t("common.open")}
                           >
@@ -485,7 +491,7 @@ function Sheet({
                       s.photoUrl ? (
                         <button
                           type="button"
-                          onClick={() => setLightboxFor(s)}
+                          onClick={() => setLightboxId(s.id)}
                           className="flex h-14 w-14 flex-none items-center justify-center rounded-lg bg-amber-50 text-2xl ring-1 ring-amber-200"
                           aria-label={t("common.open")}
                         >
@@ -545,7 +551,11 @@ function Sheet({
         </div>
       </BottomSheet>
 
-      <Lightbox session={lightboxFor} onClose={() => setLightboxFor(null)} />
+      <Lightbox
+        sessions={lightboxSessions}
+        currentSessionId={lightboxId}
+        onClose={() => setLightboxId(null)}
+      />
 
       <SpotSheet placeId={spotFor} onClose={() => setSpotFor(null)} />
     </>

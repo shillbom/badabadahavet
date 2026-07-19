@@ -209,6 +209,7 @@ function MemberSwimsSheetContent({
                       s.photoUrl ? (
                         <SwimPhoto
                           session={s}
+                          sessions={memberSwims}
                           className="h-14 w-14 flex-none rounded-lg ring-1 ring-wave-200 ring-inset"
                         />
                       ) : undefined
