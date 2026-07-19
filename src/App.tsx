@@ -21,7 +21,7 @@ import { Toaster } from "@/components/ui/Toast";
 import UpdatePrompt from "@/components/UpdatePrompt";
 import SinceLastVisit from "@/components/SinceLastVisit";
 import ConsentBanner from "@/components/ConsentBanner";
-import { CelebrationOverlay } from "@/components/Celebration";
+import { CelebrationOverlay } from "@/components/fx/Celebration";
 import { celebrate } from "@/components/celebrationStore";
 import { FullSplash } from "@/components/Splash";
 import { setBootReady } from "@/lib/bootSignal";

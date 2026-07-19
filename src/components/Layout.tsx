@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { useT } from "@/lib/i18n";
 import TopBar from "@/components/TopBar";
 import SwimNudge from "@/components/SwimNudge";
-import DiscoRays from "@/components/DiscoRays";
+import DiscoRays from "@/components/fx/DiscoRays";
 import NavBar from "./NavBar";
 
 export default function Layout() {

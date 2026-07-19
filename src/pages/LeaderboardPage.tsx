@@ -214,7 +214,7 @@ export default function LeaderboardPage() {
         </div>
       ) : null}
 
-      <ol className="space-y-2">
+      <ol className="mb-4 space-y-2">
         {top.map((r, i) => (
           <BoardRow
             key={r.uid}

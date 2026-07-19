@@ -339,7 +339,7 @@ export default function GroupsPage() {
           {t("groups.empty")}
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="mb-4 space-y-2">
           <AnimatePresence initial={false}>
             {groups.map((g) => (
               <GroupListItem

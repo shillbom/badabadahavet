@@ -67,7 +67,7 @@ function SplashArt() {
             textAnchor="middle"
             x="120"
             y="50"
-            fontSize="56"
+            fontSize="64"
           >
             Badligan
           </text>
@@ -76,7 +76,7 @@ function SplashArt() {
             textAnchor="middle"
             x="120"
             y="50"
-            fontSize="56"
+            fontSize="64"
             fill="url(#splash-wave)"
           >
             Badligan

@@ -175,7 +175,7 @@ export default function ToswimPage() {
           {view === "todo" ? t("toswim.empty.todo") : t("toswim.empty.done")}
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="mb-4 space-y-2">
           {visible.map((e, i) => (
             <m.li
               key={e.placeId}

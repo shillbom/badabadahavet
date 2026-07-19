@@ -204,15 +204,35 @@ export default function SwimMap({
           spiderfyOnMaxZoom
           iconCreateFunction={createClusterIcon}
         >
-          {clusterablePlaces.map((p) => (
+          {clusterablePlaces.map((p) => {
+            const lastUpdate = Math.max(p.lastSwimAt ?? 0, p.waterTempAt ?? 0);
+            return (
+              <PlaceMarker
+                key={`${p.id}:${lastUpdate}`}
+                place={p}
+                icon={pinIcon(
+                  hasFreshTemp(p) ? p.waterTemp : null,
+                  pinRingFor(p.lastSwimBorder),
+                  recencyFactor(p.lastSwimAt),
+                )}
+                markerRefs={markerRefs}
+                mapRef={mapRef}
+                onPickExisting={onPickExisting}
+                canPickExisting={canPickExisting}
+                setPopup={setPopup}
+                popupSessionsFor={popupSessionsFor}
+                linkToSpot={linkToSpot}
+              />
+            );
+          })}
+        </MarkerClusterGroup>
+        {unclusteredPlaces.map((p) => {
+          const lastUpdate = Math.max(p.lastSwimAt ?? 0, p.waterTempAt ?? 0);
+          return (
             <PlaceMarker
-              key={p.id}
+              key={`active-${p.id}:${lastUpdate}`}
               place={p}
-              icon={pinIcon(
-                hasFreshTemp(p) ? p.waterTemp : null,
-                pinRingFor(p.lastSwimBorder),
-                recencyFactor(p.lastSwimAt),
-              )}
+              icon={activePlaceIcon}
               markerRefs={markerRefs}
               mapRef={mapRef}
               onPickExisting={onPickExisting}
@@ -221,22 +241,8 @@ export default function SwimMap({
               popupSessionsFor={popupSessionsFor}
               linkToSpot={linkToSpot}
             />
-          ))}
-        </MarkerClusterGroup>
-        {unclusteredPlaces.map((p) => (
-          <PlaceMarker
-            key={`active-${p.id}`}
-            place={p}
-            icon={activePlaceIcon}
-            markerRefs={markerRefs}
-            mapRef={mapRef}
-            onPickExisting={onPickExisting}
-            canPickExisting={canPickExisting}
-            setPopup={setPopup}
-            popupSessionsFor={popupSessionsFor}
-            linkToSpot={linkToSpot}
-          />
-        ))}
+          );
+        })}
         {pickedAt && !activePlaceId ? (
           <Marker position={[pickedAt.lat, pickedAt.lng]} icon={newSwimIcon} />
         ) : null}
