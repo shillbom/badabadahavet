@@ -1,0 +1,42 @@
+name: Rebuild leaderboard toplist
+
+on:
+  # Once a day, well clear of the temperature sweep (10:00 UTC). The scoring
+  # Cloud Functions keep each year's top 5 correct incrementally; this job
+  # only exists to heal drift from score *drops* (edits, removals, bans)
+  # where the displaced 6th-place swimmer isn't tracked, so daily is plenty.
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: rebuild-toplist
+  cancel-in-progress: true
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Use Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Write service-account JSON
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/sa.json" >> "$GITHUB_ENV"
+
+      - name: Rebuild leaderboard toplist
+        env:
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: npm run backfill:toplist -- --write

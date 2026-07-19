@@ -287,6 +287,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Global top-5 leaderboard snapshot per year, maintained by the
+    // logSession / removeSession / editSession Cloud Functions and rebuilt
+    // by scripts/backfill-toplist.mjs (all Admin SDK, which bypasses these
+    // rules). World-readable so signed-out guests see the global board
+    // without needing access to individual user docs.
+    match /leaderboard/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

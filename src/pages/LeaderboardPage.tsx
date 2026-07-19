@@ -9,9 +9,16 @@ import {
 } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
-import type { SessionDoc, UserDoc, YearStats } from "@/lib/types";
+import type {
+  GroupDoc,
+  SessionDoc,
+  UserDoc,
+  YearStats,
+  LeaderboardEntry,
+} from "@/lib/types";
 import {
-  fetchLatestSwimUid,
+  fetchLatestSwimAt,
+  watchGlobalLeaderboard,
   watchMemberSessions,
   watchUsersByYearScore,
 } from "@/lib/data";
@@ -21,7 +28,6 @@ import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import { cn } from "@/lib/utils";
-import { useIsAdmin } from "@/lib/adminMode";
 
 type Row = {
   uid: string;
@@ -39,112 +45,34 @@ const MIN_YEAR = 2026;
 export default function LeaderboardPage() {
   const groups = useStore((s) => s.groups);
   const { user } = useAuth();
-  const isAdmin = useIsAdmin();
 
   const t = useT();
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
 
-  // `scope` is the user's explicit choice; null means "not chosen yet", in
-  // which case we fall back to the computed default group (freshest swim)
-  // and finally to global. Group ids are validated against the live group
-  // list so leaving a group can't strand the board on a dead scope.
-  const [scope, setScope] = useState<string | null>(null);
-  const [defaultScope, setDefaultScope] = useState<string | null>(null);
+  const {
+    scope,
+    setScope,
+    effectiveScope,
+    orderedGroups,
+    groupRecencyReady,
+    toggleGlobal,
+  } = useGroupScope(user, groups);
 
-  // Default tab: the group whose members swam most recently. One cheap
-  // one-shot lookup (limit-1 query per 30 members) across the union of all
-  // group members; when the freshest swimmer is in several of my groups —
-  // or nobody has swum yet — the biggest group wins.
-  const groupsKey = groups
-    .map((g) => g.id)
-    .toSorted()
-    .join("\n");
-  useEffect(() => {
-    if (!user || groups.length === 0) return;
-    let active = true;
-    const memberUnion = new Set<string>();
-    for (const g of groups) for (const uid of g.members) memberUnion.add(uid);
-    void fetchLatestSwimUid([...memberUnion]).then((latestUid) => {
-      if (!active) return;
-      const withSwimmer = latestUid
-        ? groups.filter((g) => g.members.includes(latestUid))
-        : [];
-      const pool = withSwimmer.length > 0 ? withSwimmer : groups;
-      const biggest = pool.toSorted(
-        (a, b) => b.members.length - a.members.length,
-      )[0];
-      setDefaultScope(biggest.id);
-      return;
-    });
-    return () => {
-      active = false;
-    };
-    // Keyed on membership content, same trick as GroupsPage.
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, groupsKey]);
-
-  const validGroupIds = new Set(groups.map((g) => g.id));
-  const effectiveScope =
-    scope && (scope === "global" || validGroupIds.has(scope))
-      ? scope
-      : defaultScope && validGroupIds.has(defaultScope)
-        ? defaultScope
-        : "global";
-
-  // Where the 🌍 toggle returns to when switched off: the last group scope
-  // that was actually shown (falls back to the default group).
-  const lastGroupScopeRef = useRef<string | null>(null);
-  if (effectiveScope !== "global") lastGroupScopeRef.current = effectiveScope;
-  const toggleGlobal = () => {
-    if (effectiveScope !== "global") {
-      setScope("global");
-      return;
-    }
-    const back = lastGroupScopeRef.current ?? defaultScope ?? groups[0]?.id;
-    if (back && validGroupIds.has(back)) setScope(back);
-  };
-
-  // The whole board is one query over user docs: the server-maintained
-  // yearly score provides membership and order, and the doc carries
-  // everything the card shows (name, points, border, achievements, and the
-  // per-year stat chips). No session docs are read at all. Guests can't
-  // read user docs (rules), so the board is empty until signed in.
-  const [roster, setRoster] = useState<UserDoc[]>([]);
-  useEffect(() => {
-    if (!user) return;
-    return watchUsersByYearScore(year, setRoster);
-  }, [user, year]);
+  const { rows, visibleRoster, dataReady } = useLeaderboardRows(
+    user,
+    year,
+    groups,
+    effectiveScope,
+  );
 
   // A sign-out leaves the last subscription value in state briefly, but it
-  // must never be rendered to a guest. Deriving this avoids an extra effect
-  // render solely to clear state.
-  const visibleRoster = user ? roster : [];
-
-  const rows: Row[] = (() => {
-    const memberFilter: Set<string> | null =
-      effectiveScope === "global"
-        ? null
-        : new Set(groups.find((g) => g.id === effectiveScope)?.members ?? []);
-    // One pass: skip non-members and build each row inline, instead of
-    // filtering the roster and then mapping the survivors.
-    const out: Row[] = [];
-    for (const u of visibleRoster) {
-      if (memberFilter && !memberFilter.has(u.uid)) continue;
-      // Achievements persisted on the profile drive the border — richer
-      // than the old live computation (all-time, not just this year).
-      const unlocked = new Set(Object.keys(u.achievements ?? {}));
-      out.push({
-        uid: u.uid,
-        displayName: u.displayName,
-        points: u.scores?.[String(year)] ?? 0,
-        border: resolveBorder(u.selectedBorder, unlocked.size, unlocked),
-        stats: u.statsByYear?.[String(year)] ?? null,
-      });
-    }
-    return out;
-  })();
+  // must never be rendered to a guest. Group boards also wait for the
+  // recency lookup so the default scope doesn't flip under the user.
+  const showingGhost = user
+    ? !dataReady || (groups.length > 0 && scope === null && !groupRecencyReady)
+    : !dataReady;
 
   // The global board only shows the podium (top 5) plus your own row with
   // its true rank when you're further down. Group boards are small and
@@ -156,10 +84,8 @@ export default function LeaderboardPage() {
       : { top: rows, me: null };
 
   // Group rows open the same member-swims sheet as the group view. The
-  // global board stays non-interactive (strangers' swims aren't a tap
-  // target). Sessions are subscribed per clicked member — one year-bounded
+  // Sessions are subscribed per clicked member — one year-bounded
   // single-uid query — instead of preloading the whole scope.
-  const isGroupScope = effectiveScope !== "global";
   const places = useStore((s) => s.placesWithTemps);
   const [memberSelection, setMemberSelection] = useState<{
     member: UserDoc | null;
@@ -203,7 +129,7 @@ export default function LeaderboardPage() {
 
       {groups.length > 0 ? (
         <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 py-1">
-          {groups.map((g) => (
+          {orderedGroups.map((g) => (
             <ScopeChip
               key={g.id}
               label={`${g.emoji ?? "👥"} ${g.name}`}
@@ -215,45 +141,51 @@ export default function LeaderboardPage() {
       ) : null}
 
       <ol className="mb-4 space-y-2">
-        {top.map((r, i) => (
-          <BoardRow
-            key={r.uid}
-            row={r}
-            rank={i}
-            isMe={user?.uid === r.uid}
-            onSelect={
-              isGroupScope || isAdmin
-                ? () => {
-                    setMemberSessions([]);
-                    setMemberSelection((current) => ({
-                      member: roster.find((u) => u.uid === r.uid) ?? null,
-                      key: current.key + 1,
-                    }));
-                  }
-                : undefined
-            }
-          />
-        ))}
-        {me ? (
+        {showingGhost ? (
           <>
-            <li
-              aria-hidden
-              className="py-0.5 text-center text-sm leading-none tracking-[0.4em] text-slate-400 select-none"
-            >
-              •••
-            </li>
-            <BoardRow row={me.row} rank={me.rank} isMe />
+            <LeaderboardGhostRow />
+            <LeaderboardGhostRow />
+            <LeaderboardGhostRow />
           </>
-        ) : null}
-        {rows.length === 0 ? (
-          <m.li
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500"
-          >
-            {t("leaderboard.empty")}
-          </m.li>
-        ) : null}
+        ) : (
+          <>
+            {top.map((r, i) => (
+              <BoardRow
+                key={r.uid}
+                row={r}
+                rank={i}
+                isMe={user?.uid === r.uid}
+                onSelect={() => {
+                  setMemberSessions([]);
+                  setMemberSelection((current) => ({
+                    member: visibleRoster.find((u) => u.uid === r.uid) ?? null,
+                    key: current.key + 1,
+                  }));
+                }}
+              />
+            ))}
+            {me ? (
+              <>
+                <li
+                  aria-hidden
+                  className="py-0.5 text-center text-sm leading-none tracking-[0.4em] text-slate-400 select-none"
+                >
+                  •••
+                </li>
+                <BoardRow row={me.row} rank={me.rank} isMe />
+              </>
+            ) : null}
+            {rows.length === 0 ? (
+              <m.li
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500"
+              >
+                {t("leaderboard.empty")}
+              </m.li>
+            ) : null}
+          </>
+        )}
       </ol>
 
       <MemberSwimsSheet
@@ -266,6 +198,231 @@ export default function LeaderboardPage() {
         }
       />
     </div>
+  );
+}
+
+/**
+ * Group tab ordering + the active scope. `scope` is the user's explicit
+ * choice; null means "not chosen yet", in which case we fall back to the
+ * computed default group (freshest member swim) and finally to global.
+ * Group ids are validated against the live group list so leaving a group
+ * can't strand the board on a dead scope.
+ */
+function useGroupScope(user: { uid: string } | null, groups: GroupDoc[]) {
+  const [scope, setScope] = useState<string | null>(null);
+  const [groupRecency, setGroupRecency] = useState<{
+    key: string;
+    defaultScope: string | null;
+    lastSwimAt: Map<string, number>;
+  } | null>(null);
+
+  // Default tab + chip order: groups by most-recent member swim (all-time),
+  // with biggest-group tie-breaks and then name for stable output.
+  const groupsKey = groups
+    .map((g) => `${g.id}:${g.members.toSorted().join(",")}`)
+    .toSorted()
+    .join("\n");
+  const groupRecencyKey = user ? `${user.uid}\n${groupsKey}` : "";
+
+  useEffect(() => {
+    if (!user || groups.length === 0) return;
+    let active = true;
+    void Promise.all(
+      groups.map(async (g) => ({
+        group: g,
+        lastSwimAt: (await fetchLatestSwimAt(g.members)) ?? 0,
+      })),
+    )
+      .then((withRecency) => {
+        if (!active) return;
+        const byRecency = withRecency.toSorted(
+          (a, b) =>
+            b.lastSwimAt - a.lastSwimAt ||
+            b.group.members.length - a.group.members.length ||
+            a.group.name.localeCompare(b.group.name),
+        );
+        setGroupRecency({
+          key: groupRecencyKey,
+          defaultScope: byRecency[0]?.group.id ?? null,
+          lastSwimAt: new Map(
+            byRecency.map(({ group, lastSwimAt }) => [group.id, lastSwimAt]),
+          ),
+        });
+        return;
+      })
+      .catch(() => {
+        if (!active) return;
+        // Fail open: stable fallback if recency lookup fails.
+        const biggest = groups.toSorted(
+          (a, b) =>
+            b.members.length - a.members.length || a.name.localeCompare(b.name),
+        )[0];
+        setGroupRecency({
+          key: groupRecencyKey,
+          defaultScope: biggest?.id ?? null,
+          lastSwimAt: new Map(),
+        });
+        return;
+      });
+    return () => {
+      active = false;
+    };
+    // Keyed on membership content, same trick as GroupsPage.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupRecencyKey]);
+
+  const validGroupIds = new Set(groups.map((g) => g.id));
+  const groupRecencyReady =
+    groups.length === 0 || groupRecency?.key === groupRecencyKey;
+  const defaultScope = groupRecencyReady
+    ? (groupRecency?.defaultScope ?? null)
+    : null;
+  const groupLastSwimAt = groupRecencyReady
+    ? (groupRecency?.lastSwimAt ?? new Map<string, number>())
+    : new Map<string, number>();
+  const orderedGroups = groups.toSorted(
+    (a, b) =>
+      (groupLastSwimAt.get(b.id) ?? 0) - (groupLastSwimAt.get(a.id) ?? 0) ||
+      b.members.length - a.members.length ||
+      a.name.localeCompare(b.name),
+  );
+  const effectiveScope =
+    scope && (scope === "global" || validGroupIds.has(scope))
+      ? scope
+      : defaultScope && validGroupIds.has(defaultScope)
+        ? defaultScope
+        : "global";
+
+  // Where the 🌍 toggle returns to when switched off: the last group scope
+  // that was actually shown (falls back to the default group).
+  const lastGroupScopeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (effectiveScope !== "global") lastGroupScopeRef.current = effectiveScope;
+  }, [effectiveScope]);
+  const toggleGlobal = () => {
+    if (effectiveScope !== "global") {
+      setScope("global");
+      return;
+    }
+    const back =
+      lastGroupScopeRef.current ?? defaultScope ?? orderedGroups[0]?.id;
+    if (back && validGroupIds.has(back)) setScope(back);
+  };
+
+  return {
+    scope,
+    setScope,
+    effectiveScope,
+    orderedGroups,
+    groupRecencyReady,
+    toggleGlobal,
+  };
+}
+
+/**
+ * The board's rows for the active year/scope. Signed-in users read the
+ * server-maintained per-year roster (one query over user docs, which carries
+ * everything a card shows — name, points, border, achievements, stat chips).
+ * Guests can't read user docs (rules) so they fall back to the world-readable
+ * top-5 snapshot. `dataReady` guards against rendering a stale value to a
+ * guest right after sign-out.
+ */
+function useLeaderboardRows(
+  user: { uid: string } | null,
+  year: number,
+  groups: GroupDoc[],
+  effectiveScope: string,
+) {
+  const rosterKey = user ? `${user.uid}:${year}` : "";
+  const [rosterResult, setRosterResult] = useState<{
+    key: string;
+    users: UserDoc[];
+  } | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    return watchUsersByYearScore(year, (next) => {
+      setRosterResult({ key: rosterKey, users: next });
+    });
+  }, [user, year, rosterKey]);
+
+  // Guests only ever see the global board, powered by the world-readable
+  // `leaderboard/{year}` snapshot (top 5) that the scoring functions keep
+  // fresh. Signed-in users don't need it — their roster is richer.
+  const guestKey = `guest:${year}`;
+  const [guestSnap, setGuestSnap] = useState<{
+    key: string;
+    entries: LeaderboardEntry[];
+  } | null>(null);
+  useEffect(() => {
+    if (user) return;
+    return watchGlobalLeaderboard(year, (entries) => {
+      setGuestSnap({ key: guestKey, entries });
+    });
+  }, [user, year, guestKey]);
+  const guestReady = guestSnap?.key === guestKey;
+
+  const rosterReady = rosterResult?.key === rosterKey;
+  const visibleRoster = user && rosterReady ? rosterResult.users : [];
+  const dataReady = user ? rosterReady : guestReady;
+
+  const rows: Row[] = (() => {
+    // Guests render straight from the top-5 snapshot — same shape as a
+    // roster row, with the border resolved from the stored achievement ids.
+    if (!user) {
+      const entries = guestReady ? guestSnap.entries : [];
+      return entries.map((e) => {
+        const unlocked = new Set(Object.keys(e.achievements ?? {}));
+        return {
+          uid: e.uid,
+          displayName: e.displayName,
+          points: e.points,
+          border: resolveBorder(e.selectedBorder, unlocked.size, unlocked),
+          stats: e.stats ?? null,
+        };
+      });
+    }
+    const memberFilter: Set<string> | null =
+      effectiveScope === "global"
+        ? null
+        : new Set(groups.find((g) => g.id === effectiveScope)?.members ?? []);
+    // One pass: skip non-members and build each row inline, instead of
+    // filtering the roster and then mapping the survivors.
+    const out: Row[] = [];
+    for (const u of visibleRoster) {
+      if (memberFilter && !memberFilter.has(u.uid)) continue;
+      // Achievements persisted on the profile drive the border — richer
+      // than the old live computation (all-time, not just this year).
+      const unlocked = new Set(Object.keys(u.achievements ?? {}));
+      out.push({
+        uid: u.uid,
+        displayName: u.displayName,
+        points: u.scores?.[String(year)] ?? 0,
+        border: resolveBorder(u.selectedBorder, unlocked.size, unlocked),
+        stats: u.statsByYear?.[String(year)] ?? null,
+      });
+    }
+    return out;
+  })();
+
+  return { rows, visibleRoster, dataReady };
+}
+
+function LeaderboardGhostRow() {
+  return (
+    <li className="glass relative flex items-center gap-3 p-3">
+      <div className="h-9 w-9 flex-none animate-pulse rounded-full bg-slate-200/70" />
+      <div className="min-w-0 flex-1">
+        <div className="h-3.5 w-32 animate-pulse rounded bg-slate-200/70" />
+        <div className="mt-1.5 flex h-4 items-center gap-2 overflow-hidden whitespace-nowrap">
+          <div className="h-2.5 w-20 animate-pulse rounded bg-slate-200/70" />
+          <div className="h-2.5 w-16 animate-pulse rounded bg-slate-200/70" />
+        </div>
+        <div className="mt-1 flex h-3.5 items-center">
+          <div className="h-2 w-14 animate-pulse rounded bg-slate-200/70" />
+        </div>
+      </div>
+      <div className="h-7 w-10 flex-none animate-pulse rounded bg-slate-200/70" />
+    </li>
   );
 }
 

@@ -13,13 +13,19 @@ import { useT } from "@/lib/i18n";
  *
  * Assumes `session.photoUrl` is set — callers render their own placeholder for
  * photo-less swims. `className` sizes/rounds the tappable box.
+ *
+ * Pass `sessions` (the whole list shown in this context) to let the lightbox
+ * swipe between all the photos around this one; it defaults to just this swim.
+ * The lightbox filters out photo-less sessions itself.
  */
 export default function SwimPhoto({
   session,
+  sessions,
   className,
   imgClassName,
 }: {
   session: SessionDoc;
+  sessions?: SessionDoc[];
   className?: string;
   imgClassName?: string;
 }) {
@@ -44,7 +50,8 @@ export default function SwimPhoto({
         />
       </button>
       <Lightbox
-        session={open ? session : null}
+        sessions={sessions ?? [session]}
+        currentSessionId={open ? session.id : null}
         onClose={() => setOpen(false)}
       />
     </>

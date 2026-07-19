@@ -35,6 +35,7 @@ import type {
   TempSummaryDoc,
   UserDoc,
   BannedUser,
+  LeaderboardEntry,
   WaterSample,
 } from "./types";
 import { summaryToMap, qualityToMap } from "./temps";
@@ -211,6 +212,24 @@ export function watchUsersByYearScore(
     ),
     (snap) => cb(snap.docs.map((d) => d.data() as UserDoc)),
   );
+}
+
+/**
+ * Live global top-5 leaderboard snapshot for `year` (`leaderboard/{year}`).
+ * World-readable, so signed-out guests get the global board without access
+ * to individual user docs. Maintained server-side by the scoring functions
+ * and rebuilt by scripts/backfill-toplist.mjs.
+ */
+export function watchGlobalLeaderboard(
+  year: number,
+  cb: (entries: LeaderboardEntry[]) => void,
+): Unsubscribe {
+  return onSnapshot(doc(db, "leaderboard", String(year)), (snap) => {
+    const data = snap.exists()
+      ? (snap.data() as { top?: LeaderboardEntry[] })
+      : null;
+    cb(Array.isArray(data?.top) ? (data.top as LeaderboardEntry[]) : []);
+  });
 }
 
 export async function fetchUsers(uids: string[]): Promise<UserDoc[]> {
@@ -633,6 +652,34 @@ export async function fetchLatestSwimUid(
     }),
   );
   return best ? (best as SessionDoc).uid : null;
+}
+
+/**
+ * One-shot: epoch ms of the most recent swim among `uids` (any year),
+ * or null when none of them has ever logged a swim.
+ */
+export async function fetchLatestSwimAt(
+  uids: string[],
+): Promise<number | null> {
+  if (uids.length === 0) return null;
+  const chunks: string[][] = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+  let bestDate: number | null = null;
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const snap = await getDocs(
+        query(
+          sessionsCol,
+          where("uid", "in", chunk),
+          orderBy("date", "desc"),
+          limit(1),
+        ),
+      );
+      const s = snap.docs[0]?.data() as SessionDoc | undefined;
+      if (s && (bestDate === null || s.date > bestDate)) bestDate = s.date;
+    }),
+  );
+  return bestDate;
 }
 
 /**

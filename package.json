@@ -26,6 +26,7 @@
     "scrub:usernames": "node scripts/scrub-usernames.mjs",
     "backfill:scores": "node scripts/backfill-scores.mjs",
     "backfill:thumbnails": "node scripts/backfill-thumbnails.mjs",
+    "backfill:toplist": "node scripts/backfill-toplist.mjs",
     "merge:places": "node scripts/merge-places.mjs",
     "prepare": "husky",
     "doctor": "npx react-doctor@latest"

@@ -8,6 +8,28 @@ export type YearStats = {
   countriesAbroad: number;
 };
 
+/** One row of the global top-5 snapshot (`leaderboard/{year}`). Mirrors the
+ *  fields a leaderboard row needs so guests can render the board without
+ *  reading individual user docs. Built server-side by functions/leaderboard.js. */
+export type LeaderboardEntry = {
+  uid: string;
+  displayName: string;
+  points: number;
+  stats: YearStats | null;
+  /** Chosen border id — resolved client-side against `achievements`. */
+  selectedBorder?: string;
+  /** Earned achievement ids (id -> timestamp); only the keys are used. */
+  achievements?: Record<string, number>;
+};
+
+/** World-readable global leaderboard snapshot for one year. Maintained by the
+ *  scoring Cloud Functions and rebuilt by scripts/backfill-toplist.mjs. */
+export type LeaderboardDoc = {
+  year: number;
+  top: LeaderboardEntry[];
+  updatedAt: number;
+};
+
 export type UserDoc = {
   uid: string;
   displayName: string;
