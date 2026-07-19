@@ -11,7 +11,7 @@ import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import type { SessionDoc, UserDoc, YearStats } from "@/lib/types";
 import {
-  fetchLatestSwimUid,
+  fetchLatestSwimAt,
   watchMemberSessions,
   watchUsersByYearScore,
 } from "@/lib/data";
@@ -21,7 +21,6 @@ import { useT } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import { cn } from "@/lib/utils";
-import { useIsAdmin } from "@/lib/adminMode";
 
 type Row = {
   uid: string;
@@ -39,7 +38,6 @@ const MIN_YEAR = 2026;
 export default function LeaderboardPage() {
   const groups = useStore((s) => s.groups);
   const { user } = useAuth();
-  const isAdmin = useIsAdmin();
 
   const t = useT();
 
@@ -51,41 +49,82 @@ export default function LeaderboardPage() {
   // and finally to global. Group ids are validated against the live group
   // list so leaving a group can't strand the board on a dead scope.
   const [scope, setScope] = useState<string | null>(null);
-  const [defaultScope, setDefaultScope] = useState<string | null>(null);
+  const [groupRecency, setGroupRecency] = useState<{
+    key: string;
+    defaultScope: string | null;
+    lastSwimAt: Map<string, number>;
+  } | null>(null);
 
-  // Default tab: the group whose members swam most recently. One cheap
-  // one-shot lookup (limit-1 query per 30 members) across the union of all
-  // group members; when the freshest swimmer is in several of my groups —
-  // or nobody has swum yet — the biggest group wins.
+  // Default tab + chip order: groups by most-recent member swim (all-time),
+  // with biggest-group tie-breaks and then name for stable output.
   const groupsKey = groups
-    .map((g) => g.id)
+    .map((g) => `${g.id}:${g.members.toSorted().join(",")}`)
     .toSorted()
     .join("\n");
+  const groupRecencyKey = user ? `${user.uid}\n${groupsKey}` : "";
+
   useEffect(() => {
     if (!user || groups.length === 0) return;
     let active = true;
-    const memberUnion = new Set<string>();
-    for (const g of groups) for (const uid of g.members) memberUnion.add(uid);
-    void fetchLatestSwimUid([...memberUnion]).then((latestUid) => {
-      if (!active) return;
-      const withSwimmer = latestUid
-        ? groups.filter((g) => g.members.includes(latestUid))
-        : [];
-      const pool = withSwimmer.length > 0 ? withSwimmer : groups;
-      const biggest = pool.toSorted(
-        (a, b) => b.members.length - a.members.length,
-      )[0];
-      setDefaultScope(biggest.id);
-      return;
-    });
+    void Promise.all(
+      groups.map(async (g) => ({
+        group: g,
+        lastSwimAt: (await fetchLatestSwimAt(g.members)) ?? 0,
+      })),
+    )
+      .then((withRecency) => {
+        if (!active) return;
+        const byRecency = withRecency.toSorted(
+          (a, b) =>
+            b.lastSwimAt - a.lastSwimAt ||
+            b.group.members.length - a.group.members.length ||
+            a.group.name.localeCompare(b.group.name),
+        );
+        setGroupRecency({
+          key: groupRecencyKey,
+          defaultScope: byRecency[0]?.group.id ?? null,
+          lastSwimAt: new Map(
+            byRecency.map(({ group, lastSwimAt }) => [group.id, lastSwimAt]),
+          ),
+        });
+        return;
+      })
+      .catch(() => {
+        if (!active) return;
+        // Fail open: stable fallback if recency lookup fails.
+        const biggest = groups.toSorted(
+          (a, b) =>
+            b.members.length - a.members.length || a.name.localeCompare(b.name),
+        )[0];
+        setGroupRecency({
+          key: groupRecencyKey,
+          defaultScope: biggest?.id ?? null,
+          lastSwimAt: new Map(),
+        });
+        return;
+      });
     return () => {
       active = false;
     };
     // Keyed on membership content, same trick as GroupsPage.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, groupsKey]);
+  }, [groupRecencyKey]);
 
   const validGroupIds = new Set(groups.map((g) => g.id));
+  const groupRecencyReady =
+    groups.length === 0 || groupRecency?.key === groupRecencyKey;
+  const defaultScope = groupRecencyReady
+    ? (groupRecency?.defaultScope ?? null)
+    : null;
+  const groupLastSwimAt = groupRecencyReady
+    ? (groupRecency?.lastSwimAt ?? new Map<string, number>())
+    : new Map<string, number>();
+  const orderedGroups = groups.toSorted(
+    (a, b) =>
+      (groupLastSwimAt.get(b.id) ?? 0) - (groupLastSwimAt.get(a.id) ?? 0) ||
+      b.members.length - a.members.length ||
+      a.name.localeCompare(b.name),
+  );
   const effectiveScope =
     scope && (scope === "global" || validGroupIds.has(scope))
       ? scope
@@ -96,13 +135,16 @@ export default function LeaderboardPage() {
   // Where the 🌍 toggle returns to when switched off: the last group scope
   // that was actually shown (falls back to the default group).
   const lastGroupScopeRef = useRef<string | null>(null);
-  if (effectiveScope !== "global") lastGroupScopeRef.current = effectiveScope;
+  useEffect(() => {
+    if (effectiveScope !== "global") lastGroupScopeRef.current = effectiveScope;
+  }, [effectiveScope]);
   const toggleGlobal = () => {
     if (effectiveScope !== "global") {
       setScope("global");
       return;
     }
-    const back = lastGroupScopeRef.current ?? defaultScope ?? groups[0]?.id;
+    const back =
+      lastGroupScopeRef.current ?? defaultScope ?? orderedGroups[0]?.id;
     if (back && validGroupIds.has(back)) setScope(back);
   };
 
@@ -111,16 +153,27 @@ export default function LeaderboardPage() {
   // everything the card shows (name, points, border, achievements, and the
   // per-year stat chips). No session docs are read at all. Guests can't
   // read user docs (rules), so the board is empty until signed in.
-  const [roster, setRoster] = useState<UserDoc[]>([]);
+  const rosterKey = user ? `${user.uid}:${year}` : "";
+  const [rosterResult, setRosterResult] = useState<{
+    key: string;
+    users: UserDoc[];
+  } | null>(null);
   useEffect(() => {
     if (!user) return;
-    return watchUsersByYearScore(year, setRoster);
-  }, [user, year]);
+    return watchUsersByYearScore(year, (next) => {
+      setRosterResult({ key: rosterKey, users: next });
+    });
+  }, [user, year, rosterKey]);
 
   // A sign-out leaves the last subscription value in state briefly, but it
   // must never be rendered to a guest. Deriving this avoids an extra effect
   // render solely to clear state.
-  const visibleRoster = user ? roster : [];
+  const rosterReady = rosterResult?.key === rosterKey;
+  const visibleRoster = user && rosterReady ? rosterResult.users : [];
+  const showingGhost =
+    !!user &&
+    (!rosterReady ||
+      (groups.length > 0 && scope === null && !groupRecencyReady));
 
   const rows: Row[] = (() => {
     const memberFilter: Set<string> | null =
@@ -156,10 +209,8 @@ export default function LeaderboardPage() {
       : { top: rows, me: null };
 
   // Group rows open the same member-swims sheet as the group view. The
-  // global board stays non-interactive (strangers' swims aren't a tap
-  // target). Sessions are subscribed per clicked member — one year-bounded
+  // Sessions are subscribed per clicked member — one year-bounded
   // single-uid query — instead of preloading the whole scope.
-  const isGroupScope = effectiveScope !== "global";
   const places = useStore((s) => s.placesWithTemps);
   const [memberSelection, setMemberSelection] = useState<{
     member: UserDoc | null;
@@ -203,7 +254,7 @@ export default function LeaderboardPage() {
 
       {groups.length > 0 ? (
         <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 py-1">
-          {groups.map((g) => (
+          {orderedGroups.map((g) => (
             <ScopeChip
               key={g.id}
               label={`${g.emoji ?? "👥"} ${g.name}`}
@@ -215,45 +266,51 @@ export default function LeaderboardPage() {
       ) : null}
 
       <ol className="mb-4 space-y-2">
-        {top.map((r, i) => (
-          <BoardRow
-            key={r.uid}
-            row={r}
-            rank={i}
-            isMe={user?.uid === r.uid}
-            onSelect={
-              isGroupScope || isAdmin
-                ? () => {
-                    setMemberSessions([]);
-                    setMemberSelection((current) => ({
-                      member: roster.find((u) => u.uid === r.uid) ?? null,
-                      key: current.key + 1,
-                    }));
-                  }
-                : undefined
-            }
-          />
-        ))}
-        {me ? (
+        {showingGhost ? (
           <>
-            <li
-              aria-hidden
-              className="py-0.5 text-center text-sm leading-none tracking-[0.4em] text-slate-400 select-none"
-            >
-              •••
-            </li>
-            <BoardRow row={me.row} rank={me.rank} isMe />
+            <LeaderboardGhostRow />
+            <LeaderboardGhostRow />
+            <LeaderboardGhostRow />
           </>
-        ) : null}
-        {rows.length === 0 ? (
-          <m.li
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500"
-          >
-            {t("leaderboard.empty")}
-          </m.li>
-        ) : null}
+        ) : (
+          <>
+            {top.map((r, i) => (
+              <BoardRow
+                key={r.uid}
+                row={r}
+                rank={i}
+                isMe={user?.uid === r.uid}
+                onSelect={() => {
+                  setMemberSessions([]);
+                  setMemberSelection((current) => ({
+                    member: visibleRoster.find((u) => u.uid === r.uid) ?? null,
+                    key: current.key + 1,
+                  }));
+                }}
+              />
+            ))}
+            {me ? (
+              <>
+                <li
+                  aria-hidden
+                  className="py-0.5 text-center text-sm leading-none tracking-[0.4em] text-slate-400 select-none"
+                >
+                  •••
+                </li>
+                <BoardRow row={me.row} rank={me.rank} isMe />
+              </>
+            ) : null}
+            {rows.length === 0 ? (
+              <m.li
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl bg-white/60 p-6 text-center text-sm text-slate-500"
+              >
+                {t("leaderboard.empty")}
+              </m.li>
+            ) : null}
+          </>
+        )}
       </ol>
 
       <MemberSwimsSheet
@@ -266,6 +323,25 @@ export default function LeaderboardPage() {
         }
       />
     </div>
+  );
+}
+
+function LeaderboardGhostRow() {
+  return (
+    <li className="glass relative flex items-center gap-3 p-3">
+      <div className="h-9 w-9 flex-none animate-pulse rounded-full bg-slate-200/70" />
+      <div className="min-w-0 flex-1">
+        <div className="h-3.5 w-32 animate-pulse rounded bg-slate-200/70" />
+        <div className="mt-1.5 flex h-4 items-center gap-2 overflow-hidden whitespace-nowrap">
+          <div className="h-2.5 w-20 animate-pulse rounded bg-slate-200/70" />
+          <div className="h-2.5 w-16 animate-pulse rounded bg-slate-200/70" />
+        </div>
+        <div className="mt-1 flex h-3.5 items-center">
+          <div className="h-2 w-14 animate-pulse rounded bg-slate-200/70" />
+        </div>
+      </div>
+      <div className="h-7 w-10 flex-none animate-pulse rounded bg-slate-200/70" />
+    </li>
   );
 }
 

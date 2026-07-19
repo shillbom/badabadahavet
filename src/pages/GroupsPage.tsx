@@ -358,6 +358,7 @@ export default function GroupsPage() {
       )}
 
       <GroupDetailSheet
+        key={openGroup?.id ?? "none"}
         group={openGroup}
         open={groupSheetOpen}
         myUid={user?.uid ?? ""}

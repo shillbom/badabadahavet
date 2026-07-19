@@ -636,6 +636,34 @@ export async function fetchLatestSwimUid(
 }
 
 /**
+ * One-shot: epoch ms of the most recent swim among `uids` (any year),
+ * or null when none of them has ever logged a swim.
+ */
+export async function fetchLatestSwimAt(
+  uids: string[],
+): Promise<number | null> {
+  if (uids.length === 0) return null;
+  const chunks: string[][] = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+  let bestDate: number | null = null;
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      const snap = await getDocs(
+        query(
+          sessionsCol,
+          where("uid", "in", chunk),
+          orderBy("date", "desc"),
+          limit(1),
+        ),
+      );
+      const s = snap.docs[0]?.data() as SessionDoc | undefined;
+      if (s && (bestDate === null || s.date > bestDate)) bestDate = s.date;
+    }),
+  );
+  return bestDate;
+}
+
+/**
  * Subscribe to every swim logged during a calendar year (defaults to the
  * current year). Personal history and per-place history are *not* time-
  * bounded — only "global" queries fan out across all users.
