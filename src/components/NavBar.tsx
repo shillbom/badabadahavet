@@ -18,7 +18,7 @@ export default function NavBar() {
       animate={{ y: 0 }}
       exit={{ y: 80 }}
       transition={{ type: "spring", stiffness: 280, damping: 28 }}
-      className="fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] backdrop-blur md:bottom-4 md:rounded-3xl md:border md:pb-2 md:shadow-xl md:shadow-wave-900/10"
+      className="t-4 fixed inset-x-0 bottom-0 z-[1000] mx-auto flex max-w-md justify-around border-t border-white/70 bg-white/85 px-4 pt-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] backdrop-blur md:bottom-4 md:rounded-3xl md:border md:pb-2 md:shadow-xl md:shadow-wave-900/10"
     >
       <NavTab
         to="/"
