@@ -1,19 +1,84 @@
 import { useState } from "react";
 import { MoreVertical } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { MapMenuToggle } from "../types";
 
+type MapMenuOptions = Extract<MapMenuToggle, { options: unknown }>;
+type MapMenuBoolean = Extract<MapMenuToggle, { checked: boolean }>;
+
+const valueClassName =
+  "rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-wave-800 ring-1 ring-slate-200";
+
+function MapBooleanToggle({
+  toggle,
+  onLabel,
+  offLabel,
+}: {
+  toggle: MapMenuBoolean;
+  onLabel: string;
+  offLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => toggle.onChange(!toggle.checked)}
+      aria-pressed={toggle.checked}
+      className="flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+    >
+      <span className="flex items-center gap-2">
+        {toggle.icon}
+        {toggle.label}
+      </span>
+      <span className={valueClassName}>
+        {toggle.checked ? onLabel : offLabel}
+      </span>
+    </button>
+  );
+}
+
+function MapOptionToggle({ toggle }: { toggle: MapMenuOptions }) {
+  const currentIndex = toggle.options.findIndex(
+    (option) => option.value === toggle.value,
+  );
+  const currentOption = toggle.options[currentIndex] ?? toggle.options[0];
+
+  function selectNextOption() {
+    const nextIndex = (currentIndex + 1) % toggle.options.length;
+    toggle.onSelect(toggle.options[nextIndex].value);
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={selectNextOption}
+      disabled={!currentOption}
+      className="flex w-full items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <span className="flex items-center gap-2">
+        {toggle.icon}
+        {toggle.label}
+      </span>
+      {currentOption ? (
+        <span className={valueClassName}>{currentOption.label}</span>
+      ) : null}
+    </button>
+  );
+}
+
 /**
- * The ⋯ button + dropdown panel of on/off filter rows. An invisible
+ * The ⋯ button + dropdown panel of cycling filter rows. An invisible
  * fixed backdrop closes it on any outside tap (cheaper and more reliable
  * on the map than document-level listeners fighting Leaflet's handlers).
  */
 export default function MapFilterMenu({
   toggles,
   ariaLabel,
+  onLabel,
+  offLabel,
 }: {
   toggles: MapMenuToggle[];
   ariaLabel: string;
+  onLabel: string;
+  offLabel: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -40,48 +105,14 @@ export default function MapFilterMenu({
           <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-white/95 p-1.5 shadow-lg ring-1 ring-slate-200">
             {toggles.map((tg) =>
               "options" in tg ? (
-                <div
-                  key={tg.label}
-                  className="rounded-xl px-2.5 py-2 text-sm font-medium text-slate-700"
-                >
-                  <span className="flex items-center gap-2">
-                    {tg.icon}
-                    {tg.label}
-                  </span>
-                  <div className="mt-1.5 flex rounded-full bg-slate-100 p-0.5">
-                    {tg.options.map((o) => (
-                      <button
-                        key={o.value}
-                        type="button"
-                        onClick={() => tg.onSelect(o.value)}
-                        className={cn(
-                          "flex-1 rounded-full px-2 py-1 text-[11px] font-semibold transition",
-                          tg.value === o.value
-                            ? "bg-white text-wave-800 shadow-sm ring-1 ring-slate-200"
-                            : "text-slate-500 hover:text-slate-700",
-                        )}
-                      >
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <MapOptionToggle key={tg.label} toggle={tg} />
               ) : (
-                <label
+                <MapBooleanToggle
                   key={tg.label}
-                  className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  <span className="flex items-center gap-2">
-                    {tg.icon}
-                    {tg.label}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={tg.checked}
-                    onChange={(e) => tg.onChange(e.target.checked)}
-                    className="h-4 w-4 flex-none rounded border-slate-300 text-wave-600 focus:ring-wave-400"
-                  />
-                </label>
+                  toggle={tg}
+                  onLabel={onLabel}
+                  offLabel={offLabel}
+                />
               ),
             )}
           </div>

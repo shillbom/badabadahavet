@@ -17,9 +17,8 @@ export type MapAction = {
   ariaLabel?: string;
 };
 
-/** One row in the ⋯ filter menu (see `menuToggles`): either a plain
- *  on/off checkbox, or — when `options` is present — a small segmented
- *  control for tri-state filters like the naturist only/on/off mode. */
+/** One cycling button in the ⋯ filter menu (see `menuToggles`): either
+ *  a boolean on/off state, or a multi-state filter when `options` is present. */
 export type MapMenuToggle =
   | {
       label: string;

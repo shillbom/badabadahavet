@@ -68,6 +68,8 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
       "Upp och hoppa i, {name}! ☀️",
       "Ny dag, nytt dopp, {name}! 🏊",
       "Tidigt upp, tidigt i, {name}! 🌤️",
+      "Upp som en {name}, ner som en badanka 🦆",
+      "Morgon, {name}! Dags för ett dopp? 🦦",
     ],
     midday: [
       "Lunchdopp, {name}? 🌞",
@@ -75,6 +77,9 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
       "Hej {name} — dags att hoppa i! 🌊",
       "Middagsbad, {name}? 🏖️",
       "Solen är uppe, {name}! Ut och bada! 💦",
+      "Hallå {name}! Vattnet ser extra trevligt ut idag 👋",
+      "Hej {name}! Lite badglädje mitt på dagen? 🌈",
+      "Fin dag för ett dopp, eller hur {name}? 🦆",
     ],
     afternoon: [
       "Kvällsdopp, {name}? 🌅",
@@ -82,6 +87,9 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
       "Gyllene timmen för ett dopp, {name} 🌇",
       "Solnedgångsbad, {name}? 🌅",
       "Svalka av dig, {name}! 💦",
+      "Hej {name}! Dagen hinner med ett dopp till ✨",
+      "Hallå {name}! Ett kvällsbad vore väl fint? 🌊",
+      "Mjuklanda i vattnet, {name} 🫧",
     ],
   },
   en: {
@@ -91,6 +99,9 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
       "Rise and swim, {name}! ☀️",
       "New day, new dip, {name}! 🏊",
       "Early bird gets the wave, {name}! 🌤️",
+      "Good morning, {name}! Ready for some blue energy? 💙",
+      "Hey {name}! A lovely morning starts in the water ✨",
+      "Morning, {name}! Shall we wake up your swim spirit? 🦦",
     ],
     midday: [
       "Lunch swim, {name}? 🌞",
@@ -98,6 +109,9 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
       "Hey {name} — time to get in! 🌊",
       "Midday dip, {name}? 🏖️",
       "The sun's out, {name} — don't waste it! 💦",
+      "Hello {name}! The water looks extra inviting today 👋",
+      "Hey {name}! How about a little midday swim joy? 🌈",
+      "Lovely day for a dip, isn't it, {name}? 🦆",
     ],
     afternoon: [
       "Evening dip, {name}? 🌅",
@@ -105,6 +119,49 @@ const GREETINGS: Record<Locale, Record<TimeSlot, string[]>> = {
       "Golden hour swim, {name}? 🌇",
       "Sunset swim, {name}? 🌅",
       "Cool down time, {name}! 💦",
+      "Hey {name}! There's still time for one more dip ✨",
+      "Hello {name}! An evening swim would be lovely, wouldn't it? 🌊",
+      "Ease into the evening with a swim, {name} 🫧",
+    ],
+  },
+};
+
+type RecentSwimPeriod = "today" | "yesterday";
+
+const RECENT_SWIM_MESSAGES: Record<
+  Locale,
+  Record<RecentSwimPeriod, string[]>
+> = {
+  sv: {
+    today: [
+      "Du har badat idag — snyggt!",
+      "Dagens dopp är redan fixat! 🌊",
+      "Du har redan varit i idag — härligt! ✨",
+      "Badat idag? Vilken fin start! 🦦",
+      "Ett dopp idag — bra jobbat! 💙",
+    ],
+    yesterday: [
+      "Du badade igår.",
+      "Igår blev det ett dopp — fint! 🌊",
+      "Du var i vattnet igår — härligt!",
+      "Det var la gött att bada igår? ✨",
+      "Ett dopp igår — kanske ett till idag? 🦦",
+    ],
+  },
+  en: {
+    today: [
+      "You swam today — nice!",
+      "Today's dip is already done! 🌊",
+      "You've already been in today — lovely! ✨",
+      "A swim today? What a fine start! 🦦",
+      "One dip today — nicely done! 💙",
+    ],
+    yesterday: [
+      "You swam yesterday.",
+      "You got a dip in yesterday — nice! 🌊",
+      "You were in the water yesterday — lovely!",
+      "Yesterday's swim glow must still be going ✨",
+      "A dip yesterday — perhaps another today? 🦦",
     ],
   },
 };
@@ -119,6 +176,16 @@ export function getTimeGreeting(name: string, seed: number): string {
   const variants = GREETINGS[locale][slot];
   const template = variants[seed % variants.length];
   return template.replace("{name}", name);
+}
+
+/** Returns a stable, friendly status for a swim logged today or yesterday. */
+export function getRecentSwimMessage(
+  period: RecentSwimPeriod,
+  seed: number,
+): string {
+  const locale = useLocale.getState().locale;
+  const variants = RECENT_SWIM_MESSAGES[locale][period];
+  return variants[seed % variants.length];
 }
 
 export function monthShort(idx: number): string {

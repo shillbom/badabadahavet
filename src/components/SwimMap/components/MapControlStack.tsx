@@ -37,6 +37,8 @@ export default function MapControlStack({
       {menuToggles && menuToggles.length > 0 ? (
         <MapFilterMenu
           ariaLabel={t("map.filters")}
+          onLabel={t("map.filter.mode.on")}
+          offLabel={t("map.filter.mode.off")}
           toggles={[
             ...menuToggles,
             {
