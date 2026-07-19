@@ -9,9 +9,15 @@ import {
 } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
-import type { SessionDoc, UserDoc, YearStats } from "@/lib/types";
+import type {
+  SessionDoc,
+  UserDoc,
+  YearStats,
+  LeaderboardEntry,
+} from "@/lib/types";
 import {
   fetchLatestSwimAt,
+  watchGlobalLeaderboard,
   watchMemberSessions,
   watchUsersByYearScore,
 } from "@/lib/data";
@@ -152,7 +158,8 @@ export default function LeaderboardPage() {
   // yearly score provides membership and order, and the doc carries
   // everything the card shows (name, points, border, achievements, and the
   // per-year stat chips). No session docs are read at all. Guests can't
-  // read user docs (rules), so the board is empty until signed in.
+  // read user docs (rules), so signed-in users use this roster while guests
+  // fall back to the world-readable top-5 snapshot below.
   const rosterKey = user ? `${user.uid}:${year}` : "";
   const [rosterResult, setRosterResult] = useState<{
     key: string;
@@ -165,17 +172,48 @@ export default function LeaderboardPage() {
     });
   }, [user, year, rosterKey]);
 
+  // Guests only ever see the global board, powered by the world-readable
+  // `leaderboard/{year}` snapshot (top 5) that the scoring functions keep
+  // fresh. Signed-in users don't need it — their roster is richer.
+  const guestKey = `guest:${year}`;
+  const [guestSnap, setGuestSnap] = useState<{
+    key: string;
+    entries: LeaderboardEntry[];
+  } | null>(null);
+  useEffect(() => {
+    if (user) return;
+    return watchGlobalLeaderboard(year, (entries) => {
+      setGuestSnap({ key: guestKey, entries });
+    });
+  }, [user, year, guestKey]);
+  const guestReady = guestSnap?.key === guestKey;
+
   // A sign-out leaves the last subscription value in state briefly, but it
   // must never be rendered to a guest. Deriving this avoids an extra effect
   // render solely to clear state.
   const rosterReady = rosterResult?.key === rosterKey;
   const visibleRoster = user && rosterReady ? rosterResult.users : [];
-  const showingGhost =
-    !!user &&
-    (!rosterReady ||
-      (groups.length > 0 && scope === null && !groupRecencyReady));
+  const showingGhost = user
+    ? !rosterReady ||
+      (groups.length > 0 && scope === null && !groupRecencyReady)
+    : !guestReady;
 
   const rows: Row[] = (() => {
+    // Guests render straight from the top-5 snapshot — same shape as a
+    // roster row, with the border resolved from the stored achievement ids.
+    if (!user) {
+      const entries = guestReady ? guestSnap.entries : [];
+      return entries.map((e) => {
+        const unlocked = new Set(Object.keys(e.achievements ?? {}));
+        return {
+          uid: e.uid,
+          displayName: e.displayName,
+          points: e.points,
+          border: resolveBorder(e.selectedBorder, unlocked.size, unlocked),
+          stats: e.stats ?? null,
+        };
+      });
+    }
     const memberFilter: Set<string> | null =
       effectiveScope === "global"
         ? null

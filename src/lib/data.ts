@@ -35,6 +35,7 @@ import type {
   TempSummaryDoc,
   UserDoc,
   BannedUser,
+  LeaderboardEntry,
   WaterSample,
 } from "./types";
 import { summaryToMap, qualityToMap } from "./temps";
@@ -211,6 +212,24 @@ export function watchUsersByYearScore(
     ),
     (snap) => cb(snap.docs.map((d) => d.data() as UserDoc)),
   );
+}
+
+/**
+ * Live global top-5 leaderboard snapshot for `year` (`leaderboard/{year}`).
+ * World-readable, so signed-out guests get the global board without access
+ * to individual user docs. Maintained server-side by the scoring functions
+ * and rebuilt by scripts/backfill-toplist.mjs.
+ */
+export function watchGlobalLeaderboard(
+  year: number,
+  cb: (entries: LeaderboardEntry[]) => void,
+): Unsubscribe {
+  return onSnapshot(doc(db, "leaderboard", String(year)), (snap) => {
+    const data = snap.exists()
+      ? (snap.data() as { top?: LeaderboardEntry[] })
+      : null;
+    cb(Array.isArray(data?.top) ? (data.top as LeaderboardEntry[]) : []);
+  });
 }
 
 export async function fetchUsers(uids: string[]): Promise<UserDoc[]> {

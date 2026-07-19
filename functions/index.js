@@ -13,6 +13,7 @@ import {
   sumYearPoints,
   yearStats,
 } from "./scoring.js";
+import { leaderboardEntry, applyToTop, removeFromTop } from "./leaderboard.js";
 import { checkTextAllowed } from "./moderation.js";
 
 initializeApp();
@@ -863,10 +864,11 @@ export const logSession = onCall(
     const newRef = sessionsCol.doc();
     const year = swimYear(date);
     const [yStart, yEnd] = yearBounds(year);
+    const leaderboardRef = db.collection("leaderboard").doc(String(year));
 
     const result = await db.runTransaction(async (tx) => {
       // ── reads (all before any writes) ──
-      const [userSnap, dupSnap, yearSnap] = await Promise.all([
+      const [userSnap, dupSnap, yearSnap, lbSnap] = await Promise.all([
         tx.get(userRef),
         tx.get(
           sessionsCol
@@ -883,6 +885,7 @@ export const logSession = onCall(
             // without it Firestore demands a separate (uid, date ASC) index.
             .orderBy("date", "desc"),
         ),
+        tx.get(leaderboardRef),
       ]);
       if (!userSnap.exists) {
         throw new HttpsError("failed-precondition", "No profile yet.");
@@ -924,6 +927,8 @@ export const logSession = onCall(
       if (photoThumb) session.photoThumb = photoThumb;
       session.border = border;
 
+      const stats = yearStats(yearSnap, { extra: session });
+
       // ── writes ──
       tx.set(newRef, {
         ...session,
@@ -931,8 +936,22 @@ export const logSession = onCall(
       });
       tx.update(userRef, {
         [`scores.${year}`]: yearTotal,
-        [`statsByYear.${year}`]: yearStats(yearSnap, { extra: session }),
+        [`statsByYear.${year}`]: stats,
       });
+      // Keep the world-readable top-5 snapshot in sync so guests see this
+      // swimmer's fresh total (see functions/leaderboard.js).
+      tx.set(
+        leaderboardRef,
+        {
+          year,
+          top: applyToTop(
+            lbSnap.exists ? (lbSnap.data().top ?? []) : [],
+            leaderboardEntry(uid, user, yearTotal, stats),
+          ),
+          updatedAt: Date.now(),
+        },
+        { merge: true },
+      );
       // The place's "last swim" frame is no longer denormalised here — the
       // daily placesSummary build derives it from sessions. logSession no
       // longer touches the place doc, so a swim never re-streams it to every
@@ -1010,17 +1029,36 @@ export const removeSession = onCall(
           // Reuse the existing (uid, date DESC) index — see logSession.
           .orderBy("date", "desc"),
       );
+      const leaderboardRef = db.collection("leaderboard").doc(String(year));
+      const lbSnap = await tx.get(leaderboardRef);
 
       // ── writes ──
       const yearTotal = sumYearPoints(yearSnap, sessionId);
       tx.delete(sessionRef);
       if (ownerSnap.exists) {
+        const stats = yearStats(yearSnap, { excludeId: sessionId });
         tx.update(ownerRef, {
           [`scores.${year}`]: Math.max(0, yearTotal),
-          [`statsByYear.${year}`]: yearStats(yearSnap, {
-            excludeId: sessionId,
-          }),
+          [`statsByYear.${year}`]: stats,
         });
+        // Keep the world-readable top-5 snapshot in sync with the lower total.
+        tx.set(
+          leaderboardRef,
+          {
+            year,
+            top: applyToTop(
+              lbSnap.exists ? (lbSnap.data().top ?? []) : [],
+              leaderboardEntry(
+                ownerUid,
+                ownerSnap.data(),
+                Math.max(0, yearTotal),
+                stats,
+              ),
+            ),
+            updatedAt: Date.now(),
+          },
+          { merge: true },
+        );
       }
       // The place's "last swim" frame is derived from sessions by the daily
       // placesSummary build, so removeSession no longer restamps the place doc.
@@ -1176,11 +1214,19 @@ export const updateSession = onCall(
       const date = newDate ?? session.date;
       const year = swimYear(date);
       const oldYear = swimYear(session.date);
-      const [userSnap, yearSnap, oldYearSnap] = await Promise.all([
-        tx.get(userRef),
-        tx.get(yearQuery(year)),
-        year === oldYear ? null : tx.get(yearQuery(oldYear)),
-      ]);
+      const leaderboardRef = db.collection("leaderboard").doc(String(year));
+      const oldLeaderboardRef =
+        year === oldYear
+          ? null
+          : db.collection("leaderboard").doc(String(oldYear));
+      const [userSnap, yearSnap, oldYearSnap, lbSnap, oldLbSnap] =
+        await Promise.all([
+          tx.get(userRef),
+          tx.get(yearQuery(year)),
+          year === oldYear ? null : tx.get(yearQuery(oldYear)),
+          tx.get(leaderboardRef),
+          oldLeaderboardRef ? tx.get(oldLeaderboardRef) : null,
+        ]);
 
       // ── compute ──
       const isWinter = isWinterMonth(date);
@@ -1220,24 +1266,51 @@ export const updateSession = onCall(
         // Recompute from the year's sessions (excluding this one's stored
         // copy, folding the edited version back in) so the totals self-heal
         // — and both years stay right when the edit crosses a boundary.
+        const user = userSnap.data();
+        const newScore = Math.max(
+          0,
+          sumYearPoints(yearSnap, sessionId) + points,
+        );
+        const newStats = yearStats(yearSnap, {
+          excludeId: sessionId,
+          extra: updatedSession,
+        });
         const userUpdates = {
-          [`scores.${year}`]: Math.max(
-            0,
-            sumYearPoints(yearSnap, sessionId) + points,
-          ),
-          [`statsByYear.${year}`]: yearStats(yearSnap, {
-            excludeId: sessionId,
-            extra: updatedSession,
-          }),
+          [`scores.${year}`]: newScore,
+          [`statsByYear.${year}`]: newStats,
         };
+        // Keep the world-readable top-5 snapshot in sync for the edited year.
+        tx.set(
+          leaderboardRef,
+          {
+            year,
+            top: applyToTop(
+              lbSnap.exists ? (lbSnap.data().top ?? []) : [],
+              leaderboardEntry(callerUid, user, newScore, newStats),
+            ),
+            updatedAt: Date.now(),
+          },
+          { merge: true },
+        );
         if (oldYearSnap) {
-          userUpdates[`scores.${oldYear}`] = Math.max(
-            0,
-            sumYearPoints(oldYearSnap, sessionId),
-          );
-          userUpdates[`statsByYear.${oldYear}`] = yearStats(oldYearSnap, {
-            excludeId: sessionId,
-          });
+          const oldScore = Math.max(0, sumYearPoints(oldYearSnap, sessionId));
+          const oldStats = yearStats(oldYearSnap, { excludeId: sessionId });
+          userUpdates[`scores.${oldYear}`] = oldScore;
+          userUpdates[`statsByYear.${oldYear}`] = oldStats;
+          if (oldLeaderboardRef) {
+            tx.set(
+              oldLeaderboardRef,
+              {
+                year: oldYear,
+                top: applyToTop(
+                  oldLbSnap.exists ? (oldLbSnap.data().top ?? []) : [],
+                  leaderboardEntry(callerUid, user, oldScore, oldStats),
+                ),
+                updatedAt: Date.now(),
+              },
+              { merge: true },
+            );
+          }
         }
         tx.update(userRef, userUpdates);
       }
@@ -1308,7 +1381,19 @@ async function purgeUserData(uid) {
 
   await db.collection("users").doc(uid).delete();
 
-  // Best-effort photo cleanup.
+  // Drop the swimmer from any world-readable leaderboard snapshots. The
+  // vacated slot is refilled by the per-year backfill job.
+  const leaderboards = await db.collection("leaderboard").get();
+  await Promise.all(
+    leaderboards.docs.map((d) => {
+      const top = d.data().top ?? [];
+      if (!top.some((e) => e && e.uid === uid)) return null;
+      return d.ref.set(
+        { top: removeFromTop(top, uid), updatedAt: Date.now() },
+        { merge: true },
+      );
+    }),
+  );
   await Promise.all(
     photoPaths.map((p) =>
       getStorage()
