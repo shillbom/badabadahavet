@@ -1,6 +1,9 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
+import { DayPicker } from "react-day-picker";
+import { sv as svLocale, enGB } from "react-day-picker/locale";
+import "react-day-picker/style.css";
 import {
   MapPin,
   Crosshair,
@@ -245,6 +248,14 @@ export default function LogSessionPage() {
 
   const dateObj = new Date(date);
   const isWinterSwim = isWinterMonth(dateObj);
+  // Only the current season is loggable: from the start of this year up to
+  // now. iOS Safari ignores the picker's min/max, so we validate here and
+  // gate the submit button on it ("now" mode is always valid — it's now).
+  const dateValid =
+    mode === "now" ||
+    (!Number.isNaN(dateObj.getTime()) &&
+      dateObj.getTime() >= currentSeasonStart() &&
+      dateObj.getTime() <= Date.now());
   // "New spot" = a place the user hasn't logged before. A brand-new pin
   // (no pickedPlaceId) is always new; a picked existing place is new only
   // if it's not already in the user's own history.
@@ -349,6 +360,7 @@ export default function LogSessionPage() {
             isNewSpot={isNewSpot}
             isWinterSwim={isWinterSwim}
             pointsPreview={pointsPreview}
+            dateValid={dateValid}
             updateLocation={updateLocation}
           />
 
@@ -370,7 +382,13 @@ export default function LogSessionPage() {
             clearPhoto={clearPhoto}
           />
 
-          <Button type="submit" loading={busy} size="lg" className="w-full">
+          <Button
+            type="submit"
+            loading={busy}
+            disabled={!dateValid}
+            size="lg"
+            className="w-full"
+          >
             {t("log.save")} <Sparkles className="h-4 w-4" />
           </Button>
         </m.div>
@@ -974,6 +992,7 @@ function WhenField({
   isNewSpot,
   isWinterSwim,
   pointsPreview,
+  dateValid,
   updateLocation,
 }: {
   date: string;
@@ -982,27 +1001,165 @@ function WhenField({
   isNewSpot: boolean;
   isWinterSwim: boolean;
   pointsPreview: number;
+  dateValid: boolean;
   updateLocation: UpdateLocation;
 }) {
   const t = useT();
+  // datetime-local strings (YYYY-MM-DDTHH:mm) sort lexicographically, so we can
+  // clamp the composed value with plain string comparison — a safety net on top
+  // of react-day-picker's disabled range and the parent's dateValid check.
+  const seasonStart = new Date(currentSeasonStart());
+  const now = new Date();
+  const minStr = toLocalInput(seasonStart);
+  const maxStr = toLocalInput(now);
+  const dpLocale = inputLang === "sv-SE" ? svLocale : enGB;
+
+  const selectedDay = date ? new Date(date) : undefined;
+  const timePart = date.length >= 16 ? date.slice(11, 16) : "12:00";
+
+  // Compose a datetime-local string from a chosen day + time, clamped to the
+  // valid season window so an out-of-range time snaps back into range.
+  const applyDate = (day: Date, time: string) => {
+    const [hh, mm] = time.split(":");
+    const d = new Date(day);
+    d.setHours(Number(hh) || 0, Number(mm) || 0, 0, 0);
+    let v = toLocalInput(d);
+    if (v < minStr) v = minStr;
+    else if (v > maxStr) v = maxStr;
+    updateLocation({ date: v });
+  };
+
+  // Tint react-day-picker with the app's wave palette.
+  const dpStyle = {
+    "--rdp-accent-color": "#019eea",
+    "--rdp-accent-background-color": "#def1ff",
+    "--rdp-today-color": "#007ec6",
+  } as React.CSSProperties;
+
+  const fmt = new Intl.DateTimeFormat(inputLang, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const nowLabel = fmt.format(now);
+  const selectedLabel = selectedDay ? fmt.format(selectedDay) : "";
+
+  // Keep the compact input as the resting state; reveal the calendar in a
+  // popover on tap. Close it when tapping outside.
+  const [open, setOpen] = useState(false);
+  const popRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [open]);
+
   return (
     <div className="space-y-1.5">
       <Label htmlFor="date">{t("log.field.when")}</Label>
-      <Input
-        id="date"
-        type="datetime-local"
-        lang={inputLang}
-        value={date}
-        min={toLocalInput(new Date(currentSeasonStart()))}
-        max={toLocalInput(new Date())}
-        onChange={(e) => updateLocation({ date: e.target.value })}
-        disabled={mode === "now"}
-        readOnly={mode === "now"}
-        className={mode === "now" ? "bg-slate-100 text-slate-500" : undefined}
-      />
+      {mode === "now" ? (
+        <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500">
+          {nowLabel}
+        </div>
+      ) : (
+        <div className="relative" ref={popRef}>
+          <button
+            type="button"
+            id="date"
+            onClick={() => setOpen((v) => !v)}
+            aria-invalid={!dateValid}
+            aria-expanded={open}
+            className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left text-sm ring-wave-200 transition focus:ring-2 focus:outline-none ${
+              dateValid ? "border-wave-200" : "border-rose-400"
+            }`}
+          >
+            <CalendarDays className="size-4 shrink-0 text-wave-600" />
+            <span
+              className={selectedLabel ? "text-slate-800" : "text-slate-400"}
+            >
+              {selectedLabel || t("log.date.placeholder")}
+            </span>
+          </button>
+          <AnimatePresence>
+            {open ? (
+              <>
+                <m.div
+                  key="backdrop"
+                  className="fixed inset-0 z-[1200] bg-slate-900/40 sm:hidden"
+                  onClick={() => setOpen(false)}
+                  aria-hidden
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                />
+                <m.div
+                  key="panel"
+                  className="fixed top-1/2 left-1/2 z-[1210] max-h-[calc(100dvh-2rem)] w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-wave-200 bg-white p-2 shadow-xl ring-1 ring-wave-100 sm:absolute sm:top-full sm:left-0 sm:mt-1 sm:max-h-none sm:translate-x-0 sm:translate-y-0"
+                  initial={{ opacity: 0, scale: 0.96, y: 4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 4 }}
+                  transition={{ duration: 0.16, ease: "easeOut" }}
+                >
+                  <div className="flex justify-center">
+                    <DayPicker
+                      mode="single"
+                      required
+                      locale={dpLocale}
+                      selected={selectedDay}
+                      onSelect={(day) => applyDate(day, timePart)}
+                      defaultMonth={selectedDay ?? now}
+                      startMonth={seasonStart}
+                      endMonth={now}
+                      disabled={{ before: seasonStart, after: now }}
+                      style={dpStyle}
+                      className="rdp-badligan"
+                    />
+                  </div>
+                  <div className="mt-1 flex items-center gap-2 border-t border-wave-100 px-1 pt-2">
+                    <Label
+                      htmlFor="swim-time"
+                      className="mb-0 shrink-0 text-slate-500"
+                    >
+                      {t("log.field.time")}
+                    </Label>
+                    <Input
+                      id="swim-time"
+                      type="time"
+                      lang={inputLang}
+                      value={timePart}
+                      onChange={(e) =>
+                        applyDate(selectedDay ?? now, e.target.value)
+                      }
+                      aria-invalid={!dateValid}
+                      className="w-auto"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="ml-auto"
+                      onClick={() => setOpen(false)}
+                    >
+                      {t("log.date.done")}
+                    </Button>
+                  </div>
+                </m.div>
+              </>
+            ) : null}
+          </AnimatePresence>
+        </div>
+      )}
       {mode === "now" ? (
         <div className="text-[11px] text-slate-500">
           {t("log.field.when.now_hint")}
+        </div>
+      ) : !dateValid ? (
+        <div className="text-[11px] font-medium text-rose-600">
+          {t("log.error.date_range")}
         </div>
       ) : null}
       <div className="mt-1 flex flex-wrap items-center gap-1.5">

@@ -511,6 +511,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.field.spot_name.locked_hint":
       "Kopplat till en befintlig badplats. Tryck på ✕ för att döpa om.",
     "log.field.when": "När",
+    "log.field.time": "Tid",
+    "log.date.placeholder": "Välj datum",
+    "log.date.done": "Klar",
     "log.field.when.now_hint":
       "Loggas automatiskt med tiden just nu — växla till välj på karta för att ändra.",
     "log.search.placeholder": "Sök bland badplatser…",
@@ -1307,6 +1310,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "log.field.spot_name.locked_hint":
       "Linked to an existing spot. Tap ✕ to rename.",
     "log.field.when": "When",
+    "log.field.time": "Time",
+    "log.date.placeholder": "Pick a date",
+    "log.date.done": "Done",
     "log.field.when.now_hint":
       "Auto-logged as right now — switch to pick to change.",
     "log.search.placeholder": "Search for spots…",
