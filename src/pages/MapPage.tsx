@@ -1,13 +1,19 @@
-import { lazy, useReducer, useState } from "react";
+import { lazy, useEffect, useReducer, useState } from "react";
 import { m } from "framer-motion";
 import { MapPin, Trophy } from "lucide-react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { sumScores } from "@/lib/scoring";
 import { useAuth } from "@/auth/AuthContext";
-import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
+import {
+  useT,
+  getRecentSwimMessage,
+  getTimeGreeting,
+  useLocale,
+} from "@/lib/i18n";
 import StreakCard from "@/components/StreakCard";
 import Stat from "@/components/ui/Stat";
 import { usePosition } from "@/hooks/position";
+import { useDeviceFocus } from "@/hooks/focus";
 const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
@@ -55,6 +61,13 @@ export default function MapPage() {
     dispatchMapView({ type: "showAll", value: next });
   }
 
+  const isFocused = useDeviceFocus();
+  useEffect(() => {
+    if (isFocused) {
+      dispatchMapView({ type: "refit" });
+    }
+  }, [isFocused]);
+
   // Hold the map until we have a real position when permission is already granted
   // (prevents Stockholm → real-location ping-pong on first load)
   const mapReady =
@@ -79,9 +92,9 @@ export default function MapPage() {
     myStats.totalSwims === 0
       ? t("map.empty.subtitle")
       : myStats.daysSinceLast === 0
-        ? t("map.last.today")
+        ? getRecentSwimMessage("today", greetingSeed)
         : myStats.daysSinceLast === 1
-          ? t("map.last.yesterday")
+          ? getRecentSwimMessage("yesterday", greetingSeed)
           : t("map.last.days", { n: myStats.daysSinceLast ?? 0 });
 
   return (
