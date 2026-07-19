@@ -1,9 +1,6 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
-import { DayPicker } from "react-day-picker";
-import { sv as svLocale, enGB } from "react-day-picker/locale";
-import "react-day-picker/style.css";
 import {
   MapPin,
   Crosshair,
@@ -18,6 +15,7 @@ import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
+import { WhenField } from "@/components/SwimDatePicker";
 import { toast } from "@/components/ui/toastStore";
 import { celebrate } from "@/components/celebrationStore";
 import {
@@ -28,6 +26,7 @@ import {
 import { checkImageFile, ImageProcessingError } from "@/lib/image";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import { reverseGeocodeCountry } from "@/lib/geocode";
+import { toLocalInput } from "@/lib/date";
 import { getPosition, haversineMeters } from "@/lib/utils";
 import {
   PLACE_RADIUS_METERS,
@@ -84,6 +83,57 @@ const NOW_FALLBACK_ACCURACY_METERS = 500;
 // How long to wait for a trustworthy fix before deciding with what we have.
 const NOW_FIX_DEADLINE_MS = 10_000;
 
+// Horizontal "swipe" between the two mode panels: the incoming panel slides in
+// from the side you're heading towards (right when moving now→pick, left when
+// moving back), and the outgoing panel slides off the opposite edge. `dir` is
+// +1 for a forward move and -1 for a backward one, passed through as the
+// AnimatePresence custom value.
+const modeSwipe = {
+  enter: (dir: number) => ({ x: dir > 0 ? 36 : -36, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (dir: number) => ({ x: dir > 0 ? -36 : 36, opacity: 0 }),
+};
+
+// The "now vs. pick a time" segmented control plus its explanatory hint.
+function ModeSelector({
+  mode,
+  onChange,
+}: {
+  mode: Mode;
+  onChange: (next: Mode) => void;
+}) {
+  const t = useT();
+  return (
+    <>
+      <SegmentedControl
+        value={mode}
+        onChange={onChange}
+        options={[
+          {
+            value: "now",
+            label: (
+              <>
+                <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
+              </>
+            ),
+          },
+          {
+            value: "pick",
+            label: (
+              <>
+                <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
+              </>
+            ),
+          },
+        ]}
+      />
+      <p className="mt-2 px-1 text-center text-[11px] text-slate-500">
+        {mode === "now" ? t("log.mode.now.hint") : t("log.mode.pick.hint")}
+      </p>
+    </>
+  );
+}
+
 export default function LogSessionPage() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -135,6 +185,16 @@ export default function LogSessionPage() {
   const { photoFileRef, photoPreview, photoInput, onPhotoChange, clearPhoto } =
     usePhotoUpload();
   const [busy, setBusy] = useState(false);
+  // Capture "now" once per mount instead of reading the clock during render —
+  // Date.now() in the render body is impure and blocks React Compiler from
+  // memoizing this component. A fixed baseline is plenty for validating that
+  // the chosen swim time isn't in the future.
+  const [nowMs] = useState(() => Date.now());
+  // Direction of the last mode change (+1 forward, -1 back) driving the swipe,
+  // plus a flag that clips horizontal overflow only while the panels slide so a
+  // scrollbar never flashes — and the calendar popover isn't clipped at rest.
+  const [swipeDir, setSwipeDir] = useState(0);
+  const [swiping, setSwiping] = useState(false);
 
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -255,7 +315,7 @@ export default function LogSessionPage() {
     mode === "now" ||
     (!Number.isNaN(dateObj.getTime()) &&
       dateObj.getTime() >= currentSeasonStart() &&
-      dateObj.getTime() <= Date.now());
+      dateObj.getTime() <= nowMs);
   // "New spot" = a place the user hasn't logged before. A brand-new pin
   // (no pickedPlaceId) is always new; a picked existing place is new only
   // if it's not already in the user's own history.
@@ -275,124 +335,112 @@ export default function LogSessionPage() {
         <span className="w-8" />
       </div>
 
-      <SegmentedControl
-        value={mode}
+      <ModeSelector
+        mode={mode}
         onChange={(next) => {
+          if (next === mode) return;
+          // Segments are ordered [now, pick]; moving to "pick" swipes forward.
+          setSwipeDir(next === "pick" ? 1 : -1);
+          setSwiping(true);
           setIntentionalNow(next === "now");
           updateLocation({ mode: next });
         }}
-        options={[
-          {
-            value: "now",
-            label: (
-              <>
-                <Crosshair className="h-3.5 w-3.5" /> {t("log.mode.now")}
-              </>
-            ),
-          },
-          {
-            value: "pick",
-            label: (
-              <>
-                <CalendarDays className="h-3.5 w-3.5" /> {t("log.mode.pick")}
-              </>
-            ),
-          },
-        ]}
       />
 
-      <p className="mt-2 px-1 text-center text-[11px] text-slate-500">
-        {mode === "now" ? t("log.mode.now.hint") : t("log.mode.pick.hint")}
-      </p>
+      <div className={swiping ? "overflow-hidden" : undefined}>
+        <AnimatePresence mode="wait" custom={swipeDir}>
+          <m.div
+            key={mode}
+            custom={swipeDir}
+            variants={modeSwipe}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            onAnimationComplete={() => setSwiping(false)}
+            className="mt-4 space-y-4"
+          >
+            {mode === "pick" ? (
+              <PlaceSearch
+                search={search}
+                searchMatches={searchMatches}
+                coords={coords}
+                searchOrigin={searchOrigin}
+                updateLocation={updateLocation}
+                swimMapRef={swimMapRef}
+              />
+            ) : null}
 
-      <AnimatePresence mode="wait">
-        <m.div
-          key={mode}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
-          className="mt-4 space-y-4"
-        >
-          {mode === "pick" ? (
-            <PlaceSearch
-              search={search}
-              searchMatches={searchMatches}
-              coords={coords}
+            <LogMap
+              places={places}
+              sessionsByPlace={sessionsByPlace}
+              preselectedPlace={preselectedPlace}
               searchOrigin={searchOrigin}
+              mode={mode}
+              coords={coords}
+              pickedPlaceId={pickedPlaceId}
+              myLocation={myLocation}
               updateLocation={updateLocation}
               swimMapRef={swimMapRef}
             />
-          ) : null}
 
-          <LogMap
-            places={places}
-            sessionsByPlace={sessionsByPlace}
-            preselectedPlace={preselectedPlace}
-            searchOrigin={searchOrigin}
-            mode={mode}
-            coords={coords}
-            pickedPlaceId={pickedPlaceId}
-            myLocation={myLocation}
-            updateLocation={updateLocation}
-            swimMapRef={swimMapRef}
-          />
-
-          <LocationBadge
-            coords={coords}
-            mode={mode}
-            pickedPlaceId={pickedPlaceId}
-            suggestion={suggestion}
-            locating={locating}
-          />
-
-          <SpotNameField
-            coords={coords}
-            pickedPlaceId={pickedPlaceId}
-            name={name}
-            suggestion={suggestion}
-            updateLocation={updateLocation}
-          />
-
-          <WhenField
-            date={date}
-            inputLang={inputLang}
-            mode={mode}
-            isNewSpot={isNewSpot}
-            isWinterSwim={isWinterSwim}
-            pointsPreview={pointsPreview}
-            dateValid={dateValid}
-            updateLocation={updateLocation}
-          />
-
-          <div className="space-y-1.5">
-            <Label htmlFor="note">{t("log.field.note")}</Label>
-            <Textarea
-              id="note"
-              rows={2}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t("log.field.note.placeholder")}
+            <LocationBadge
+              coords={coords}
+              mode={mode}
+              pickedPlaceId={pickedPlaceId}
+              suggestion={suggestion}
+              locating={locating}
             />
-          </div>
 
-          <PhotoField
-            photoPreview={photoPreview}
-            photoInput={photoInput}
-            onPhotoChange={onPhotoChange}
-            clearPhoto={clearPhoto}
-          />
+            <SpotNameField
+              coords={coords}
+              pickedPlaceId={pickedPlaceId}
+              name={name}
+              suggestion={suggestion}
+              updateLocation={updateLocation}
+            />
 
-          <Button
-            type="submit"
-            loading={busy}
-            disabled={!dateValid}
-            size="lg"
-            className="w-full"
-          >
-            {t("log.save")} <Sparkles className="h-4 w-4" />
-          </Button>
-        </m.div>
-      </AnimatePresence>
+            <WhenField
+              date={date}
+              inputLang={inputLang}
+              mode={mode}
+              isNewSpot={isNewSpot}
+              isWinterSwim={isWinterSwim}
+              pointsPreview={pointsPreview}
+              dateValid={dateValid}
+              updateLocation={updateLocation}
+            />
+
+            <div className="space-y-1.5">
+              <Label htmlFor="note">{t("log.field.note")}</Label>
+              <Textarea
+                id="note"
+                rows={2}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={t("log.field.note.placeholder")}
+              />
+            </div>
+
+            <PhotoField
+              photoPreview={photoPreview}
+              photoInput={photoInput}
+              onPhotoChange={onPhotoChange}
+              clearPhoto={clearPhoto}
+            />
+
+            <Button
+              type="submit"
+              loading={busy}
+              disabled={!dateValid}
+              size="lg"
+              className="w-full"
+            >
+              {t("log.save")} <Sparkles className="h-4 w-4" />
+            </Button>
+          </m.div>
+        </AnimatePresence>
+      </div>
     </form>
   );
 }
@@ -985,205 +1033,6 @@ function SpotNameField({
   );
 }
 
-function WhenField({
-  date,
-  inputLang,
-  mode,
-  isNewSpot,
-  isWinterSwim,
-  pointsPreview,
-  dateValid,
-  updateLocation,
-}: {
-  date: string;
-  inputLang: string;
-  mode: Mode;
-  isNewSpot: boolean;
-  isWinterSwim: boolean;
-  pointsPreview: number;
-  dateValid: boolean;
-  updateLocation: UpdateLocation;
-}) {
-  const t = useT();
-  // datetime-local strings (YYYY-MM-DDTHH:mm) sort lexicographically, so we can
-  // clamp the composed value with plain string comparison — a safety net on top
-  // of react-day-picker's disabled range and the parent's dateValid check.
-  const seasonStart = new Date(currentSeasonStart());
-  const now = new Date();
-  const minStr = toLocalInput(seasonStart);
-  const maxStr = toLocalInput(now);
-  const dpLocale = inputLang === "sv-SE" ? svLocale : enGB;
-
-  const selectedDay = date ? new Date(date) : undefined;
-  const timePart = date.length >= 16 ? date.slice(11, 16) : "12:00";
-
-  // Compose a datetime-local string from a chosen day + time, clamped to the
-  // valid season window so an out-of-range time snaps back into range.
-  const applyDate = (day: Date, time: string) => {
-    const [hh, mm] = time.split(":");
-    const d = new Date(day);
-    d.setHours(Number(hh) || 0, Number(mm) || 0, 0, 0);
-    let v = toLocalInput(d);
-    if (v < minStr) v = minStr;
-    else if (v > maxStr) v = maxStr;
-    updateLocation({ date: v });
-  };
-
-  // Tint react-day-picker with the app's wave palette.
-  const dpStyle = {
-    "--rdp-accent-color": "#019eea",
-    "--rdp-accent-background-color": "#def1ff",
-    "--rdp-today-color": "#007ec6",
-  } as React.CSSProperties;
-
-  const fmt = new Intl.DateTimeFormat(inputLang, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-  const nowLabel = fmt.format(now);
-  const selectedLabel = selectedDay ? fmt.format(selectedDay) : "";
-
-  // Keep the compact input as the resting state; reveal the calendar in a
-  // popover on tap. Close it when tapping outside.
-  const [open, setOpen] = useState(false);
-  const popRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (popRef.current && !popRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
-  }, [open]);
-
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor="date">{t("log.field.when")}</Label>
-      {mode === "now" ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500">
-          {nowLabel}
-        </div>
-      ) : (
-        <div className="relative" ref={popRef}>
-          <button
-            type="button"
-            id="date"
-            onClick={() => setOpen((v) => !v)}
-            aria-invalid={!dateValid}
-            aria-expanded={open}
-            className={`flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2 text-left text-sm ring-wave-200 transition focus:ring-2 focus:outline-none ${
-              dateValid ? "border-wave-200" : "border-rose-400"
-            }`}
-          >
-            <CalendarDays className="size-4 shrink-0 text-wave-600" />
-            <span
-              className={selectedLabel ? "text-slate-800" : "text-slate-400"}
-            >
-              {selectedLabel || t("log.date.placeholder")}
-            </span>
-          </button>
-          <AnimatePresence>
-            {open ? (
-              <>
-                <m.div
-                  key="backdrop"
-                  className="fixed inset-0 z-[1200] bg-slate-900/40 sm:hidden"
-                  onClick={() => setOpen(false)}
-                  aria-hidden
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                />
-                <m.div
-                  key="panel"
-                  className="fixed top-1/2 left-1/2 z-[1210] max-h-[calc(100dvh-2rem)] w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-wave-200 bg-white p-2 shadow-xl ring-1 ring-wave-100 sm:absolute sm:top-full sm:left-0 sm:mt-1 sm:max-h-none sm:translate-x-0 sm:translate-y-0"
-                  initial={{ opacity: 0, scale: 0.96, y: 4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.96, y: 4 }}
-                  transition={{ duration: 0.16, ease: "easeOut" }}
-                >
-                  <div className="flex justify-center">
-                    <DayPicker
-                      mode="single"
-                      required
-                      locale={dpLocale}
-                      selected={selectedDay}
-                      onSelect={(day) => applyDate(day, timePart)}
-                      defaultMonth={selectedDay ?? now}
-                      startMonth={seasonStart}
-                      endMonth={now}
-                      disabled={{ before: seasonStart, after: now }}
-                      style={dpStyle}
-                      className="rdp-badligan"
-                    />
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 border-t border-wave-100 px-1 pt-2">
-                    <Label
-                      htmlFor="swim-time"
-                      className="mb-0 shrink-0 text-slate-500"
-                    >
-                      {t("log.field.time")}
-                    </Label>
-                    <Input
-                      id="swim-time"
-                      type="time"
-                      lang={inputLang}
-                      value={timePart}
-                      onChange={(e) =>
-                        applyDate(selectedDay ?? now, e.target.value)
-                      }
-                      aria-invalid={!dateValid}
-                      className="w-auto"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="ml-auto"
-                      onClick={() => setOpen(false)}
-                    >
-                      {t("log.date.done")}
-                    </Button>
-                  </div>
-                </m.div>
-              </>
-            ) : null}
-          </AnimatePresence>
-        </div>
-      )}
-      {mode === "now" ? (
-        <div className="text-[11px] text-slate-500">
-          {t("log.field.when.now_hint")}
-        </div>
-      ) : !dateValid ? (
-        <div className="text-[11px] font-medium text-rose-600">
-          {t("log.error.date_range")}
-        </div>
-      ) : null}
-      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        <div className="chip bg-wave-100 text-wave-800 ring-wave-200">
-          💧 {t("log.points.swim")}
-        </div>
-        {isNewSpot ? (
-          <div className="chip bg-emerald-100 text-emerald-800 ring-emerald-200">
-            ✨ {t("log.points.new_spot")}
-          </div>
-        ) : null}
-        {isWinterSwim ? (
-          <div className="chip bg-sky-100 text-sky-800 ring-sky-200">
-            ❄️ {t("log.points.winter")}
-          </div>
-        ) : null}
-        <span className="ml-auto font-display text-sm font-black text-wave-700">
-          {t("log.points.total", { n: pointsPreview })}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function PhotoField({
   photoPreview,
   photoInput,
@@ -1240,10 +1089,4 @@ function PhotoField({
 function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
-}
-
-const pad = (n: number) => n.toString().padStart(2, "0");
-
-function toLocalInput(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }

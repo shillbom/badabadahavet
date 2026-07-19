@@ -1,4 +1,11 @@
-import { lazy, useEffect, useReducer, useState } from "react";
+import {
+  lazy,
+  useEffect,
+  useEffectEvent,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { m } from "framer-motion";
 import { MapPin, Trophy } from "lucide-react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
@@ -14,6 +21,7 @@ import StreakCard from "@/components/StreakCard";
 import Stat from "@/components/ui/Stat";
 import { usePosition } from "@/hooks/position";
 import { useDeviceFocus } from "@/hooks/focus";
+import { haversineMeters } from "@/lib/utils";
 const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
@@ -36,6 +44,7 @@ export default function MapPage() {
   const locationPermission = useStore((s) => s.locationPermission);
   // Fall back to Firestore lastLocation while GPS hasn't resolved yet
   const myLocation = usePosition();
+  const previousLocation = useRef(myLocation);
 
   // ⋯ menu "my places" filter, three modes: "off" (default) = every spot,
   // coloured by the community's last swim; "on" = every spot, but a pin only
@@ -87,6 +96,24 @@ export default function MapPage() {
       dispatchMapView({ type: "refit" });
     }
   }, [isFocused]);
+
+  const updateLocationAfterMove = useEffectEvent(
+    (pos: { lat: number; lng: number }) => {
+      if (
+        previousLocation.current == null ||
+        (previousLocation.current &&
+          haversineMeters(previousLocation.current, pos) > 500)
+      ) {
+        dispatchMapView({ type: "refit" });
+      }
+      previousLocation.current = pos;
+    },
+  );
+  useEffect(() => {
+    if (myLocation) {
+      updateLocationAfterMove(myLocation);
+    }
+  }, [myLocation]);
 
   // Hold the map until we have a real position when permission is already granted
   // (prevents Stockholm → real-location ping-pong on first load)
