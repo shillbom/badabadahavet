@@ -21,6 +21,7 @@ export default function MapPage() {
   const t = useT();
   const places = useStore((s) => s.placesWithTemps);
   const myPlaces = useStore((s) => s.myPlaces);
+  const mySessions = useStore((s) => s.mySessions);
   const sessionsByPlace = useStore((s) => s.sessionsByPlace);
   const myStats = useStore((s) => s.myStats);
 
@@ -36,30 +37,49 @@ export default function MapPage() {
   // Fall back to Firestore lastLocation while GPS hasn't resolved yet
   const myLocation = usePosition();
 
-  const [{ fitToken, showAll }, dispatchMapView] = useReducer(
+  // ⋯ menu "my places" filter, three modes: "off" (default) = every spot,
+  // coloured by the community's last swim; "on" = every spot, but a pin only
+  // glows blue when *I've* swum there (recency from my own swims); "only" =
+  // just the spots I've swum at.
+  const [{ fitToken, mineMode }, dispatchMapView] = useReducer(
     (
-      state: { fitToken: number; showAll: boolean },
-      action: { type: "refit" } | { type: "showAll"; value: boolean },
+      state: { fitToken: number; mineMode: "off" | "on" | "only" },
+      action:
+        { type: "refit" } | { type: "mineMode"; value: "off" | "on" | "only" },
     ) =>
       action.type === "refit"
         ? { ...state, fitToken: state.fitToken + 1 }
-        : { showAll: action.value, fitToken: state.fitToken + 1 },
-    { fitToken: 0, showAll: true },
+        : { mineMode: action.value, fitToken: state.fitToken + 1 },
+    { fitToken: 0, mineMode: "off" },
   );
   // ⋯ menu naturist filter: "only" = just naturist spots, "on" (default) =
   // everything, "off" = hide naturist spots.
   const [nudeMode, setNudeMode] = useState<"only" | "on" | "off">("on");
 
   const shownPlaces = (() => {
-    const base = isGuest || showAll ? places : myPlaces;
+    let base = isGuest || mineMode !== "only" ? places : myPlaces;
+    // "on": keep every spot visible but recolour from my own swims, so a pin
+    // is only blue where I've been (grey everywhere else).
+    if (!isGuest && mineMode === "on") {
+      const myLastSwim = new Map<string, number>();
+      for (const s of mySessions) {
+        const prev = myLastSwim.get(s.placeId);
+        if (prev === undefined || s.date > prev)
+          myLastSwim.set(s.placeId, s.date);
+      }
+      base = base.map((p) => {
+        const mine = myLastSwim.get(p.id);
+        return {
+          ...p,
+          lastSwimAt: mine,
+          lastSwimBorder: mine !== undefined ? p.lastSwimBorder : undefined,
+        };
+      });
+    }
     if (nudeMode === "only") return base.filter((p) => p.nude === true);
     if (nudeMode === "off") return base.filter((p) => p.nude !== true);
     return base;
   })();
-
-  function changeShowAll(next: boolean) {
-    dispatchMapView({ type: "showAll", value: next });
-  }
 
   const isFocused = useDeviceFocus();
   useEffect(() => {
@@ -140,8 +160,8 @@ export default function MapPage() {
           />
           <Stat
             onClick={() =>
-              showAll
-                ? changeShowAll(false)
+              mineMode !== "only"
+                ? dispatchMapView({ type: "mineMode", value: "only" })
                 : dispatchMapView({ type: "refit" })
             }
             size="lg"
@@ -163,7 +183,7 @@ export default function MapPage() {
               sessionsByPlace={sessionsByPlace}
               userLocation={myLocation}
               fitToken={fitToken}
-              fitBoundsToPlaces={!isGuest && !showAll}
+              fitBoundsToPlaces={!isGuest && mineMode === "only"}
               viewKey="main"
               fullscreenControl
               menuToggles={[
@@ -172,8 +192,17 @@ export default function MapPage() {
                   : [
                       {
                         label: t("map.filter.mine"),
-                        checked: !showAll,
-                        onChange: (mine: boolean) => changeShowAll(!mine),
+                        value: mineMode,
+                        options: [
+                          { value: "only", label: t("map.filter.mode.only") },
+                          { value: "on", label: t("map.filter.mode.on") },
+                          { value: "off", label: t("map.filter.mode.off") },
+                        ],
+                        onSelect: (v: string) =>
+                          dispatchMapView({
+                            type: "mineMode",
+                            value: v as "off" | "on" | "only",
+                          }),
                       },
                     ]),
                 {
