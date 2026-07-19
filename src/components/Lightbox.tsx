@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useState } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m } from "framer-motion";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -38,37 +38,44 @@ export default function Lightbox({
   const [dir, setDir] = useState(0);
 
   // Snap to the requested swim whenever the caller (re)opens the viewer.
-  useEffect(() => {
-    if (!currentSessionId) return;
-    const i = photos.findIndex((s) => s.id === currentSessionId);
-    if (i >= 0) setIndex(i);
-    // Only react to the requested id, not to array identity changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSessionId]);
+  // Adjusting state during render (rather than in an effect) keeps the React
+  // Compiler happy and avoids an extra commit — the id sentinel makes it run
+  // once per open, and re-snaps when reopened on the same swim because the
+  // sentinel is cleared to null on close.
+  const [snappedId, setSnappedId] = useState<string | null>(null);
+  if (currentSessionId !== snappedId) {
+    setSnappedId(currentSessionId);
+    if (currentSessionId) {
+      const i = photos.findIndex((s) => s.id === currentSessionId);
+      if (i >= 0) setIndex(i);
+      setDir(0);
+    }
+  }
 
   const go = useCallback(
     (delta: number) => {
-      setIndex((i) => {
-        const next = i + delta;
-        if (next < 0 || next >= photos.length) return i;
-        setDir(delta);
-        return next;
-      });
+      const next = index + delta;
+      if (next < 0 || next >= photos.length) return;
+      setDir(delta);
+      setIndex(next);
     },
-    [photos.length],
+    [index, photos.length],
   );
 
-  // Keyboard navigation while open.
+  // Keyboard navigation while open. The handler reads fresh `go`/`onClose`
+  // via an Effect Event so the listener subscribes once per open instead of
+  // re-binding on every index change.
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key === "ArrowLeft") go(-1);
+    else if (e.key === "ArrowRight") go(1);
+    else if (e.key === "Escape") onClose();
+  });
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") go(-1);
-      else if (e.key === "ArrowRight") go(1);
-      else if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, go, onClose]);
+    const handler = (e: KeyboardEvent) => onKey(e);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open]);
 
   const s = photos[index];
   const hasPrev = index > 0;
