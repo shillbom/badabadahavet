@@ -134,9 +134,9 @@ function useGroupActions(user: ReturnType<typeof useAuth>["user"]) {
         // Already a member? Tell them immediately without showing the dialog.
         toast.info(t("groups.join.already_member"));
       } else {
-        const join = { ...preview, code: code.trim().toUpperCase() };
-        setLastJoin(join);
-        setPendingJoin(join);
+        const setJoin = { ...preview, code: code.trim().toUpperCase() };
+        setLastJoin(setJoin);
+        setPendingJoin(setJoin);
       }
     } catch {
       toast.error(t("groups.join.error.generic"));
@@ -543,6 +543,7 @@ function useGroupMemberStats(
 
     void fetchUsers(group.members).then((users) => {
       if (active) setProfilesState({ profiles: users, loading: false });
+      return;
     });
 
     const unsubscribe = watchMemberSessions(group.members, setAllSessions);

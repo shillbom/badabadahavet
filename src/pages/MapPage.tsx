@@ -1,4 +1,4 @@
-import { lazy, useReducer, useState } from "react";
+import { lazy, useEffect, useReducer, useState } from "react";
 import { m } from "framer-motion";
 import { MapPin, Trophy } from "lucide-react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
@@ -8,6 +8,7 @@ import { useT, getTimeGreeting, useLocale } from "@/lib/i18n";
 import StreakCard from "@/components/StreakCard";
 import Stat from "@/components/ui/Stat";
 import { usePosition } from "@/hooks/position";
+import { useDeviceFocus } from "@/hooks/focus";
 const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
@@ -54,6 +55,13 @@ export default function MapPage() {
   function changeShowAll(next: boolean) {
     dispatchMapView({ type: "showAll", value: next });
   }
+
+  const isFocused = useDeviceFocus();
+  useEffect(() => {
+    if (isFocused) {
+      dispatchMapView({ type: "refit" });
+    }
+  }, [isFocused]);
 
   // Hold the map until we have a real position when permission is already granted
   // (prevents Stockholm → real-location ping-pong on first load)

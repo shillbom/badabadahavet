@@ -76,6 +76,7 @@ export default function LeaderboardPage() {
         (a, b) => b.members.length - a.members.length,
       )[0];
       setDefaultScope(biggest.id);
+      return;
     });
     return () => {
       active = false;

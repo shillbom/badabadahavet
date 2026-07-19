@@ -449,6 +449,7 @@ function useLogLocation({
       const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setSearchOrigin(loc);
       if (user) await updateUserLastLocation(user.uid, loc.lat, loc.lng);
+      return;
     });
   }, [user]);
 
