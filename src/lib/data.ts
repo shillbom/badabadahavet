@@ -28,6 +28,7 @@ import type {
   GroupDoc,
   PlaceDoc,
   PlacePin,
+  PlaceSummaryEntry,
   PlacesSummaryDoc,
   PlaceTempDoc,
   SessionDoc,
@@ -315,8 +316,21 @@ export function watchPlacesSummary(
 ): Unsubscribe {
   return onSnapshot(doc(db, "placesSummary", "current"), (snap) => {
     const data = snap.exists() ? (snap.data() as PlacesSummaryDoc) : null;
+    // `packed` is JSON.stringify(entries) in a single field (see PlacesSummaryDoc)
+    // — the doc is ~7x smaller on the wire than the raw entries map. Fall back to
+    // a legacy `entries` map so a new client still reads a not-yet-repacked doc.
+    let entries: Record<string, PlaceSummaryEntry> | undefined;
+    if (data && typeof data.packed === "string") {
+      try {
+        entries = JSON.parse(data.packed) as Record<string, PlaceSummaryEntry>;
+      } catch {
+        entries = undefined;
+      }
+    } else {
+      entries = data?.entries;
+    }
     cb({
-      pins: summaryToPlaces(data?.entries),
+      pins: summaryToPlaces(entries),
       builtAt: typeof data?.builtAt === "number" ? data.builtAt : 0,
       exists: snap.exists(),
     });

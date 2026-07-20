@@ -243,12 +243,20 @@ export type PlaceSummaryEntry = {
  *  Clients read this single doc plus a bounded `updatedAt > builtAt` delta on
  *  `places` instead of an always-on listener over the whole (~4k-doc)
  *  collection, which re-streamed every place edit (and every swim's lastSwim*
- *  stamp) to every client. `builtAt` is the cursor for that delta. `entries`
- *  is index-exempt in firestore.indexes.json for the same reason tempSummary's
- *  maps are (the 40k-index-entries-per-document cap). */
+ *  stamp) to every client. `builtAt` is the cursor for that delta.
+ *
+ *  `packed` is `JSON.stringify(entries)` stored as a single string field. This
+ *  matters because Firestore's Listen wire protocol encodes every field with a
+ *  verbose typed wrapper (`{mapValue:{fields:{n:{stringValue:…}}}}` per entry),
+ *  which inflated the ~5k-entry map to ~2.2 MB on the wire — a ~10 s first load
+ *  on mobile. Packing the whole payload into one `stringValue` collapses that
+ *  back to the raw JSON size (~300 KB). `entries` is kept optional only so a
+ *  client running new code can still read an old (pre-pack) doc until the next
+ *  daily sweep rewrites it in packed form. */
 export type PlacesSummaryDoc = {
   builtAt: number;
-  entries: Record<string, PlaceSummaryEntry>;
+  packed?: string;
+  entries?: Record<string, PlaceSummaryEntry>;
 };
 
 export type SessionDoc = {
