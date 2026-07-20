@@ -129,7 +129,11 @@ async function main() {
   if (!placesSummaryChanged(oldEntries, newEntries)) {
     console.log(`→ placesSummary/current unchanged — nothing to write`);
   } else if (WRITE) {
-    await summaryRef.set({ builtAt, entries: newEntries });
+    // Stored as a single JSON string field, not a map: Firestore's Listen wire
+    // protocol wraps every map field in a verbose typed envelope, which inflated
+    // this ~5k-entry doc to ~2.2 MB on the wire (a ~10 s mobile first load).
+    // Packing collapses it to the raw JSON size (~300 KB). See PlacesSummaryDoc.
+    await summaryRef.set({ builtAt, packed: JSON.stringify(newEntries) });
     console.log(`✓ placesSummary/current rewritten (${entryCount} entries)`);
   } else {
     console.log(
