@@ -395,11 +395,13 @@ export const useStore = create<State>((set, get) => {
 
     // ── Bootstrap ─────────────────────────────────────────────────────────
     _startListening: () => {
-      // The places subscription survives auth changes — but we hold off
-      // starting it until Firebase Auth has resolved its first state, so the
-      // query carries the user's credentials when they're signed in. The
-      // community feed (all sessions) is NOT started here: it's expensive and
-      // only runs while something has acquired it via _acquireAllSessions.
+      // The public summary listeners (placesSummary/tempSummary) are
+      // world-readable and need no credentials, so we start them immediately
+      // below (startPublic()) rather than waiting for Firebase Auth — that's
+      // what let guests' map sit blank while auth resolved. Only the auth-gated
+      // `places` delta waits for a signed-in user (syncDelta). The community
+      // feed (all sessions) is NOT started here: it's expensive and only runs
+      // while something has acquired it via _acquireAllSessions.
       let publicUnsubs: (() => void)[] = [];
       let userUnsubs: (() => void)[] = [];
       let publicStarted = false;
@@ -561,11 +563,14 @@ export const useStore = create<State>((set, get) => {
         fetchLocation();
       }
 
+      // Start the world-readable summary listeners now — they carry no
+      // credentials, so there's nothing to wait for. syncDelta() (called from
+      // the summary callback and the auth callback below) keeps the auth-gated
+      // `places` delta off until a user is signed in.
+      startPublic();
+
       const authUnsub = onAuthStateChanged(auth, async (u) => {
-        // First auth state resolved — safe to start public listeners now
-        // (with the user's credentials attached if they're signed in).
         feedAuthReady = true;
-        startPublic();
         // Tear down the previous user's subscriptions on every auth change.
         stopUser();
         // The `places` delta is a live subscription — hold it only while
