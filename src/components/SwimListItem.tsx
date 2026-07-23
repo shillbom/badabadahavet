@@ -1,6 +1,6 @@
 import type { ReactNode, Ref } from "react";
 import { m } from "framer-motion";
-import { Calendar } from "lucide-react";
+import { Calendar, Thermometer } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
 import { waterEmojiFor } from "@/lib/waterEmoji";
 
@@ -24,6 +24,7 @@ export default function SwimListItem({
   date,
   winter,
   unique,
+  waterTemp,
   note,
   children,
 }: {
@@ -45,6 +46,7 @@ export default function SwimListItem({
   date: number;
   winter?: boolean;
   unique?: boolean;
+  waterTemp?: number;
   note?: string | null;
   /** Footer row, e.g. a ReactionBar or chip list. */
   children?: ReactNode;
@@ -78,11 +80,17 @@ export default function SwimListItem({
             </div>
           ) : null}
         </div>
-        <div className="mt-0.5 flex items-center gap-1 text-[11px] text-slate-500">
+        <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
           <Calendar className="h-3 w-3" />
           {formatDateTime(date)}
-          {winter ? <span className="ml-1">❄️</span> : null}
+          {winter ? <span className="ml-0.5">❄️</span> : null}
           {unique ? <span className="ml-0.5">✨</span> : null}
+          {waterTemp != null ? (
+            <span className="ml-1 inline-flex items-center gap-0.5 rounded-md bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-200">
+              <Thermometer className="h-3 w-3 text-teal-500" />
+              {waterTemp}°C
+            </span>
+          ) : null}
         </div>
         {note ? <p className="mt-0.5 text-xs text-slate-600">{note}</p> : null}
         {children}

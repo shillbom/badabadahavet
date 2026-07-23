@@ -1,7 +1,7 @@
 ---
 name: react-doctor
 description: Use when finishing a feature, fixing a bug, before committing React code, or when the user types `/doctor`, asks to scan, triage, or clean up React diagnostics. Covers lint, accessibility, bundle size, architecture. Includes a regression check and a full local-triage workflow that fetches the canonical playbook.
-version: "1.2.0"
+version: "1.3.0"
 ---
 
 # React Doctor
@@ -49,3 +49,51 @@ npx react-doctor@latest --verbose --scope changed
 | `--scope changed` | Only report issues introduced vs the base branch (default: full) |
 | `--scope lines`   | Only report issues on the changed lines                          |
 | `--score`         | Output only the numeric score                                    |
+
+## Running non-interactively (agents / CI)
+
+The default CLI is **interactive** — it prompts "Choose what to scan" and blocks
+forever waiting for a keypress, which hangs any agent/automated run. To scan
+without prompts and get machine-readable output:
+
+```bash
+npx react-doctor@latest --json --json-out /tmp/rd.json -y --scope full --no-score
+```
+
+| Flag                | Purpose                                                 |
+| ------------------- | ------------------------------------------------------- |
+| `-y` / `--yes`      | Skip the interactive picker; scan all detected projects |
+| `--json`            | Emit a structured JSON report instead of the pretty TUI |
+| `--json-out <path>` | Write that JSON to a file (easier to parse than stdout) |
+| `--no-score`        | Skip the score API call / share URL / crash reporting   |
+
+**Exit code is unreliable** — the process may exit `1` when issues are found even
+though the scan succeeded. Trust the JSON, not `$?`: check `report.ok === true`
+and `report.error === null`.
+
+**JSON shape** (top-level keys): `schemaVersion`, `mode`, `ok`, `error`,
+`directory`, `projects`, `summary`, `diagnostics`. The `diagnostics` array is the
+one you want — each entry has `rule`, `filePath`, `line`, and (when several
+findings share a root cause) `fixGroupId`.
+
+Parse and filter to the files you touched, e.g.:
+
+```bash
+python3 -c "
+import json
+d = json.load(open('/tmp/rd.json'))
+assert d['ok'] and d['error'] is None, d.get('error')
+for x in d['diagnostics']:
+    if 'MyPage' in x['filePath']:
+        print(x['rule'], x['filePath'] + ':' + str(x['line']))
+"
+```
+
+To confirm a fix, re-run and check the rule no longer appears at that file/line.
+
+## Understanding a specific rule
+
+`npx react-doctor@latest rules explain <rule>` prints the canonical explanation
+and fix recipe for one rule — use it before fixing. The per-rule prompt URLs
+(`https://www.react.doctor/prompts/rules/react-doctor/<rule>.md`) 404 for most
+rules, so prefer `rules explain`.

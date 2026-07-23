@@ -218,6 +218,7 @@ export default function HistoryPage() {
                 ) : undefined
               }
               date={s.date}
+              waterTemp={s.waterTemp}
               note={s.note}
             >
               {/* Winter/unique stay as labelled chips here (not the compact

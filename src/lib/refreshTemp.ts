@@ -12,9 +12,11 @@ const callable = cloudFn<{ placeId: string }, unknown>("refreshPlaceTemp");
 /**
  * Trigger a server-side temperature refresh for a place if the known
  * reading (its `at` timestamp — from placeTemps or the temp summary) is
- * older than an hour. The result lands in `placeTemps/{placeId}`, so only
- * call this from somewhere that subscribes to that doc (SpotPage) — the
- * map reads the daily summary and would never see the update. Silently
+ * older than an hour. The result lands in `placeTemps/{placeId}`; the
+ * `syncTempSummary` Cloud Function trigger then folds it into
+ * `tempSummary/current`, so the map picks it up too. The live update here
+ * only reaches components that subscribe to `placeTemps/{placeId}`
+ * (SpotPage) — the map refreshes on its next summary snapshot. Silently
  * no-ops if:
  *   - the reading is fresh,
  *   - we already asked recently,

@@ -15,6 +15,7 @@ import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
+import { WaterTempField } from "@/components/WaterTempField";
 import { WhenField } from "@/components/SwimDatePicker";
 import { toast } from "@/components/ui/toastStore";
 import { celebrate } from "@/components/celebrationStore";
@@ -45,7 +46,8 @@ import { useLocale, useT } from "@/lib/i18n";
 import BackButton from "@/components/ui/BackButton";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import { usePosition } from "@/hooks/position";
-import type { PlaceWithTemp } from "@/lib/types";
+import type { User } from "firebase/auth";
+import type { PlaceWithTemp, SessionDoc, UserDoc } from "@/lib/types";
 
 type Mode = "now" | "pick";
 
@@ -134,67 +136,47 @@ function ModeSelector({
   );
 }
 
-export default function LogSessionPage() {
-  const { user, profile } = useAuth();
+/**
+ * Owns the "save a swim" flow: validation, rate-limit check, place
+ * create-or-find, the session write, and the streak/celebration feedback.
+ * Split out of LogSessionPage so the page component stays readable — it
+ * exposes just the `busy` flag and the form's `submit` handler.
+ */
+function useSubmitSwim(args: {
+  user: User | null;
+  profile: UserDoc | null;
+  coords: Coords | null;
+  name: string;
+  suggestion: string | null;
+  mode: string;
+  date: string;
+  note: string;
+  waterTemp: string;
+  places: PlaceWithTemp[];
+  mySessions: SessionDoc[];
+  unlockedAchievements: Set<string>;
+  photoFileRef: React.RefObject<File | null>;
+  countryRef: React.RefObject<string | null>;
+}) {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const t = useT();
-  // The native datetime-local picker formats date + 12h/24h time from
-  // the input's own `lang`, not from <html lang>. en-GB → 24h with sane
-  // day-first format, sv-SE → Swedish month names + 24h. Safari obeys
-  // this where it ignores the page locale entirely.
-  const locale = useLocale((s) => s.locale);
-  const inputLang = locale === "sv" ? "sv-SE" : "en-GB";
-  const places = useStore((s) => s.placesWithTemps);
-  const mySessions = useStore((s) => s.mySessions);
-  const myPlaceIds = useStore((s) => s.myPlaceIds);
-  const unlockedAchievements = useStore((s) => s.unlockedAchievements);
-  const sessionsByPlace = useStore((s) => s.sessionsByPlace);
-  // Live GPS fix for the "current position" (blue) dot on the map. Falls back
-  // to the last known location while GPS resolves; null until we have either,
-  // so we never plant a "you are here" dot at a hardcoded guess.
-  const myLocation = usePosition();
-  // Pin popups + achievement checks read the community feed — keep it
-  // subscribed while logging (this page is behind login).
-  useAllSessionsFeed();
-
-  // Pre-select a place when navigating from SpotPage (?placeId=xxx).
-  const preselectedPlaceId = searchParams.get("placeId");
-  const preselectedPlace = preselectedPlaceId
-    ? (places.find((p) => p.id === preselectedPlaceId) ?? null)
-    : null;
-
+  const [busy, setBusy] = useState(false);
   const {
-    state: { mode, name, date, coords, search, pickedPlaceId, locating },
-    updateLocation,
-    setIntentionalNow,
-    searchOrigin,
-    swimMapRef,
-    countryRef,
-    searchMatches,
-    suggestion,
-  } = useLogLocation({
-    preselectedPlaceId,
-    preselectedPlace,
-    places,
     user,
     profile,
-  });
-
-  const [note, setNote] = useState("");
-  const { photoFileRef, photoPreview, photoInput, onPhotoChange, clearPhoto } =
-    usePhotoUpload();
-  const [busy, setBusy] = useState(false);
-  // Capture "now" once per mount instead of reading the clock during render —
-  // Date.now() in the render body is impure and blocks React Compiler from
-  // memoizing this component. A fixed baseline is plenty for validating that
-  // the chosen swim time isn't in the future.
-  const [nowMs] = useState(() => Date.now());
-  // Direction of the last mode change (+1 forward, -1 back) driving the swipe,
-  // plus a flag that clips horizontal overflow only while the panels slide so a
-  // scrollbar never flashes — and the calendar popover isn't clipped at rest.
-  const [swipeDir, setSwipeDir] = useState(0);
-  const [swiping, setSwiping] = useState(false);
+    coords,
+    name,
+    suggestion,
+    mode,
+    date,
+    note,
+    waterTemp,
+    places,
+    mySessions,
+    unlockedAchievements,
+    photoFileRef,
+    countryRef,
+  } = args;
 
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -250,6 +232,9 @@ export default function LogSessionPage() {
         unlockedAchievements.size,
         unlockedAchievements,
       );
+      const parsedWaterTemp = waterTemp.trim()
+        ? parseFloat(waterTemp.replace(",", "."))
+        : undefined;
       const session = await createSession({
         uid: user.uid,
         place,
@@ -260,6 +245,9 @@ export default function LogSessionPage() {
         photoFile: photoFileRef.current,
         country: countryRef.current,
         border: myBorder.id,
+        waterTemp: Number.isFinite(parsedWaterTemp)
+          ? parsedWaterTemp
+          : undefined,
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
       // Streak feedback, computed against the pre-log session list: crossing
@@ -303,8 +291,92 @@ export default function LogSessionPage() {
         toast.error(t("log.error.generic"));
       }
     }
+    // The reset sits after the try/catch rather than in a `finally`: the React
+    // Compiler can't optimize try/finally, and the catch swallows every error
+    // so this runs on both success and failure. The too-soon guard above
+    // resets before its own early return.
     setBusy(false);
   }
+
+  return { busy, submit };
+}
+
+export default function LogSessionPage() {
+  const { user, profile } = useAuth();
+  const [searchParams] = useSearchParams();
+  const t = useT();
+  // The native datetime-local picker formats date + 12h/24h time from
+  // the input's own `lang`, not from <html lang>. en-GB → 24h with sane
+  // day-first format, sv-SE → Swedish month names + 24h. Safari obeys
+  // this where it ignores the page locale entirely.
+  const locale = useLocale((s) => s.locale);
+  const inputLang = locale === "sv" ? "sv-SE" : "en-GB";
+  const places = useStore((s) => s.placesWithTemps);
+  const mySessions = useStore((s) => s.mySessions);
+  const myPlaceIds = useStore((s) => s.myPlaceIds);
+  const unlockedAchievements = useStore((s) => s.unlockedAchievements);
+  const sessionsByPlace = useStore((s) => s.sessionsByPlace);
+  // Live GPS fix for the "current position" (blue) dot on the map. Falls back
+  // to the last known location while GPS resolves; null until we have either,
+  // so we never plant a "you are here" dot at a hardcoded guess.
+  const myLocation = usePosition();
+  // Pin popups + achievement checks read the community feed — keep it
+  // subscribed while logging (this page is behind login).
+  useAllSessionsFeed();
+
+  // Pre-select a place when navigating from SpotPage (?placeId=xxx).
+  const preselectedPlaceId = searchParams.get("placeId");
+  const preselectedPlace = preselectedPlaceId
+    ? (places.find((p) => p.id === preselectedPlaceId) ?? null)
+    : null;
+
+  const {
+    state: { mode, name, date, coords, search, pickedPlaceId, locating },
+    updateLocation,
+    setIntentionalNow,
+    searchOrigin,
+    swimMapRef,
+    countryRef,
+    searchMatches,
+    suggestion,
+  } = useLogLocation({
+    preselectedPlaceId,
+    preselectedPlace,
+    places,
+    user,
+    profile,
+  });
+
+  const [note, setNote] = useState("");
+  const [waterTemp, setWaterTemp] = useState("");
+  const { photoFileRef, photoPreview, photoInput, onPhotoChange, clearPhoto } =
+    usePhotoUpload();
+  const { busy, submit } = useSubmitSwim({
+    user,
+    profile,
+    coords,
+    name,
+    suggestion,
+    mode,
+    date,
+    note,
+    waterTemp,
+    places,
+    mySessions,
+    unlockedAchievements,
+    photoFileRef,
+    countryRef,
+  });
+  // Capture "now" once per mount instead of reading the clock during render —
+  // Date.now() in the render body is impure and blocks React Compiler from
+  // memoizing this component. A fixed baseline is plenty for validating that
+  // the chosen swim time isn't in the future.
+  const [nowMs] = useState(() => Date.now());
+  // Direction of the last mode change (+1 forward, -1 back) driving the swipe,
+  // plus a flag that clips horizontal overflow only while the panels slide so a
+  // scrollbar never flashes — and the calendar popover isn't clipped at rest.
+  const [swipeDir, setSwipeDir] = useState(0);
+  const [swiping, setSwiping] = useState(false);
 
   const dateObj = new Date(date);
   const isWinterSwim = isWinterMonth(dateObj);
@@ -421,6 +493,13 @@ export default function LogSessionPage() {
                 placeholder={t("log.field.note.placeholder")}
               />
             </div>
+
+            <WaterTempField
+              value={waterTemp}
+              onChange={setWaterTemp}
+              presets={[12, 15, 18, 20, 22]}
+              hint
+            />
 
             <PhotoField
               photoPreview={photoPreview}
@@ -711,6 +790,13 @@ function usePhotoUpload() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
 
+  // Free a preview's object URL once it's replaced or the form unmounts,
+  // otherwise the underlying File stays pinned in memory for the page's life.
+  useEffect(() => {
+    if (!photoPreview) return;
+    return () => URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
+
   async function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -734,7 +820,6 @@ function usePhotoUpload() {
 
   function clearPhoto() {
     photoFileRef.current = null;
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhotoPreview(null);
     if (photoInput.current) photoInput.current.value = "";
   }

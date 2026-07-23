@@ -296,6 +296,10 @@ service cloud.firestore {
       allow read: if true;
       allow write: if false;
     }
+    match /placeTempHistory/{placeId} {
+      allow read: if true;
+      allow write: if false;
+    }
 
     // Every place's lightweight map fields in one doc, rebuilt by the daily
     // sweep (scripts/update-places-summary.mjs via the Admin SDK, which
