@@ -195,9 +195,11 @@ export default function EditSwimPage() {
       } else {
         toast.error(t("swim.edit.error"));
       }
-    } finally {
-      setBusy(false);
     }
+    // Reset after the try/catch rather than in a `finally`: the React Compiler
+    // can't optimize try/finally, and the catch swallows errors so this runs
+    // on both success and failure.
+    setBusy(false);
   }
 
   async function onDelete() {
@@ -211,9 +213,9 @@ export default function EditSwimPage() {
       navigate(-1);
     } catch {
       toast.error(t("swim.edit.delete_error"));
-    } finally {
-      setDeleting(false);
     }
+    // Reset after the try/catch rather than in a `finally` (see submit above).
+    setDeleting(false);
   }
 
   return (

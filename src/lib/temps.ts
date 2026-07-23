@@ -84,3 +84,44 @@ export function mergePlaceTemps(
     };
   });
 }
+
+/**
+ * Fetch Open-Meteo's daily mean sea-surface-temperature estimate for a
+ * coordinate over the inclusive [startStr, endStr] window (YYYY-MM-DD keys).
+ * Returns a date-keyed map of °C values rounded to one decimal; a failed,
+ * non-OK, or empty response yields an empty map so callers can fall back to
+ * whatever stored readings exist. Never throws.
+ *
+ * `timezone=Europe/Stockholm` makes Open-Meteo aggregate and label days in
+ * the same zone as `localDay`, so its keys line up with ours.
+ */
+export async function fetchMarineTemps(
+  lat: number,
+  lng: number,
+  startStr: string,
+  endStr: string,
+): Promise<Record<string, number>> {
+  try {
+    const res = await fetch(
+      `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&start_date=${startStr}&end_date=${endStr}&daily=sea_surface_temperature_mean&timezone=Europe%2FStockholm`,
+      { headers: { Accept: "application/json" } },
+    );
+    if (!res.ok) return {};
+    const data = await res.json();
+    if (!data?.daily?.time) return {};
+    const times: string[] = data.daily.time;
+    const temps: (number | null)[] =
+      data.daily.sea_surface_temperature_mean ?? [];
+    const result: Record<string, number> = {};
+    times.forEach((timeStr, idx) => {
+      const val = temps[idx];
+      if (typeof val === "number" && !Number.isNaN(val)) {
+        result[timeStr] = Math.round(val * 10) / 10;
+      }
+    });
+    return result;
+  } catch {
+    // Ignored — the caller falls back to whatever stored readings exist.
+    return {};
+  }
+}

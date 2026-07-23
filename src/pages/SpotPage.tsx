@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
@@ -46,7 +46,7 @@ import type {
   WaterSample,
 } from "@/lib/types";
 import { formatDate, rememberReturnPath, shareOrCopy } from "@/lib/utils";
-import { freshestReading } from "@/lib/temps";
+import { fetchMarineTemps, freshestReading } from "@/lib/temps";
 import {
   algaeSeverity,
   isSampleFresh,
@@ -1079,9 +1079,11 @@ function SpotInfoCard({
             : "spot.info.error",
         ),
       );
-    } finally {
-      setBusy(false);
     }
+    // Reset after the try/catch rather than in a `finally`: the React Compiler
+    // can't optimize try/finally, and the catch swallows errors so this runs
+    // on both success and failure.
+    setBusy(false);
   }
 
   if (editing) {
@@ -1268,7 +1270,7 @@ function useSpotTempHistory(placeId: string, lat?: number, lng?: number) {
   const [storedHistory, setStoredHistory] =
     useState<PlaceTempHistoryDoc | null>(null);
   const [omPoints, setOmPoints] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
+  const [omDone, setOmDone] = useState(false);
   // Remember which coordinates we've already fetched an estimate for, so a
   // later stored-history update (which re-runs the effect) doesn't fire a
   // duplicate upstream request.
@@ -1279,54 +1281,38 @@ function useSpotTempHistory(placeId: string, lat?: number, lng?: number) {
     return watchPlaceTempHistory(placeId, setStoredHistory);
   }, [placeId]);
 
-  useEffect(() => {
-    if (typeof lat !== "number" || typeof lng !== "number") return;
-    const fetchKey = `${lat},${lng}`;
-    if (fetchedFor.current === fetchKey) return;
+  const hasCoords = typeof lat === "number" && typeof lng === "number";
 
-    // Skip the upstream estimate entirely when we already have a stored
-    // reading for every day in the window — there's nothing left to fill in.
-    const days = recentDayKeys();
-    const covered = days.every(
-      (d) => typeof storedHistory?.days?.[d]?.t === "number",
-    );
-    if (covered) {
-      setLoading(false);
-      return;
-    }
+  // We already have everything when a stored reading exists for every day in
+  // the window — there's nothing left for the upstream estimate to fill in.
+  // Derived from stored history so it stays correct without an effect. Plain
+  // compute: the React Compiler memoizes, so no manual useMemo.
+  const covered = recentDayKeys().every(
+    (d) => typeof storedHistory?.days?.[d]?.t === "number",
+  );
+
+  useEffect(() => {
+    if (typeof lat !== "number" || typeof lng !== "number" || covered) return;
+    // Capture the narrowed coordinates so the async closure below keeps their
+    // `number` type (TypeScript doesn't carry the guard into a nested function).
+    const latNum = lat;
+    const lngNum = lng;
+    const fetchKey = `${latNum},${lngNum}`;
+    if (fetchedFor.current === fetchKey) return;
     fetchedFor.current = fetchKey;
 
     let cancelled = false;
+    const days = recentDayKeys();
     const startStr = days[0];
     const endStr = days[days.length - 1];
 
     async function loadOm() {
-      try {
-        // `timezone=Europe/Stockholm` makes Open-Meteo aggregate and label
-        // days in the same zone as localDay, so its keys line up with ours.
-        const res = await fetch(
-          `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&start_date=${startStr}&end_date=${endStr}&daily=sea_surface_temperature_mean&timezone=Europe%2FStockholm`,
-          { headers: { Accept: "application/json" } },
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        if (cancelled || !data?.daily?.time) return;
-        const times: string[] = data.daily.time;
-        const temps: (number | null)[] =
-          data.daily.sea_surface_temperature_mean ?? [];
-        const result: Record<string, number> = {};
-        times.forEach((timeStr, idx) => {
-          const val = temps[idx];
-          if (typeof val === "number" && !Number.isNaN(val)) {
-            result[timeStr] = Math.round(val * 10) / 10;
-          }
-        });
-        setOmPoints(result);
-      } catch {
-        // Ignored — the graph falls back to whatever stored readings exist.
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      // The network call lives in lib/temps so this effect isn't doing raw
+      // fetching; it never throws and returns {} on any failure.
+      const result = await fetchMarineTemps(latNum, lngNum, startStr, endStr);
+      if (cancelled) return;
+      if (Object.keys(result).length > 0) setOmPoints(result);
+      setOmDone(true);
     }
 
     void loadOm();
@@ -1334,22 +1320,24 @@ function useSpotTempHistory(placeId: string, lat?: number, lng?: number) {
     return () => {
       cancelled = true;
     };
-  }, [lat, lng, storedHistory]);
+  }, [lat, lng, covered]);
 
-  // Stored readings win over the upstream estimate for each day. Recomputed
-  // only when a source changes rather than on every render.
-  const points = useMemo<HistoryPoint[]>(() => {
-    const result: HistoryPoint[] = [];
-    for (const dateStr of recentDayKeys()) {
-      const stored = storedHistory?.days?.[dateStr];
-      if (stored && typeof stored.t === "number") {
-        result.push({ date: dateStr, t: stored.t, p: stored.p });
-      } else if (omPoints[dateStr] != null) {
-        result.push({ date: dateStr, t: omPoints[dateStr], p: "open-meteo" });
-      }
+  // Loading only while a fetch is genuinely outstanding: we have coordinates,
+  // stored history doesn't already cover the window, and the estimate hasn't
+  // come back yet. Derived — never toggled from inside an effect.
+  const loading = hasCoords && !covered && !omDone;
+
+  // Stored readings win over the upstream estimate for each day. Plain
+  // compute: the React Compiler memoizes, so no manual useMemo.
+  const points: HistoryPoint[] = [];
+  for (const dateStr of recentDayKeys()) {
+    const stored = storedHistory?.days?.[dateStr];
+    if (stored && typeof stored.t === "number") {
+      points.push({ date: dateStr, t: stored.t, p: stored.p });
+    } else if (omPoints[dateStr] != null) {
+      points.push({ date: dateStr, t: omPoints[dateStr], p: "open-meteo" });
     }
-    return result;
-  }, [storedHistory, omPoints]);
+  }
 
   return { points, loading };
 }
@@ -1523,7 +1511,7 @@ function SpotTempGraph({
                   cx={c.x}
                   cy={c.y}
                   r={isSelected ? "4.5" : "2.5"}
-                  className="cursor-pointer transition-all"
+                  className="cursor-pointer transition-[r,fill,stroke-width] duration-150 ease-in-out"
                   fill={isSelected ? "#0f766e" : "#0d9488"}
                   stroke="#ffffff"
                   strokeWidth={isSelected ? "2" : "1"}
