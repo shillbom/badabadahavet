@@ -1079,8 +1079,9 @@ function SpotInfoCard({
             : "spot.info.error",
         ),
       );
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   if (editing) {

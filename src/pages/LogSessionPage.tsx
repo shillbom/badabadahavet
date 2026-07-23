@@ -9,14 +9,13 @@ import {
   X,
   Sparkles,
   Search,
-  Thermometer,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthContext";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import SwimMap from "@/components/SwimMap";
+import { WaterTempField } from "@/components/WaterTempField";
 import { WhenField } from "@/components/SwimDatePicker";
 import { toast } from "@/components/ui/toastStore";
 import { celebrate } from "@/components/celebrationStore";
@@ -245,7 +244,6 @@ export default function LogSessionPage() {
         )
       ) {
         toast.error(t("log.error.too_soon"));
-        setBusy(false);
         return;
       }
       const myBorder = resolveBorder(
@@ -311,8 +309,9 @@ export default function LogSessionPage() {
       } else {
         toast.error(t("log.error.generic"));
       }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   const dateObj = new Date(date);
@@ -431,52 +430,12 @@ export default function LogSessionPage() {
               />
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5">
-                <Thermometer className="h-4 w-4 text-teal-600" />
-                <Label htmlFor="waterTemp">{t("log.field.water_temp")}</Label>
-              </div>
-              <div className="relative">
-                <Input
-                  id="waterTemp"
-                  type="number"
-                  step="0.1"
-                  min="-5"
-                  max="40"
-                  value={waterTemp}
-                  onChange={(e) => setWaterTemp(e.target.value)}
-                  placeholder={t("log.field.water_temp.placeholder")}
-                  className="pr-10"
-                />
-                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm font-semibold text-slate-400">
-                  °C
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {[12, 15, 18, 20, 22].map((deg) => (
-                  <button
-                    key={deg}
-                    type="button"
-                    onClick={() =>
-                      setWaterTemp((curr) =>
-                        curr === String(deg) ? "" : String(deg),
-                      )
-                    }
-                    className={cn(
-                      "rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition active:scale-95",
-                      waterTemp === String(deg)
-                        ? "bg-wave-600 text-white ring-wave-600"
-                        : "bg-white/80 text-slate-700 ring-slate-200 hover:bg-slate-100",
-                    )}
-                  >
-                    {deg}°C
-                  </button>
-                ))}
-              </div>
-              <p className="text-[11px] text-slate-500">
-                {t("log.field.water_temp.hint")}
-              </p>
-            </div>
+            <WaterTempField
+              value={waterTemp}
+              onChange={setWaterTemp}
+              presets={[12, 15, 18, 20, 22]}
+              hint
+            />
 
             <PhotoField
               photoPreview={photoPreview}
@@ -767,6 +726,13 @@ function usePhotoUpload() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
 
+  // Free a preview's object URL once it's replaced or the form unmounts,
+  // otherwise the underlying File stays pinned in memory for the page's life.
+  useEffect(() => {
+    if (!photoPreview) return;
+    return () => URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
+
   async function onPhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -790,7 +756,6 @@ function usePhotoUpload() {
 
   function clearPhoto() {
     photoFileRef.current = null;
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhotoPreview(null);
     if (photoInput.current) photoInput.current.value = "";
   }

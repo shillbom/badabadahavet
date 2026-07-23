@@ -1,12 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Camera, MapPin, Trash2, X, Thermometer } from "lucide-react";
+import { Camera, MapPin, Trash2, X } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
 import BackButton from "@/components/ui/BackButton";
 import Photo from "@/components/Photo";
+import { WaterTempField } from "@/components/WaterTempField";
 import { toast } from "@/components/ui/toastStore";
 import { removeSession, updateSession, type SessionEdits } from "@/lib/data";
 import { checkImageFile, ImageProcessingError } from "@/lib/image";
@@ -53,6 +54,14 @@ export default function EditSwimPage() {
   const photoInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Free a replaced photo's object URL once it's swapped out or the form
+  // unmounts, so the picked File isn't pinned in memory for the page's life.
+  useEffect(() => {
+    const preview = photoEdit.kind === "replace" ? photoEdit.preview : null;
+    if (!preview) return;
+    return () => URL.revokeObjectURL(preview);
+  }, [photoEdit]);
 
   if (!session) {
     // Own sessions stream in via the store listener — right after a reload
@@ -115,16 +124,16 @@ export default function EditSwimPage() {
       if (photoInput.current) photoInput.current.value = "";
       return;
     }
-    setPhotoEdit((prev) => {
-      if (prev.kind === "replace") URL.revokeObjectURL(prev.preview);
-      return { kind: "replace", file: f, preview: URL.createObjectURL(f) };
-    });
+    // Create the preview URL outside the state updater so StrictMode's
+    // double-invoke can't leak a second, unreferenced object URL. The effect
+    // above revokes the previous preview when this new one replaces it.
+    const preview = URL.createObjectURL(f);
+    setPhotoEdit({ kind: "replace", file: f, preview });
   }
 
   function clearPhoto() {
     setPhotoEdit((prev) => {
       if (prev.kind === "replace") {
-        URL.revokeObjectURL(prev.preview);
         // Removing a just-picked file falls back to the stored photo (if
         // any) — removing the stored photo is the explicit "remove" state.
         return session?.photoUrl ? { kind: "keep" } : { kind: "remove" };
@@ -172,7 +181,6 @@ export default function EditSwimPage() {
       await updateSession(session, edits);
       toast.success(t("swim.edit.saved"));
       navigate(-1);
-      return;
     } catch (err) {
       if (err instanceof ImageProcessingError) {
         toast.error(
@@ -187,8 +195,9 @@ export default function EditSwimPage() {
       } else {
         toast.error(t("swim.edit.error"));
       }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function onDelete() {
@@ -200,11 +209,11 @@ export default function EditSwimPage() {
       await removeSession(session.id);
       toast.success(t("swim.edit.deleted"));
       navigate(-1);
-      return;
     } catch {
       toast.error(t("swim.edit.delete_error"));
+    } finally {
+      setDeleting(false);
     }
-    setDeleting(false);
   }
 
   return (
@@ -279,77 +288,20 @@ export default function EditSwimPage() {
           />
         </div>
 
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <Thermometer className="h-4 w-4 text-teal-600" />
-            <Label htmlFor="waterTemp">{t("log.field.water_temp")}</Label>
-          </div>
-          <div className="relative">
-            <Input
-              id="waterTemp"
-              type="number"
-              step="0.1"
-              min="-5"
-              max="40"
-              value={waterTempValue}
-              disabled={locked}
-              onChange={(e) => setWaterTemp(e.target.value)}
-              placeholder={t("log.field.water_temp.placeholder")}
-              className="pr-10"
-            />
-            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm font-semibold text-slate-400">
-              °C
-            </span>
-          </div>
-        </div>
+        <WaterTempField
+          value={waterTempValue}
+          onChange={setWaterTemp}
+          disabled={locked}
+        />
 
-        <div className="space-y-1.5">
-          <Label>{t("log.field.photo")}</Label>
-          {currentPhotoUrl ? (
-            <div className="relative overflow-hidden rounded-xl">
-              {photoEdit.kind === "keep" ? (
-                <Photo
-                  src={currentPhotoUrl}
-                  thumb={session.photoThumb}
-                  className="h-44 w-full"
-                  imgClassName="object-cover"
-                />
-              ) : (
-                <img
-                  src={currentPhotoUrl}
-                  alt=""
-                  className="h-44 w-full object-cover"
-                />
-              )}
-              <button
-                type="button"
-                onClick={clearPhoto}
-                className="absolute top-2 right-2 rounded-full bg-black/60 p-1 text-white"
-                aria-label={t("log.remove_photo")}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => photoInput.current?.click()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white/60 py-6 text-sm text-slate-500 hover:bg-white/90"
-            >
-              <Camera className="h-4 w-4" />
-              {t("log.add_photo")}
-            </button>
-          )}
-          {/* No `capture` attribute — see LogSessionPage: leaving it off lets
-              mobile users choose the photo library OR take a new photo. */}
-          <input
-            ref={photoInput}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={onPhotoChange}
-          />
-        </div>
+        <PhotoEditField
+          url={currentPhotoUrl}
+          isKeep={photoEdit.kind === "keep"}
+          thumb={session.photoThumb}
+          onClear={clearPhoto}
+          onPick={onPhotoChange}
+          inputRef={photoInput}
+        />
 
         <Button
           type="submit"
@@ -378,6 +330,72 @@ export default function EditSwimPage() {
         </div>
       </div>
     </form>
+  );
+}
+
+type PhotoEditFieldProps = {
+  url: string | null;
+  isKeep: boolean;
+  thumb?: string;
+  onClear: () => void;
+  onPick: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+};
+
+/** Photo picker for the edit form: keeps, replaces, or removes the swim photo. */
+function PhotoEditField({
+  url,
+  isKeep,
+  thumb,
+  onClear,
+  onPick,
+  inputRef,
+}: PhotoEditFieldProps) {
+  const t = useT();
+  return (
+    <div className="space-y-1.5">
+      <Label>{t("log.field.photo")}</Label>
+      {url ? (
+        <div className="relative overflow-hidden rounded-xl">
+          {isKeep ? (
+            <Photo
+              src={url}
+              thumb={thumb}
+              className="h-44 w-full"
+              imgClassName="object-cover"
+            />
+          ) : (
+            <img src={url} alt="" className="h-44 w-full object-cover" />
+          )}
+          <button
+            type="button"
+            onClick={onClear}
+            className="absolute top-2 right-2 rounded-full bg-black/60 p-1 text-white"
+            aria-label={t("log.remove_photo")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 bg-white/60 py-6 text-sm text-slate-500 hover:bg-white/90"
+        >
+          <Camera className="h-4 w-4" />
+          {t("log.add_photo")}
+        </button>
+      )}
+      {/* No `capture` attribute — see LogSessionPage: leaving it off lets
+          mobile users choose the photo library OR take a new photo. */}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={onPick}
+      />
+    </div>
   );
 }
 
