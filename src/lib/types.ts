@@ -79,13 +79,21 @@ export type BannedUser = {
   bannedBy: string;
 };
 
-/** The upstream feeds a water-temperature reading can come from. */
+/** The upstream feeds a water-temperature reading can come from, plus "user" for reported temps. */
 export type TempProvider = "havochvatten" | "smhi" | "open-meteo";
+export type TempSource = TempProvider | "user";
 
 /** One water-temperature reading. Field names are single letters because
  *  thousands of these are packed into the one `tempSummary/current` doc
  *  (doc-size budget): t = °C, at = epoch ms sampled, p = producing feed. */
-export type TempReading = { t: number; at: number; p: TempProvider };
+export type TempReading = { t: number; at: number; p: TempSource };
+
+/** placeTempHistory/{placeId} — daily temperature readings recorded per day. */
+export type PlaceTempHistoryDoc = {
+  placeId: string;
+  days: Record<string, { t: number; p: TempSource }>;
+  updatedAt?: number;
+};
 
 /** The latest official water-quality lab sample from Hav och Vatten, pulled
  *  from the same badplatsen detail doc the temperature comes from. Packed
@@ -141,11 +149,8 @@ export type PlaceWithTemp = PlacePin & {
   waterTemp?: number;
   /** Epoch ms — when waterTemp was sampled. */
   waterTempAt?: number;
-  /** Which upstream actually produced the current `waterTemp`. Distinct
-   *  from `tempSource` (the preference) — a "havochvatten" or "smhi" place
-   *  can end up with an "open-meteo" reading when its preferred feed has
-   *  none. */
-  waterTempProvider?: TempProvider;
+  /** Which upstream (or "user") produced the current `waterTemp`. */
+  waterTempProvider?: TempSource;
 };
 
 export type PlaceDoc = {
@@ -282,6 +287,10 @@ export type SessionDoc = {
   country?: string;
   /** The swimmer's chosen border id at log time (see lib/borders.ts). */
   border?: string;
+  /** Water temperature in °C recorded or derived for this swim. */
+  waterTemp?: number;
+  /** Source/provider for `waterTemp`: "user" or an upstream provider. */
+  waterTempProvider?: TempSource;
   points: number;
   createdAt: number;
   /** Emoji reactions: key = emoji, value = a map of reactor UID -> epoch ms

@@ -31,6 +31,7 @@ import type {
   PlaceSummaryEntry,
   PlacesSummaryDoc,
   PlaceTempDoc,
+  PlaceTempHistoryDoc,
   SessionDoc,
   TempReading,
   TempSummaryDoc,
@@ -398,6 +399,18 @@ export function watchPlaceTemp(
   );
 }
 
+/**
+ * Daily temperature history recorded for a spot (`placeTempHistory/{placeId}`).
+ */
+export function watchPlaceTempHistory(
+  placeId: string,
+  cb: (history: PlaceTempHistoryDoc | null) => void,
+): Unsubscribe {
+  return onSnapshot(doc(db, "placeTempHistory", placeId), (snap) =>
+    cb(snap.exists() ? (snap.data() as PlaceTempHistoryDoc) : null),
+  );
+}
+
 // ---------- Sessions ----------
 
 export type LoggedSession = {
@@ -466,6 +479,8 @@ export async function createSession(opts: {
   country?: string | null;
   /** The swimmer's chosen border id — stamped onto the place for the map. */
   border?: string;
+  /** Water temperature in °C reported by the swimmer. */
+  waterTemp?: number;
 }): Promise<LoggedSession> {
   let photoUrl: string | undefined;
   let photoPath: string | undefined;
@@ -490,6 +505,7 @@ export async function createSession(opts: {
       photoPath?: string;
       photoThumb?: string;
       border?: string;
+      waterTemp?: number;
     },
     LoggedSession
   >("logSession");
@@ -506,6 +522,7 @@ export async function createSession(opts: {
       photoPath,
       photoThumb,
       border: opts.border,
+      waterTemp: opts.waterTemp,
     });
     return res.data;
   } catch (err) {
@@ -523,6 +540,8 @@ export type SessionEdits = {
   note?: string | null;
   /** New photo file to upload, null to remove the photo, omit to keep. */
   photoFile?: File | null;
+  /** New water temperature (°C), null to clear, omit to keep. */
+  waterTemp?: number | null;
 };
 
 /**
@@ -554,6 +573,7 @@ export async function updateSession(
       date?: number;
       note?: string | null;
       photo?: { url: string; path: string; thumb?: string } | null;
+      waterTemp?: number | null;
     },
     { ok: true; points: number; isWinter: boolean }
   >("updateSession");
@@ -565,6 +585,7 @@ export async function updateSession(
       ...(edits.date !== undefined ? { date: edits.date } : {}),
       ...(edits.note !== undefined ? { note: edits.note } : {}),
       ...(photo !== undefined ? { photo } : {}),
+      ...(edits.waterTemp !== undefined ? { waterTemp: edits.waterTemp } : {}),
     });
   } catch (err) {
     rethrowModeration(err);
