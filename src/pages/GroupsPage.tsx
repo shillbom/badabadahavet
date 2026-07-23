@@ -1,23 +1,24 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
+import { DayPicker, type DateRange } from "react-day-picker";
+import { sv as svLocale, enGB } from "react-day-picker/locale";
+import "react-day-picker/style.css";
 import {
   Copy,
   LogOut,
   Plus,
   Share2,
-  X,
   UserMinus,
   Waves,
-  Pencil,
   Check,
   Merge,
+  Settings,
+  CalendarRange,
 } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
-import SegmentedControl from "@/components/ui/SegmentedControl";
 import { Input, Label } from "@/components/ui/Input";
 import { toast } from "@/components/ui/toastStore";
 import {
@@ -31,10 +32,10 @@ import {
   watchMemberSessions,
 } from "@/lib/data";
 import type { GroupDoc, PlaceWithTemp, SessionDoc, UserDoc } from "@/lib/types";
-import { useT } from "@/lib/i18n";
+import { useT, useLocale, localeBcp } from "@/lib/i18n";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
-import { longestStreakInYear } from "@/lib/streak";
-import { DAY_MS, dayStartMs as dayStart } from "@/lib/date";
+import { aggregateMemberStats, compareMemberStats } from "@/lib/leaderboard";
+import { DAY_MS, dayStartMs as dayStart, formatGroupRange } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import EmojiAvatar from "@/components/EmojiAvatar";
@@ -111,6 +112,8 @@ function useGroupActions(user: ReturnType<typeof useAuth>["user"]) {
   const [groupName, setGroupName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [busy, setBusy] = useState(false);
+  // Optional competition timespan. `undefined` means "no window set".
+  const [timespan, setTimespan] = useState<DateRange | undefined>(undefined);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Pending join confirmation: the group preview returned by lookupGroupByCode.
@@ -189,9 +192,16 @@ function useGroupActions(user: ReturnType<typeof useAuth>["user"]) {
     setBusy(true);
     try {
       await assertTextAllowed(groupName);
-      const g = await createGroup({ name: groupName, uid: user.uid });
+      const { start, end } = rangeToMs(timespan);
+      const g = await createGroup({
+        name: groupName,
+        uid: user.uid,
+        startDate: start,
+        endDate: end,
+      });
       toast.success(t("groups.create.success", { name: g.name, code: g.code }));
       setGroupName("");
+      setTimespan(undefined);
     } catch (err) {
       toast.error(
         t(
@@ -214,6 +224,8 @@ function useGroupActions(user: ReturnType<typeof useAuth>["user"]) {
     groups,
     groupName,
     setGroupName,
+    timespan,
+    setTimespan,
     joinCode,
     setJoinCode,
     busy,
@@ -224,6 +236,117 @@ function useGroupActions(user: ReturnType<typeof useAuth>["user"]) {
     onJoin,
     confirmJoin,
   };
+}
+
+/**
+ * Build a react-day-picker range from stored day-start ms bounds, or undefined
+ * when the group has no competition window.
+ */
+function toDateRange(startMs?: number, endMs?: number): DateRange | undefined {
+  if (startMs == null && endMs == null) return undefined;
+  return {
+    from: startMs != null ? new Date(startMs) : undefined,
+    to: endMs != null ? new Date(endMs) : undefined,
+  };
+}
+
+/**
+ * Convert a picked range into day-start ms bounds for storage. A range with
+ * only a start (mid-selection) stores the same day for both ends so the window
+ * is still valid; an undefined range clears both bounds.
+ */
+function rangeToMs(range: DateRange | undefined): {
+  start?: number;
+  end?: number;
+} {
+  if (!range) return {};
+  const start = range.from ? dayStart(range.from.getTime()) : undefined;
+  const end = range.to ? dayStart(range.to.getTime()) : start;
+  return { start, end };
+}
+
+/**
+ * Optional competition-window picker shared by the create form and the settings
+ * sheet. A checkbox reveals a react-day-picker range calendar; ticking it seeds
+ * a sensible default of the whole current year, unticking clears the window.
+ */
+function TimespanPicker({
+  range,
+  onRangeChange,
+}: {
+  range: DateRange | undefined;
+  onRangeChange: (r: DateRange | undefined) => void;
+}) {
+  const t = useT();
+  const locale = useLocale((s) => s.locale);
+  const dpLocale = locale === "sv" ? svLocale : enGB;
+  const enabled = range !== undefined;
+
+  // Tint react-day-picker with the app's wave palette (matches SwimDatePicker).
+  const dpStyle = {
+    "--rdp-accent-color": "#019eea",
+    "--rdp-accent-background-color": "#def1ff",
+    "--rdp-today-color": "#007ec6",
+  } as React.CSSProperties;
+
+  function toggle(on: boolean) {
+    if (!on) {
+      onRangeChange(undefined);
+      return;
+    }
+    const y = new Date().getFullYear();
+    onRangeChange({ from: new Date(y, 0, 1), to: new Date(y, 11, 31) });
+  }
+
+  return (
+    <div className="space-y-2 border-t border-white/40 pt-3">
+      <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-slate-600">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => toggle(e.target.checked)}
+          className="h-4 w-4 rounded border-slate-300 text-wave-600 accent-wave-600 focus:ring-wave-500"
+        />
+        <CalendarRange className="h-3.5 w-3.5" />
+        {t("groups.timespan.add")}
+      </label>
+      <AnimatePresence initial={false}>
+        {enabled && (
+          <m.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <p className="pb-1 text-[11px] text-slate-400">
+              {t("groups.timespan.optional_hint")}
+            </p>
+            <div className="flex justify-center rounded-2xl bg-white/60 p-1 ring-1 ring-white/60">
+              <DayPicker
+                mode="range"
+                locale={dpLocale}
+                selected={range}
+                onSelect={(next, triggerDate) => {
+                  // When a complete range already exists, RDP's default treats
+                  // a click inside it as moving a boundary — so a click meant
+                  // to be the new *start* becomes the end. Reset to a fresh
+                  // one-day range at the clicked date instead; the next click
+                  // then completes the range as usual.
+                  if (range?.from && range?.to) {
+                    onRangeChange({ from: triggerDate, to: undefined });
+                  } else {
+                    onRangeChange(next);
+                  }
+                }}
+                defaultMonth={range?.from ?? new Date()}
+                style={dpStyle}
+              />
+            </div>
+          </m.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 function copyCode(code: string, t: ReturnType<typeof useT>) {
@@ -260,13 +383,15 @@ export default function GroupsPage() {
   const { user } = useAuth();
   const t = useT();
   const places = useStore((s) => s.placesWithTemps);
-  const [openGroup, setOpenGroup] = useState<GroupDoc | null>(null);
+  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [groupSheetOpen, setGroupSheetOpen] = useState(false);
 
   const {
     groups,
     groupName,
     setGroupName,
+    timespan,
+    setTimespan,
     joinCode,
     setJoinCode,
     busy,
@@ -278,13 +403,17 @@ export default function GroupsPage() {
     confirmJoin,
   } = useGroupActions(user);
 
+  // Derive the open group from the live list so edits (rename, timespan, kicks)
+  // reflect in the detail sheet immediately instead of showing a stale snapshot.
+  const openGroup = groups.find((g) => g.id === openGroupId) ?? null;
+
   async function onLeave(groupId: string, name: string) {
     if (!user) return;
     if (!window.confirm(t("groups.leave_confirm", { name }))) return;
     try {
       await leaveGroup({ groupId, uid: user.uid });
       toast.success(t("groups.left", { name }));
-      if (openGroup?.id === groupId) setGroupSheetOpen(false);
+      if (openGroupId === groupId) setGroupSheetOpen(false);
     } catch {
       toast.error(t("groups.leave.error.generic"));
     }
@@ -308,6 +437,7 @@ export default function GroupsPage() {
             <Plus className="h-4 w-4" />
           </Button>
         </div>
+        <TimespanPicker range={timespan} onRangeChange={setTimespan} />
       </m.form>
 
       <m.form onSubmit={onJoin} layout className="glass mb-5 space-y-3 p-4">
@@ -347,7 +477,7 @@ export default function GroupsPage() {
                 group={g}
                 myUid={user?.uid}
                 onOpen={() => {
-                  setOpenGroup(g);
+                  setOpenGroupId(g.id);
                   setGroupSheetOpen(true);
                 }}
                 onLeave={() => onLeave(g.id, g.name)}
@@ -555,61 +685,15 @@ function useGroupMemberStats(
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [membersKey]);
 
-  const memberStats = ((): Map<string, MemberStats> => {
-    const members = group?.members ?? [];
-    const memberSet = new Set(members);
-    const acc = new Map<
-      string,
-      {
-        points: number;
-        swims: number;
-        spots: Set<string>;
-        lastSwim: number;
-        dates: number[];
-      }
-    >();
-    for (const uid of members)
-      acc.set(uid, {
-        points: 0,
-        swims: 0,
-        spots: new Set(),
-        lastSwim: 0,
-        dates: [],
-      });
-    for (const s of allSessions) {
-      if (!memberSet.has(s.uid)) continue;
-      const entry = acc.get(s.uid)!;
-      entry.points += s.points;
-      entry.swims += 1;
-      entry.spots.add(s.placeId);
-      if (s.date > entry.lastSwim) entry.lastSwim = s.date;
-      entry.dates.push(s.date);
-    }
-    const map = new Map<string, MemberStats>();
-    for (const [uid, e] of acc)
-      map.set(uid, {
-        points: e.points,
-        swims: e.swims,
-        spots: e.spots,
-        lastSwim: e.lastSwim,
-        // The year's best streak, not the live one — keeps the group
-        // comparison fair for members whose streak happens to be broken today.
-        streak: longestStreakInYear(e.dates, new Date().getFullYear()),
-      });
-    return map;
-  })();
+  const memberStats = aggregateMemberStats(
+    allSessions,
+    group?.members ?? [],
+    new Date().getFullYear(),
+  );
 
-  const sortedMembers = [...profiles].toSorted((a, b) => {
-    const sa = memberStats.get(a.uid);
-    const sb = memberStats.get(b.uid);
-    if (sortBy === "recent") return (sb?.lastSwim ?? 0) - (sa?.lastSwim ?? 0);
-    if (sortBy === "streak")
-      return (
-        (sb?.streak ?? 0) - (sa?.streak ?? 0) ||
-        (sb?.lastSwim ?? 0) - (sa?.lastSwim ?? 0)
-      );
-    return (sb?.points ?? 0) - (sa?.points ?? 0);
-  });
+  const sortedMembers = [...profiles].toSorted((a, b) =>
+    compareMemberStats(memberStats.get(a.uid), memberStats.get(b.uid), sortBy),
+  );
 
   // Whoever's on top of the points board — but only a single member, and only
   // when they actually beat everyone else. With nobody on the board yet (0
@@ -656,70 +740,56 @@ function GroupDetailSheet({
   onLeave: () => void;
 }) {
   const t = useT();
+  const locale = useLocale((s) => s.locale);
 
   const shown = group;
 
-  const [sortBy, setSortBy] = useState<"points" | "recent" | "streak">(
-    "points",
-  );
-
   const {
     allSessions,
+    profiles,
     loadingProfiles,
     memberStats,
     sortedMembers,
     leaderUids,
     tiedForLead,
-  } = useGroupMemberStats(group, sortBy);
+  } = useGroupMemberStats(group, "points");
 
   const isLeader = shown?.createdBy === myUid;
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const rangeLabel = shown
+    ? formatGroupRange(shown, localeBcp(locale), {
+        openStart: t("groups.timespan.open_start_label"),
+        openEnd: t("groups.timespan.open_end_label"),
+      })
+    : null;
   const [memberSelection, setMemberSelection] = useState<{
     member: UserDoc | null;
     key: number;
   }>({ member: null, key: 0 });
   const selectedMember = memberSelection.member;
 
-  async function onKick(member: UserDoc) {
-    if (!shown) return;
-    if (
-      !window.confirm(
-        t("groups.detail.kick_confirm", { name: member.displayName }),
-      )
-    )
-      return;
-    try {
-      await kickGroupMember({ groupId: shown.id, memberUid: member.uid });
-      toast.success(t("groups.detail.kicked", { name: member.displayName }));
-    } catch {
-      toast.error(t("groups.detail.kick_error"));
-    }
-  }
-
   const header =
     shown != null ? (
-      <GroupSheetHeader group={shown} isLeader={isLeader} />
+      <GroupSheetHeader
+        group={shown}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
     ) : null;
 
   return (
     <>
       <BottomSheet open={open} onClose={onClose} size="large" title={header}>
         {shown ? (
-          <div className="px-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
+          <div className="px-4 pt-1 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
+            {rangeLabel && (
+              <div className="mb-3 flex items-center gap-1.5 rounded-xl bg-wave-50 px-3 py-2 text-xs font-medium text-wave-700 ring-1 ring-wave-200">
+                <CalendarRange className="h-3.5 w-3.5 flex-none" />
+                <span>{rangeLabel}</span>
+              </div>
+            )}
             <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
               {t("groups.detail.members")}
             </h4>
-            <SegmentedControl
-              className="mb-3 flex"
-              size="sm"
-              grow
-              value={sortBy}
-              onChange={setSortBy}
-              options={[
-                { value: "points", label: t("groups.sort.points") },
-                { value: "recent", label: t("groups.sort.recent") },
-                { value: "streak", label: t("groups.sort.streak") },
-              ]}
-            />
             {loadingProfiles ? (
               <div className="flex h-20 items-center justify-center">
                 <div className="h-6 w-6 animate-spin rounded-full border-2 border-wave-600 border-r-transparent" />
@@ -734,36 +804,37 @@ function GroupDetailSheet({
                     isMe={member.uid === myUid}
                     isFounder={member.uid === shown.createdBy}
                     leaderBadge={
-                      sortBy === "points" && leaderUids.has(member.uid)
+                      leaderUids.has(member.uid)
                         ? tiedForLead
                           ? "tied"
                           : "lead"
                         : null
                     }
-                    canKick={isLeader && member.uid !== myUid}
                     onSelect={() =>
                       setMemberSelection((current) => ({
                         member,
                         key: current.key + 1,
                       }))
                     }
-                    onKick={() => onKick(member)}
                   />
                 ))}
               </ul>
             )}
-            {/* Leave button at bottom */}
-            <button
-              type="button"
-              onClick={onLeave}
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 hover:bg-rose-100"
-            >
-              <LogOut className="h-4 w-4" />
-              {t("groups.leave_title")}
-            </button>
           </div>
         ) : null}
       </BottomSheet>
+
+      {shown && (
+        <GroupSettingsSheet
+          group={shown}
+          open={settingsOpen}
+          isLeader={isLeader}
+          myUid={myUid}
+          profiles={profiles}
+          onClose={() => setSettingsOpen(false)}
+          onLeave={onLeave}
+        />
+      )}
 
       {/* Member-detail map overlay (stacks above the group sheet) */}
       <MemberSwimsSheet
@@ -786,192 +857,24 @@ function GroupDetailSheet({
  */
 function GroupSheetHeader({
   group,
-  isLeader,
+  onOpenSettings,
 }: {
   group: GroupDoc;
-  isLeader: boolean;
+  onOpenSettings: () => void;
 }) {
   const t = useT();
-
-  // Rename state
-  const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState(group.name);
-  const [savingMeta, setSavingMeta] = useState(false);
-
-  // Emoji picker state
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
-  const emojiTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const [pickerPos, setPickerPos] = useState<{
-    top: number;
-    left: number;
-  } | null>(null);
-
-  async function saveName() {
-    const trimmed = nameInput.trim();
-    if (!trimmed || trimmed === group.name) {
-      setEditingName(false);
-      return;
-    }
-    setSavingMeta(true);
-    try {
-      await assertTextAllowed(trimmed);
-      await updateGroupMeta(group.id, { name: trimmed, emoji: group.emoji });
-      toast.success(t("groups.detail.rename.success"));
-      setEditingName(false);
-    } catch (err) {
-      toast.error(
-        t(
-          err instanceof ModerationError
-            ? "moderation.name_rejected"
-            : "groups.detail.rename.error",
-        ),
-      );
-    }
-    setSavingMeta(false);
-  }
-
-  async function saveEmoji(emoji: string) {
-    setEmojiPickerOpen(false);
-    try {
-      await updateGroupMeta(group.id, { name: group.name, emoji });
-      toast.success(t("groups.detail.rename.success"));
-    } catch {
-      toast.error(t("groups.detail.rename.error"));
-    }
-  }
-
   const groupIcon = group.emoji ?? "👥";
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-3">
-      {/* Group emoji / picker trigger */}
-      <div className="relative flex-none">
-        <button
-          type="button"
-          ref={emojiTriggerRef}
-          disabled={!isLeader}
-          onClick={() => {
-            if (!isLeader) return;
-            if (!emojiPickerOpen && emojiTriggerRef.current) {
-              const r = emojiTriggerRef.current.getBoundingClientRect();
-              setPickerPos({
-                top: r.bottom + 8,
-                left: r.left + r.width / 2,
-              });
-            }
-            setEmojiPickerOpen((v) => !v);
-          }}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-wave-100 text-2xl ring-1 ring-wave-200 transition hover:bg-wave-200 disabled:cursor-default"
-          title={isLeader ? t("groups.detail.emoji.pick") : undefined}
-        >
-          {groupIcon}
-        </button>
-        {createPortal(
-          <AnimatePresence>
-            {emojiPickerOpen && pickerPos && (
-              <>
-                {/* Click-away backdrop */}
-                <button
-                  type="button"
-                  aria-label="close"
-                  onClick={() => setEmojiPickerOpen(false)}
-                  className="fixed inset-0 z-[1300] cursor-default bg-transparent"
-                />
-                <m.div
-                  initial={{ opacity: 0, scale: 0.9, y: -4 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: -4 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 380,
-                    damping: 28,
-                  }}
-                  style={{
-                    position: "fixed",
-                    top: pickerPos.top,
-                    left: pickerPos.left,
-                    transform: "translateX(-50%)",
-                  }}
-                  className="z-[1310] w-[14.5rem] rounded-2xl bg-white p-2 shadow-xl ring-1 ring-slate-200"
-                >
-                  {/* Triangle pointer */}
-                  <div className="relative grid grid-cols-5 gap-1">
-                    {GROUP_EMOJIS.map((e) => {
-                      const active = e === groupIcon;
-                      return (
-                        <button
-                          type="button"
-                          key={e}
-                          onClick={() => saveEmoji(e)}
-                          className={`flex h-10 w-10 items-center justify-center rounded-xl text-xl transition active:scale-95 ${
-                            active
-                              ? "bg-wave-100 ring-2 ring-wave-500"
-                              : "hover:bg-wave-50"
-                          }`}
-                        >
-                          {e}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </m.div>
-              </>
-            )}
-          </AnimatePresence>,
-          document.body,
-        )}
+      <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-wave-100 text-2xl ring-1 ring-wave-200">
+        {groupIcon}
       </div>
-      {/* Name / rename */}
+      {/* Name + meta */}
       <div className="min-w-0 flex-1">
-        {editingName && isLeader ? (
-          <div className="flex items-center gap-1.5">
-            <input
-              autoFocus
-              aria-label={t("groups.detail.rename")}
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") saveName();
-                if (e.key === "Escape") setEditingName(false);
-              }}
-              maxLength={60}
-              className="min-w-0 flex-1 rounded-lg border border-wave-300 bg-white px-2 py-1 font-display text-lg font-black text-wave-900 outline-none focus:ring-2 focus:ring-wave-400"
-            />
-            <Button
-              size="icon-sm"
-              onClick={saveName}
-              loading={savingMeta}
-              icon={<Check className="h-3.5 w-3.5" />}
-            />
-            <button
-              type="button"
-              onClick={() => setEditingName(false)}
-              aria-label={t("common.cancel")}
-              className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <h3 className="truncate font-display text-xl font-black text-wave-900">
-              {group.name}
-            </h3>
-            {isLeader && (
-              <button
-                type="button"
-                onClick={() => {
-                  setNameInput(group.name);
-                  setEditingName(true);
-                }}
-                aria-label={t("groups.detail.rename")}
-                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        )}
+        <h3 className="truncate font-display text-xl font-black text-wave-900">
+          {group.name}
+        </h3>
         <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
           {group.members.length === 1
             ? t("groups.member_one")
@@ -989,7 +892,250 @@ function GroupSheetHeader({
           </button>
         </p>
       </div>
+      <button
+        type="button"
+        onClick={onOpenSettings}
+        aria-label={t("groups.settings.open")}
+        title={t("groups.settings.open")}
+        className="flex-none rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+      >
+        <Settings className="h-5 w-5" />
+      </button>
     </div>
+  );
+}
+
+/**
+ * Group settings sheet, opened from the detail-sheet cog. Consolidates every
+ * admin affordance (rename, emoji, competition timespan, member management)
+ * plus "leave group" so the roster view stays uncluttered. The leader sees the
+ * full toolset; other members see only "leave".
+ */
+function GroupSettingsSheet({
+  group,
+  open,
+  isLeader,
+  myUid,
+  profiles,
+  onClose,
+  onLeave,
+}: {
+  group: GroupDoc;
+  open: boolean;
+  isLeader: boolean;
+  myUid: string;
+  profiles: UserDoc[];
+  onClose: () => void;
+  onLeave: () => void;
+}) {
+  const t = useT();
+  const locale = useLocale((s) => s.locale);
+
+  const [nameInput, setNameInput] = useState(group.name);
+  const [savingName, setSavingName] = useState(false);
+  const [timespan, setTimespan] = useState<DateRange | undefined>(
+    toDateRange(group.startDate, group.endDate),
+  );
+  const [savingDates, setSavingDates] = useState(false);
+
+  // Resync local inputs whenever the underlying group doc changes (e.g. a
+  // concurrent edit or reopening on a different group).
+  useEffect(() => {
+    setNameInput(group.name);
+  }, [group.id, group.name]);
+  useEffect(() => {
+    setTimespan(toDateRange(group.startDate, group.endDate));
+  }, [group.id, group.startDate, group.endDate]);
+
+  const rangeLabel = formatGroupRange(group, localeBcp(locale), {
+    openStart: t("groups.timespan.open_start_label"),
+    openEnd: t("groups.timespan.open_end_label"),
+  });
+
+  async function saveName() {
+    const trimmed = nameInput.trim();
+    if (!trimmed || trimmed === group.name) return;
+    setSavingName(true);
+    try {
+      await assertTextAllowed(trimmed);
+      await updateGroupMeta(group.id, { name: trimmed, emoji: group.emoji });
+      toast.success(t("groups.detail.rename.success"));
+    } catch (err) {
+      toast.error(
+        t(
+          err instanceof ModerationError
+            ? "moderation.name_rejected"
+            : "groups.detail.rename.error",
+        ),
+      );
+    }
+    setSavingName(false);
+  }
+
+  async function saveEmoji(emoji: string) {
+    try {
+      await updateGroupMeta(group.id, { name: group.name, emoji });
+      toast.success(t("groups.detail.rename.success"));
+    } catch {
+      toast.error(t("groups.detail.rename.error"));
+    }
+  }
+
+  async function saveDates() {
+    const { start, end } = rangeToMs(timespan);
+    setSavingDates(true);
+    try {
+      await updateGroupMeta(group.id, {
+        startDate: start ?? null,
+        endDate: end ?? null,
+      });
+      toast.success(t("groups.settings.saved"));
+    } catch {
+      toast.error(t("groups.detail.rename.error"));
+    }
+    setSavingDates(false);
+  }
+
+  async function kick(member: UserDoc) {
+    if (
+      !window.confirm(
+        t("groups.detail.kick_confirm", { name: member.displayName }),
+      )
+    )
+      return;
+    try {
+      await kickGroupMember({ groupId: group.id, memberUid: member.uid });
+      toast.success(t("groups.detail.kicked", { name: member.displayName }));
+    } catch {
+      toast.error(t("groups.detail.kick_error"));
+    }
+  }
+
+  const groupIcon = group.emoji ?? "👥";
+
+  return (
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      size="large"
+      title={t("groups.settings.title")}
+    >
+      <div className="space-y-5 px-4 pb-[calc(max(env(safe-area-inset-bottom),0.5rem)+1.5rem)]">
+        {isLeader ? (
+          <>
+            {/* Rename */}
+            <div className="space-y-1.5">
+              <Label>{t("groups.detail.rename")}</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={nameInput}
+                  maxLength={60}
+                  onChange={(e) => setNameInput(e.target.value)}
+                />
+                <Button
+                  onClick={saveName}
+                  loading={savingName}
+                  disabled={
+                    !nameInput.trim() || nameInput.trim() === group.name
+                  }
+                  icon={<Check className="h-4 w-4" />}
+                />
+              </div>
+            </div>
+
+            {/* Emoji */}
+            <div className="space-y-1.5">
+              <Label>{t("groups.detail.emoji.pick")}</Label>
+              <div className="grid grid-cols-5 gap-1">
+                {GROUP_EMOJIS.map((e) => {
+                  const active = e === groupIcon;
+                  return (
+                    <button
+                      type="button"
+                      key={e}
+                      onClick={() => saveEmoji(e)}
+                      className={cn(
+                        "flex h-10 items-center justify-center rounded-xl text-xl transition active:scale-95",
+                        active
+                          ? "bg-wave-100 ring-2 ring-wave-500"
+                          : "hover:bg-wave-50",
+                      )}
+                    >
+                      {e}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Competition timespan */}
+            <div className="space-y-1.5">
+              <Label>{t("groups.settings.timespan")}</Label>
+              <TimespanPicker range={timespan} onRangeChange={setTimespan} />
+              <Button
+                size="sm"
+                onClick={saveDates}
+                loading={savingDates}
+                className="w-full"
+              >
+                {t("groups.settings.saved_action")}
+              </Button>
+            </div>
+
+            {/* Manage members */}
+            <div className="space-y-1.5">
+              <Label>{t("groups.settings.manage_members")}</Label>
+              <ul className="space-y-2">
+                {profiles.map((mbr) => (
+                  <li
+                    key={mbr.uid}
+                    className="flex items-center gap-3 rounded-2xl bg-white/70 px-3 py-2 ring-1 ring-white/60"
+                  >
+                    <EmojiAvatar emoji={mbr.emoji} size="sm" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-wave-900">
+                      {mbr.displayName}
+                      {mbr.uid === myUid && (
+                        <span className="ml-1.5 text-[10px] text-wave-500">
+                          {t("common.you")}
+                        </span>
+                      )}
+                    </span>
+                    {mbr.uid !== myUid && (
+                      <button
+                        type="button"
+                        onClick={() => kick(mbr)}
+                        className="rounded-full bg-white p-1.5 text-rose-400 ring-1 ring-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                        title={t("groups.detail.kick")}
+                        aria-label={t("groups.detail.kick")}
+                      >
+                        <UserMinus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </>
+        ) : (
+          rangeLabel && (
+            <div className="flex items-center gap-1.5 rounded-xl bg-wave-50 px-3 py-2 text-xs font-medium text-wave-700 ring-1 ring-wave-200">
+              <CalendarRange className="h-3.5 w-3.5 flex-none" />
+              <span>{rangeLabel}</span>
+            </div>
+          )
+        )}
+
+        {/* Leave group (all members) */}
+        <button
+          type="button"
+          onClick={onLeave}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 ring-1 ring-rose-200 hover:bg-rose-100"
+        >
+          <LogOut className="h-4 w-4" />
+          {t("groups.leave_title")}
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -1000,9 +1146,7 @@ function MemberRow({
   isMe,
   isFounder,
   leaderBadge,
-  canKick,
   onSelect,
-  onKick,
 }: {
   member: UserDoc;
   stats: MemberStats | undefined;
@@ -1011,9 +1155,7 @@ function MemberRow({
   /** Leaderboard badge to show on the avatar: gold for sole lead, knot for a
    *  tie, or none. */
   leaderBadge: "lead" | "tied" | null;
-  canKick: boolean;
   onSelect: () => void;
-  onKick: () => void;
 }) {
   const t = useT();
   const s = stats ?? {
@@ -1096,20 +1238,6 @@ function MemberRow({
           {last.label}
         </span>
       </button>
-      {canKick ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onKick();
-          }}
-          className="rounded-full bg-white p-1.5 text-rose-400 ring-1 ring-rose-200 hover:bg-rose-50 hover:text-rose-600"
-          title={t("groups.detail.kick")}
-          aria-label={t("groups.detail.kick")}
-        >
-          <UserMinus className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
     </li>
   );
 }

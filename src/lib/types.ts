@@ -302,4 +302,12 @@ export type GroupDoc = {
   members: string[];
   createdBy: string;
   createdAt: number;
+  /** Optional competition timespan set by the group admin. When present, the
+   *  group's leaderboard scores only sessions inside the range (and hides the
+   *  year picker). Both bounds are optional and independent, so a range can be
+   *  open-ended on either side. Stored as day-start epoch ms; `endDate` is the
+   *  last *included* day (filter as `date < endDate + DAY_MS`). A range may
+   *  cross calendar years (e.g. a whole summer break). */
+  startDate?: number;
+  endDate?: number;
 };

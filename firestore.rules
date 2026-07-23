@@ -216,7 +216,15 @@ service cloud.firestore {
                     && request.resource.data.code is string
                     && request.resource.data.code.size() >= 3
                     && request.resource.data.code.size() <= 12
-                    && request.resource.data.createdAt is number;
+                    && request.resource.data.createdAt is number
+                    && (
+                      !('startDate' in request.resource.data)
+                      || request.resource.data.startDate is number
+                    )
+                    && (
+                      !('endDate' in request.resource.data)
+                      || request.resource.data.endDate is number
+                    );
 
       allow update: if signedIn() && (
         // Member voluntarily leaves.
@@ -229,17 +237,28 @@ service cloud.firestore {
              == resource.data.members.size() - 1
         )
         ||
-        // Creator renames or changes emoji.
+        // Creator renames, changes emoji, or edits the competition timespan.
         (
           resource.data.createdBy == request.auth.uid
-          && changedKeys().hasOnly(['name', 'emoji'])
-          && request.resource.data.name is string
-          && request.resource.data.name.size() > 0
-          && request.resource.data.name.size() <= 60
+          && changedKeys().hasOnly(['name', 'emoji', 'startDate', 'endDate'])
+          && (
+            !('name' in request.resource.data)
+            || (request.resource.data.name is string
+                && request.resource.data.name.size() > 0
+                && request.resource.data.name.size() <= 60)
+          )
           && (
             !('emoji' in request.resource.data)
             || (request.resource.data.emoji is string
                 && request.resource.data.emoji.size() <= 8)
+          )
+          && (
+            !('startDate' in request.resource.data)
+            || request.resource.data.startDate is number
+          )
+          && (
+            !('endDate' in request.resource.data)
+            || request.resource.data.endDate is number
           )
         )
         ||

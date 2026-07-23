@@ -594,47 +594,63 @@ export function watchUserSessions(
 }
 
 /**
+ * Subscribe to a fixed set of users' sessions within a half-open time range
+ * `[startMs, endExclusiveMs)`. Backs both the year-bounded group board and the
+ * timespan-scoped competition board. `endExclusiveMs` may be Infinity for an
+ * open-ended range, in which case the upper `date <` clause is dropped so the
+ * query stays a single (uid, date DESC) index scan.
+ */
+export function watchMemberSessionsRange(
+  uids: string[],
+  startMs: number,
+  endExclusiveMs: number,
+  cb: (sessions: SessionDoc[]) => void,
+): Unsubscribe {
+  if (uids.length === 0) {
+    cb([]);
+    return () => {};
+  }
+  // Firestore `in` supports up to 30 values; chunk if needed.
+  const chunks: string[][] = [];
+  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
+
+  const results = new Map<string, SessionDoc[]>();
+  const unsubs = chunks.map((chunk, idx) => {
+    const clauses = [
+      where("uid", "in", chunk),
+      where("date", ">=", startMs),
+      ...(Number.isFinite(endExclusiveMs)
+        ? [where("date", "<", endExclusiveMs)]
+        : []),
+      // Matches the existing (uid, date DESC) composite index.
+      orderBy("date", "desc"),
+    ];
+    return onSnapshot(query(sessionsCol, ...clauses), (snap) => {
+      results.set(
+        String(idx),
+        snap.docs.map((d) => d.data() as SessionDoc),
+      );
+      cb([...results.values()].flat());
+    });
+  });
+  return () => unsubs.forEach((u) => u());
+}
+
+/**
  * Subscribe to this year's sessions for a fixed set of users (e.g. a group).
  * Year-bounded like `watchAllSessions` — the group board compares the
  * current season, and an unbounded query would re-download every member's
- * full history and keep growing each year.
+ * full history and keep growing each year. Thin wrapper over
+ * `watchMemberSessionsRange`.
  */
 export function watchMemberSessions(
   uids: string[],
   cb: (sessions: SessionDoc[]) => void,
   year: number = new Date().getFullYear(),
 ): Unsubscribe {
-  if (uids.length === 0) {
-    cb([]);
-    return () => {};
-  }
   const start = new Date(year, 0, 1).getTime();
   const end = new Date(year + 1, 0, 1).getTime();
-  // Firestore `in` supports up to 30 values; chunk if needed.
-  const chunks: string[][] = [];
-  for (let i = 0; i < uids.length; i += 30) chunks.push(uids.slice(i, i + 30));
-
-  const results = new Map<string, SessionDoc[]>();
-  const unsubs = chunks.map((chunk, idx) =>
-    onSnapshot(
-      query(
-        sessionsCol,
-        where("uid", "in", chunk),
-        where("date", ">=", start),
-        where("date", "<", end),
-        // Matches the existing (uid, date DESC) composite index.
-        orderBy("date", "desc"),
-      ),
-      (snap) => {
-        results.set(
-          String(idx),
-          snap.docs.map((d) => d.data() as SessionDoc),
-        );
-        cb([...results.values()].flat());
-      },
-    ),
-  );
-  return () => unsubs.forEach((u) => u());
+  return watchMemberSessionsRange(uids, start, end, cb);
 }
 
 /**
@@ -763,6 +779,9 @@ export async function toggleReaction(
 export async function createGroup(opts: {
   name: string;
   uid: string;
+  /** Optional competition timespan (day-start epoch ms; endDate inclusive). */
+  startDate?: number;
+  endDate?: number;
 }): Promise<GroupDoc> {
   // Check uniqueness via the lookup Cloud Function (Admin SDK bypasses the
   // Firestore rules that prevent non-members from reading group docs).
@@ -786,6 +805,10 @@ export async function createGroup(opts: {
     members: [opts.uid],
     createdBy: opts.uid,
     createdAt: Date.now(),
+    // Only persist timespan bounds that were actually set — leaving them off
+    // keeps the doc (and the Firestore rules) simple for the common case.
+    ...(opts.startDate != null ? { startDate: opts.startDate } : {}),
+    ...(opts.endDate != null ? { endDate: opts.endDate } : {}),
   };
   await setDoc(ref, data);
   return data;
@@ -850,14 +873,31 @@ export async function leaveGroup(opts: {
   await callable({ groupId: opts.groupId });
 }
 
-/** Group creator updates name and/or emoji. */
+/**
+ * Group creator updates name, emoji, and/or the competition timespan.
+ * Pass a number to set a date bound, or `null` to clear it (deleteField).
+ * `undefined` leaves a field untouched.
+ */
 export async function updateGroupMeta(
   groupId: string,
-  opts: { name?: string; emoji?: string },
+  opts: {
+    name?: string;
+    emoji?: string;
+    startDate?: number | null;
+    endDate?: number | null;
+  },
 ): Promise<void> {
-  const updates: Record<string, string> = {};
+  const updates: Record<
+    string,
+    string | number | ReturnType<typeof deleteField>
+  > = {};
   if (opts.name !== undefined) updates.name = opts.name.trim();
   if (opts.emoji !== undefined) updates.emoji = opts.emoji;
+  if (opts.startDate !== undefined)
+    updates.startDate =
+      opts.startDate === null ? deleteField() : opts.startDate;
+  if (opts.endDate !== undefined)
+    updates.endDate = opts.endDate === null ? deleteField() : opts.endDate;
   if (Object.keys(updates).length)
     await updateDoc(doc(groupsCol, groupId), updates);
 }
