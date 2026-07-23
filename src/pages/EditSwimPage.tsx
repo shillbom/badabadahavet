@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Camera, MapPin, Trash2, X } from "lucide-react";
+import { Camera, MapPin, Trash2, X, Thermometer } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
@@ -48,6 +48,7 @@ export default function EditSwimPage() {
 
   const [date, setDate] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [waterTemp, setWaterTemp] = useState<string | null>(null);
   const [photoEdit, setPhotoEdit] = useState<PhotoEdit>({ kind: "keep" });
   const photoInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -75,6 +76,8 @@ export default function EditSwimPage() {
   // re-streamed session (e.g. a reaction landing) doesn't clobber edits.
   const dateValue = date ?? toLocalInput(new Date(session.date));
   const noteValue = note ?? session.note ?? "";
+  const waterTempValue =
+    waterTemp ?? (session.waterTemp != null ? String(session.waterTemp) : "");
   // Past seasons are locked: a swim from a previous year can no longer be
   // edited or deleted (the updateSession/removeSession functions enforce this
   // too — this just keeps the UI honest).
@@ -146,6 +149,12 @@ export default function EditSwimPage() {
     const trimmedNote = noteValue.trim();
     if (trimmedNote !== (session.note ?? "")) {
       edits.note = trimmedNote || null;
+    }
+    const parsedWt = waterTempValue.trim()
+      ? parseFloat(waterTempValue.replace(",", "."))
+      : null;
+    if (parsedWt !== (session.waterTemp ?? null)) {
+      edits.waterTemp = Number.isFinite(parsedWt) ? parsedWt : null;
     }
     if (photoEdit.kind === "remove" && session.photoUrl) edits.photoFile = null;
     else if (photoEdit.kind === "replace") edits.photoFile = photoEdit.file;
@@ -268,6 +277,30 @@ export default function EditSwimPage() {
             onChange={(e) => setNote(e.target.value)}
             placeholder={t("log.field.note.placeholder")}
           />
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <Thermometer className="h-4 w-4 text-teal-600" />
+            <Label htmlFor="waterTemp">{t("log.field.water_temp")}</Label>
+          </div>
+          <div className="relative">
+            <Input
+              id="waterTemp"
+              type="number"
+              step="0.1"
+              min="-5"
+              max="40"
+              value={waterTempValue}
+              disabled={locked}
+              onChange={(e) => setWaterTemp(e.target.value)}
+              placeholder={t("log.field.water_temp.placeholder")}
+              className="pr-10"
+            />
+            <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm font-semibold text-slate-400">
+              °C
+            </span>
+          </div>
         </div>
 
         <div className="space-y-1.5">

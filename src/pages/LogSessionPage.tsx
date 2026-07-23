@@ -9,7 +9,9 @@ import {
   X,
   Sparkles,
   Search,
+  Thermometer,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthContext";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
@@ -182,6 +184,7 @@ export default function LogSessionPage() {
   });
 
   const [note, setNote] = useState("");
+  const [waterTemp, setWaterTemp] = useState("");
   const { photoFileRef, photoPreview, photoInput, onPhotoChange, clearPhoto } =
     usePhotoUpload();
   const [busy, setBusy] = useState(false);
@@ -250,6 +253,9 @@ export default function LogSessionPage() {
         unlockedAchievements.size,
         unlockedAchievements,
       );
+      const parsedWaterTemp = waterTemp.trim()
+        ? parseFloat(waterTemp.replace(",", "."))
+        : undefined;
       const session = await createSession({
         uid: user.uid,
         place,
@@ -260,6 +266,9 @@ export default function LogSessionPage() {
         photoFile: photoFileRef.current,
         country: countryRef.current,
         border: myBorder.id,
+        waterTemp: Number.isFinite(parsedWaterTemp)
+          ? parsedWaterTemp
+          : undefined,
       });
       celebrate.swim(session.points, session.isUniqueForUser, session.isWinter);
       // Streak feedback, computed against the pre-log session list: crossing
@@ -420,6 +429,53 @@ export default function LogSessionPage() {
                 onChange={(e) => setNote(e.target.value)}
                 placeholder={t("log.field.note.placeholder")}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Thermometer className="h-4 w-4 text-teal-600" />
+                <Label htmlFor="waterTemp">{t("log.field.water_temp")}</Label>
+              </div>
+              <div className="relative">
+                <Input
+                  id="waterTemp"
+                  type="number"
+                  step="0.1"
+                  min="-5"
+                  max="40"
+                  value={waterTemp}
+                  onChange={(e) => setWaterTemp(e.target.value)}
+                  placeholder={t("log.field.water_temp.placeholder")}
+                  className="pr-10"
+                />
+                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm font-semibold text-slate-400">
+                  °C
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[12, 15, 18, 20, 22].map((deg) => (
+                  <button
+                    key={deg}
+                    type="button"
+                    onClick={() =>
+                      setWaterTemp((curr) =>
+                        curr === String(deg) ? "" : String(deg),
+                      )
+                    }
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition active:scale-95",
+                      waterTemp === String(deg)
+                        ? "bg-wave-600 text-white ring-wave-600"
+                        : "bg-white/80 text-slate-700 ring-slate-200 hover:bg-slate-100",
+                    )}
+                  >
+                    {deg}°C
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                {t("log.field.water_temp.hint")}
+              </p>
             </div>
 
             <PhotoField

@@ -230,6 +230,7 @@ function MemberSwimsSheetContent({
                     date={s.date}
                     winter={s.isWinter}
                     unique={s.isUniqueForUser}
+                    waterTemp={s.waterTemp}
                     note={s.note}
                   >
                     <ReactionBar session={s} myUid={user?.uid} />

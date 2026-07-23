@@ -461,6 +461,7 @@ function Sheet({
                       date={s.date}
                       winter={s.isWinter}
                       unique={s.isUniqueForUser}
+                      waterTemp={s.waterTemp}
                       note={s.note}
                     >
                       <ReactionBar session={s} myUid={myUid} />
@@ -525,6 +526,7 @@ function Sheet({
                       </div>
                     }
                     date={s.date}
+                    waterTemp={s.waterTemp}
                   >
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       {emojis.map((e) => (
