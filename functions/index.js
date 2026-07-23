@@ -3,6 +3,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { getAuth } from "firebase-admin/auth";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { logger } from "firebase-functions/v2";
 import { defineSecret } from "firebase-functions/params";
 import {
@@ -17,6 +18,7 @@ import {
 } from "./scoring.js";
 import { leaderboardEntry, applyToTop, removeFromTop } from "./leaderboard.js";
 import { checkTextAllowed } from "./moderation.js";
+import { asReading, freshestReading } from "./tempLogic.js";
 
 initializeApp();
 
@@ -385,7 +387,9 @@ export const refreshPlaceTemp = onCall(
     }
 
     // t/at/p is the compact reading shape shared with tempSummary/current
-    // (see functions/tempLogic.js).
+    // (see functions/tempLogic.js). The write to placeTemps is the single
+    // source of truth; the syncTempSummary trigger folds it into the map's
+    // tempSummary/current doc, so we never write the summary from here.
     await tempRef.set(
       {
         placeId,
@@ -414,6 +418,36 @@ export const refreshPlaceTemp = onCall(
       waterTempAt: reading.stamp,
       provider: reading.source,
     };
+  },
+);
+
+// The map reads water temps only from the single `tempSummary/current` doc
+// (never from placeTemps), so keep it in lockstep with every reading. This
+// is the ONE place that folds placeTemps into the summary: refreshPlaceTemp
+// and the user-temp writes in logSession/editSession all just write
+// placeTemps and let this trigger fan the freshest reading into the map.
+// (The daily sweep rebuilds the whole summary from placeTemps the same way;
+// this keeps a freshly-added or just-refreshed spot current between sweeps.)
+export const syncTempSummary = onDocumentWritten(
+  { document: "placeTemps/{placeId}", region: PROJECT_REGION },
+  async (event) => {
+    const after = event.data?.after;
+    if (!after?.exists) return; // deletion — leave the summary untouched
+    const reading = asReading(after.data());
+    if (!reading) return; // no valid temp fields on the doc
+    const placeId = event.params.placeId;
+    const db = getFirestore();
+    const summaryRef = db.doc("tempSummary/current");
+    const snap = await summaryRef.get();
+    const existing = snap.exists ? snap.data().entries?.[placeId] : null;
+    // Never regress the map to an older reading (a user can log a temp for a
+    // backdated swim, writing an older `at` into placeTemps).
+    const winner = freshestReading(reading, existing);
+    if (existing && winner.at === asReading(existing)?.at) return; // no change
+    await summaryRef.set(
+      { entries: { [placeId]: { t: winner.t, at: winner.at, p: winner.p } } },
+      { merge: true },
+    );
   },
 );
 
