@@ -39,3 +39,49 @@ export function longestConsecutiveWeeks(weekStarts: Iterable<number>): number {
   }
   return best;
 }
+
+/**
+ * Resolve a group's optional competition timespan into a half-open range
+ * `[startMs, endExclusiveMs)` for session filtering. `endDate` is the last
+ * *included* day, so the exclusive bound is the following midnight. Missing
+ * bounds are open-ended: start falls back to 0, end to +Infinity.
+ */
+export function groupRangeMs(group: { startDate?: number; endDate?: number }): {
+  startMs: number;
+  endExclusiveMs: number;
+} {
+  return {
+    startMs: group.startDate ?? 0,
+    endExclusiveMs: group.endDate != null ? group.endDate + DAY_MS : Infinity,
+  };
+}
+
+/** Format a day-start epoch ms as a short local `d MMM yyyy` label. */
+export function formatDay(ts: number, locale: string): string {
+  return new Date(ts).toLocaleDateString(locale, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/**
+ * Human range label for a group timespan, e.g. "1 jun 2026 – 31 aug 2026",
+ * "from 1 jun 2026" (open end), or "until 31 aug 2026" (open start).
+ * `openStart` / `openEnd` are the localized prefixes for the open-ended cases.
+ * Returns null when the group has no timespan at all.
+ */
+export function formatGroupRange(
+  group: { startDate?: number; endDate?: number },
+  locale: string,
+  labels: { openStart: string; openEnd: string },
+): string | null {
+  const hasStart = group.startDate != null;
+  const hasEnd = group.endDate != null;
+  if (!hasStart && !hasEnd) return null;
+  if (hasStart && hasEnd)
+    return `${formatDay(group.startDate!, locale)} – ${formatDay(group.endDate!, locale)}`;
+  if (hasStart)
+    return `${labels.openEnd} ${formatDay(group.startDate!, locale)}`;
+  return `${labels.openStart} ${formatDay(group.endDate!, locale)}`;
+}

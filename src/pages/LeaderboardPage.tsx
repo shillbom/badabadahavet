@@ -6,9 +6,11 @@ import {
   Crown,
   Snowflake,
   MapPin,
+  CalendarRange,
 } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
+import SegmentedControl from "@/components/ui/SegmentedControl";
 import type {
   GroupDoc,
   SessionDoc,
@@ -18,13 +20,22 @@ import type {
 } from "@/lib/types";
 import {
   fetchLatestSwimAt,
+  fetchUsers,
   watchGlobalLeaderboard,
   watchMemberSessions,
+  watchMemberSessionsRange,
   watchUsersByYearScore,
 } from "@/lib/data";
-import { splitTopList, yearPickerBounds } from "@/lib/leaderboard";
+import {
+  aggregateMemberStats,
+  compareMemberStats,
+  splitTopList,
+  yearPickerBounds,
+  type MemberSortBy,
+} from "@/lib/leaderboard";
+import { groupRangeMs, formatGroupRange } from "@/lib/date";
 import { resolveBorder, type Border } from "@/lib/borders";
-import { useT } from "@/lib/i18n";
+import { useT, useLocale, localeBcp } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import MemberSwimsSheet from "@/components/MemberSwimsSheet";
 import { cn } from "@/lib/utils";
@@ -44,9 +55,11 @@ export default function LeaderboardPage() {
   const { user } = useAuth();
 
   const t = useT();
+  const locale = useLocale((s) => s.locale);
 
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
+  const [sortBy, setSortBy] = useState<MemberSortBy>("points");
 
   const {
     scope,
@@ -57,12 +70,36 @@ export default function LeaderboardPage() {
     toggleGlobal,
   } = useGroupScope(user, groups);
 
-  const { rows, visibleRoster, dataReady } = useLeaderboardRows(
-    user,
-    year,
-    groups,
-    effectiveScope,
+  const isGroupScope = effectiveScope !== "global";
+  const activeGroup = isGroupScope
+    ? (groups.find((g) => g.id === effectiveScope) ?? null)
+    : null;
+  // A group with a competition window scores by its date range instead of the
+  // calendar year, so the year picker is hidden and the dates shown instead.
+  const isTimespan = !!(
+    activeGroup &&
+    (activeGroup.startDate != null || activeGroup.endDate != null)
   );
+  const rangeLabel =
+    activeGroup && isTimespan
+      ? formatGroupRange(activeGroup, localeBcp(locale), {
+          openStart: t("groups.timespan.open_start_label"),
+          openEnd: t("groups.timespan.open_end_label"),
+        })
+      : null;
+
+  // The global board reads precomputed yearly scores from the roster; group
+  // boards compute points from member sessions so they can be sorted by
+  // recency/streak and sliced to a competition window. Both hooks run (hooks
+  // can't be conditional); only the active scope's result is rendered.
+  const globalData = useLeaderboardRows(user, year, groups, effectiveScope);
+  const groupData = useGroupBoardRows(user, activeGroup, year, sortBy);
+
+  const rows = isGroupScope ? groupData.rows : globalData.rows;
+  const visibleRoster = isGroupScope
+    ? groupData.roster
+    : globalData.visibleRoster;
+  const dataReady = isGroupScope ? groupData.ready : globalData.dataReady;
 
   // A sign-out leaves the last subscription value in state briefly, but it
   // must never be rendered to a guest. Group boards also wait for the
@@ -75,14 +112,13 @@ export default function LeaderboardPage() {
   // its true rank when you're further down. Group boards are small and
   // personal, so they stay complete.
   const TOP_N = 5;
-  const { top, me } =
-    effectiveScope === "global"
-      ? splitTopList(rows, user?.uid, TOP_N)
-      : { top: rows, me: null };
+  const { top, me } = isGroupScope
+    ? { top: rows, me: null }
+    : splitTopList(rows, user?.uid, TOP_N);
 
   // Group rows open the same member-swims sheet as the group view. The
-  // Sessions are subscribed per clicked member — one year-bounded
-  // single-uid query — instead of preloading the whole scope.
+  // sessions are subscribed per clicked member — a single-uid query bounded
+  // to the active scope's range — instead of preloading the whole scope.
   const places = useStore((s) => s.placesWithTemps);
   const [memberSelection, setMemberSelection] = useState<{
     member: UserDoc | null;
@@ -91,10 +127,21 @@ export default function LeaderboardPage() {
   const selectedMember = memberSelection.member;
   const [memberSessions, setMemberSessions] = useState<SessionDoc[]>([]);
   const selectedUid = selectedMember?.uid;
+  const memberRange =
+    isTimespan && activeGroup ? groupRangeMs(activeGroup) : null;
+  const rangeStart = memberRange?.startMs;
+  const rangeEnd = memberRange?.endExclusiveMs;
   useEffect(() => {
     if (!selectedUid) return;
+    if (rangeStart != null && rangeEnd != null)
+      return watchMemberSessionsRange(
+        [selectedUid],
+        rangeStart,
+        rangeEnd,
+        setMemberSessions,
+      );
     return watchMemberSessions([selectedUid], setMemberSessions, year);
-  }, [selectedUid, year]);
+  }, [selectedUid, year, rangeStart, rangeEnd]);
 
   return (
     <div className="px-4 pt-2">
@@ -115,11 +162,21 @@ export default function LeaderboardPage() {
             <span className="text-sm">🌍</span>
             {t("leaderboard.scope.global")}
           </button>
-          <YearPicker
-            year={year}
-            {...yearPickerBounds(year, currentYear)}
-            onChange={setYear}
-          />
+          {isTimespan ? (
+            <span
+              className="chip cursor-default gap-1 whitespace-nowrap"
+              title={rangeLabel ?? undefined}
+            >
+              <CalendarRange className="h-3.5 w-3.5" />
+              {rangeLabel}
+            </span>
+          ) : (
+            <YearPicker
+              year={year}
+              {...yearPickerBounds(year, currentYear)}
+              onChange={setYear}
+            />
+          )}
         </div>
       </div>
 
@@ -134,6 +191,21 @@ export default function LeaderboardPage() {
             />
           ))}
         </div>
+      ) : null}
+
+      {isGroupScope ? (
+        <SegmentedControl
+          className="mb-3 flex"
+          size="sm"
+          grow
+          value={sortBy}
+          onChange={setSortBy}
+          options={[
+            { value: "points", label: t("groups.sort.points") },
+            { value: "recent", label: t("groups.sort.recent") },
+            { value: "streak", label: t("groups.sort.streak") },
+          ]}
+        />
       ) : null}
 
       <ol className="mb-4 space-y-2">
@@ -401,6 +473,106 @@ function useLeaderboardRows(
   })();
 
   return { rows, visibleRoster, dataReady };
+}
+
+/**
+ * Group-board rows computed from the members' actual sessions, so the board can
+ * be sorted by points/recency/streak and sliced to a competition window. Falls
+ * back to the calendar `year` when the group has no timespan. A no-op (empty,
+ * ready) when `group` is null (global scope) or the viewer is a guest — the
+ * security rules reject unauthenticated session reads.
+ */
+function useGroupBoardRows(
+  user: { uid: string } | null,
+  group: GroupDoc | null,
+  year: number,
+  sortBy: MemberSortBy,
+): { rows: Row[]; roster: UserDoc[]; ready: boolean } {
+  const hasTimespan =
+    !!group && (group.startDate != null || group.endDate != null);
+  const range =
+    group && hasTimespan
+      ? groupRangeMs(group)
+      : {
+          startMs: new Date(year, 0, 1).getTime(),
+          endExclusiveMs: new Date(year + 1, 0, 1).getTime(),
+        };
+  const membersKey = group?.members.join("\n") ?? "";
+  const key = group
+    ? `${membersKey}:${range.startMs}:${range.endExclusiveMs}`
+    : "";
+
+  const [profiles, setProfiles] = useState<{
+    key: string;
+    users: UserDoc[];
+  } | null>(null);
+  const [sessions, setSessions] = useState<{
+    key: string;
+    list: SessionDoc[];
+  } | null>(null);
+
+  useEffect(() => {
+    if (!group || !user) {
+      setProfiles(null);
+      setSessions(null);
+      return;
+    }
+    let active = true;
+    setProfiles(null);
+    setSessions(null);
+    void fetchUsers(group.members).then((users) => {
+      if (active) setProfiles({ key, users });
+      return;
+    });
+    const unsub = watchMemberSessionsRange(
+      group.members,
+      range.startMs,
+      range.endExclusiveMs,
+      (list) => setSessions({ key, list }),
+    );
+    return () => {
+      active = false;
+      unsub();
+    };
+    // `key` folds in members + range; `user` gates the guest case.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, user]);
+
+  if (!group || !user) return { rows: [], roster: [], ready: true };
+
+  const ready = profiles?.key === key && sessions?.key === key;
+  if (!ready) return { rows: [], roster: [], ready: false };
+
+  const roster = profiles!.users;
+  // Streak metric is "the year's best run" — for a window pick the year it
+  // mostly falls in (its end, or start for an open-ended range).
+  const streakYear = hasTimespan
+    ? new Date(group.endDate ?? group.startDate ?? Date.now()).getFullYear()
+    : year;
+  const stats = aggregateMemberStats(sessions!.list, group.members, streakYear);
+
+  const rows: Row[] = roster
+    .map((u): Row => {
+      const st = stats.get(u.uid);
+      const unlocked = new Set(Object.keys(u.achievements ?? {}));
+      return {
+        uid: u.uid,
+        displayName: u.displayName,
+        points: st?.points ?? 0,
+        border: resolveBorder(u.selectedBorder, unlocked.size, unlocked),
+        stats: {
+          swims: st?.swims ?? 0,
+          uniquePlaces: st?.spots.size ?? 0,
+          winters: 0,
+          countriesAbroad: 0,
+        },
+      };
+    })
+    .toSorted((a, b) =>
+      compareMemberStats(stats.get(a.uid), stats.get(b.uid), sortBy),
+    );
+
+  return { rows, roster, ready: true };
 }
 
 function LeaderboardGhostRow() {
