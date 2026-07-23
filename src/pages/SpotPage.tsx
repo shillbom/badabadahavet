@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
@@ -32,14 +32,17 @@ import {
   totalPoints,
   watchPlaceSessions,
   watchPlaceTemp,
+  watchPlaceTempHistory,
 } from "@/lib/data";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
 import type {
   PlaceDoc,
   PlaceTempDoc,
+  PlaceTempHistoryDoc,
   PlaceWithTemp,
   SessionDoc,
   TempReading,
+  TempSource,
   WaterSample,
 } from "@/lib/types";
 import { formatDate, rememberReturnPath, shareOrCopy } from "@/lib/utils";
@@ -110,6 +113,7 @@ function SpotViewContent({
   const t = useT();
   const { place, loading, setPlace, sessions, reading, waterSample } =
     useSpotData(placeId);
+  const [showTempHistory, setShowTempHistory] = useState(false);
   const [searchParams] = useSearchParams();
   const focusedSessionId = searchParams.get("session");
   // Track which sessions have been highlighted once so we don't replay
@@ -333,7 +337,16 @@ function SpotViewContent({
         />
       </div>
 
-      <WaterTempCard reading={reading} t={t} />
+      <WaterTempCard
+        reading={reading}
+        t={t}
+        showHistory={showTempHistory}
+        onToggleHistory={() => setShowTempHistory((v) => !v)}
+      />
+
+      {showTempHistory ? (
+        <SpotTempGraph placeId={place.id} lat={place.lat} lng={place.lng} />
+      ) : null}
 
       <WaterQualityCard sample={waterSample} t={t} />
 
@@ -754,6 +767,7 @@ function SpotRecentDips({
           date={s.date}
           winter={s.isWinter}
           unique={s.isUniqueForUser}
+          waterTemp={s.waterTemp}
           note={s.note}
         >
           <ReactionBar session={s} myUid={myUid} />
@@ -818,9 +832,13 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 function WaterTempCard({
   reading,
   t,
+  showHistory,
+  onToggleHistory,
 }: {
   reading: TempReading | null;
   t: (key: string, vars?: Record<string, string | number>) => string;
+  showHistory?: boolean;
+  onToggleHistory?: () => void;
 }) {
   const [now, setNow] = useState(() => Date.now());
 
@@ -863,16 +881,29 @@ function WaterTempCard({
             : "bg-teal-50/80 ring-teal-200"
       }`}
     >
-      <div className="flex items-center gap-2.5">
-        <Thermometer
-          className={`h-4 w-4 flex-none ${isWarm ? "text-amber-500" : isCool ? "text-sky-500" : "text-teal-500"}`}
-        />
-        <span
-          className={`font-semibold ${isWarm ? "text-amber-900" : isCool ? "text-sky-900" : "text-teal-900"}`}
-        >
-          {reading.t.toFixed(1)} °C
-        </span>
-        <span className={`text-xs ${mutedColor}`}>{ageLabel}</span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Thermometer
+            className={`h-4 w-4 flex-none ${isWarm ? "text-amber-500" : isCool ? "text-sky-500" : "text-teal-500"}`}
+          />
+          <span
+            className={`font-semibold ${isWarm ? "text-amber-900" : isCool ? "text-sky-900" : "text-teal-900"}`}
+          >
+            {reading.t.toFixed(1)} °C
+          </span>
+          <span className={`text-xs ${mutedColor} truncate`}>{ageLabel}</span>
+        </div>
+        {onToggleHistory ? (
+          <button
+            type="button"
+            onClick={onToggleHistory}
+            className={`flex-none text-xs font-semibold underline underline-offset-2 hover:opacity-80 ${mutedColor}`}
+          >
+            {showHistory
+              ? t("spot.temp.hide_history")
+              : t("spot.temp.show_history")}
+          </button>
+        ) : null}
       </div>
       {sourceLabel ? (
         <div className={`mt-0.5 pl-[26px] text-[11px] ${mutedColor}`}>
@@ -1207,4 +1238,302 @@ function buildStats(sessions: SessionDoc[], myUid?: string) {
     mine,
     topSwimmer,
   };
+}
+
+type HistoryPoint = { date: string; t: number; p: TempSource };
+
+/** How many days of temperature history the spot graph spans. */
+const HISTORY_DAYS = 30;
+
+/**
+ * YYYY-MM-DD day key in Sweden's local zone. Must match the `localDay` helper
+ * in functions/index.js so the graph lines each stored reading up with the
+ * calendar day the swim actually happened — UTC bucketing would shift a
+ * late-evening CEST swim into the next day.
+ */
+const localDay = (ms: number) =>
+  new Date(ms).toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
+
+/** The last HISTORY_DAYS + 1 local day keys, oldest → newest. */
+function recentDayKeys(): string[] {
+  const keys: string[] = [];
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+  for (let i = HISTORY_DAYS; i >= 0; i--) keys.push(localDay(now - i * DAY));
+  return keys;
+}
+
+function useSpotTempHistory(placeId: string, lat?: number, lng?: number) {
+  const [storedHistory, setStoredHistory] =
+    useState<PlaceTempHistoryDoc | null>(null);
+  const [omPoints, setOmPoints] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  // Remember which coordinates we've already fetched an estimate for, so a
+  // later stored-history update (which re-runs the effect) doesn't fire a
+  // duplicate upstream request.
+  const fetchedFor = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!placeId) return;
+    return watchPlaceTempHistory(placeId, setStoredHistory);
+  }, [placeId]);
+
+  useEffect(() => {
+    if (typeof lat !== "number" || typeof lng !== "number") return;
+    const fetchKey = `${lat},${lng}`;
+    if (fetchedFor.current === fetchKey) return;
+
+    // Skip the upstream estimate entirely when we already have a stored
+    // reading for every day in the window — there's nothing left to fill in.
+    const days = recentDayKeys();
+    const covered = days.every(
+      (d) => typeof storedHistory?.days?.[d]?.t === "number",
+    );
+    if (covered) {
+      setLoading(false);
+      return;
+    }
+    fetchedFor.current = fetchKey;
+
+    let cancelled = false;
+    const startStr = days[0];
+    const endStr = days[days.length - 1];
+
+    async function loadOm() {
+      try {
+        // `timezone=Europe/Stockholm` makes Open-Meteo aggregate and label
+        // days in the same zone as localDay, so its keys line up with ours.
+        const res = await fetch(
+          `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lng}&start_date=${startStr}&end_date=${endStr}&daily=sea_surface_temperature_mean&timezone=Europe%2FStockholm`,
+          { headers: { Accept: "application/json" } },
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled || !data?.daily?.time) return;
+        const times: string[] = data.daily.time;
+        const temps: (number | null)[] =
+          data.daily.sea_surface_temperature_mean ?? [];
+        const result: Record<string, number> = {};
+        times.forEach((timeStr, idx) => {
+          const val = temps[idx];
+          if (typeof val === "number" && !Number.isNaN(val)) {
+            result[timeStr] = Math.round(val * 10) / 10;
+          }
+        });
+        setOmPoints(result);
+      } catch {
+        // Ignored — the graph falls back to whatever stored readings exist.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadOm();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lat, lng, storedHistory]);
+
+  // Stored readings win over the upstream estimate for each day. Recomputed
+  // only when a source changes rather than on every render.
+  const points = useMemo<HistoryPoint[]>(() => {
+    const result: HistoryPoint[] = [];
+    for (const dateStr of recentDayKeys()) {
+      const stored = storedHistory?.days?.[dateStr];
+      if (stored && typeof stored.t === "number") {
+        result.push({ date: dateStr, t: stored.t, p: stored.p });
+      } else if (omPoints[dateStr] != null) {
+        result.push({ date: dateStr, t: omPoints[dateStr], p: "open-meteo" });
+      }
+    }
+    return result;
+  }, [storedHistory, omPoints]);
+
+  return { points, loading };
+}
+
+function SpotTempGraph({
+  placeId,
+  lat,
+  lng,
+}: {
+  placeId: string;
+  lat?: number;
+  lng?: number;
+}) {
+  const t = useT();
+  const { points, loading } = useSpotTempHistory(placeId, lat, lng);
+  const [selectedPoint, setSelectedPoint] = useState<HistoryPoint | null>(null);
+
+  if (loading && points.length === 0) {
+    return (
+      <div className="mt-3 flex h-28 items-center justify-center rounded-2xl bg-white/60 ring-1 ring-white/60">
+        <div className="h-5 w-5 animate-spin rounded-full border-2 border-teal-600 border-r-transparent" />
+      </div>
+    );
+  }
+
+  if (points.length < 2) {
+    return (
+      <div className="mt-3 rounded-2xl bg-white/60 p-4 text-center text-xs text-slate-500 ring-1 ring-white/60">
+        {t("spot.temp.graph_nodata")}
+      </div>
+    );
+  }
+
+  const temps = points.map((p) => p.t);
+  const minTemp = Math.floor(Math.min(...temps) - 1);
+  const maxTemp = Math.ceil(Math.max(...temps) + 1);
+  const range = Math.max(1, maxTemp - minTemp);
+  const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+
+  const width = 320;
+  const height = 110;
+  const padLeft = 24;
+  const padRight = 16;
+  const padTop = 16;
+  const padBottom = 20;
+
+  const chartW = width - padLeft - padRight;
+  const chartH = height - padTop - padBottom;
+
+  const coords = points.map((p, i) => {
+    const x = padLeft + (i / (points.length - 1)) * chartW;
+    const y = padTop + chartH - ((p.t - minTemp) / range) * chartH;
+    return { x, y, point: p };
+  });
+
+  const pathD = coords
+    .map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`)
+    .join(" ");
+
+  const areaD = `${pathD} L ${coords[coords.length - 1].x.toFixed(1)} ${height - padBottom} L ${coords[0].x.toFixed(1)} ${height - padBottom} Z`;
+
+  const active = selectedPoint ?? points[points.length - 1];
+
+  return (
+    <div className="mt-3 rounded-2xl bg-gradient-to-br from-teal-50/90 to-sky-50/90 p-3 ring-1 ring-teal-200/80">
+      <div className="flex items-center justify-between text-xs font-semibold text-teal-900">
+        <div className="flex items-center gap-1.5">
+          <Thermometer className="h-4 w-4 text-teal-600" />
+          <div className="flex flex-col leading-tight">
+            <span>{t("spot.temp.graph_title")}</span>
+            <span className="text-[10px] font-medium text-teal-600/80">
+              {t("spot.temp.history_days")}
+            </span>
+          </div>
+        </div>
+        <div className="text-[11px] font-medium text-teal-700">
+          {t("spot.temp.graph_avg", { temp: avgTemp })}
+        </div>
+      </div>
+
+      {active ? (
+        <div className="mt-1 flex items-center justify-between text-[11px] text-teal-800">
+          <span className="font-semibold">
+            {formatDate(new Date(active.date).getTime())}
+          </span>
+          <span className="font-bold text-teal-900">
+            {active.t}°C{" "}
+            <span className="font-normal text-slate-500">
+              ({t(`temp.source.${active.p}`)})
+            </span>
+          </span>
+        </div>
+      ) : null}
+
+      <div className="relative mt-2">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="w-full overflow-visible"
+        >
+          <defs>
+            <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#14b8a6" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="#14b8a6" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          <line
+            x1={padLeft}
+            y1={padTop}
+            x2={width - padRight}
+            y2={padTop}
+            stroke="#99f6e4"
+            strokeDasharray="2,2"
+            strokeWidth="1"
+          />
+          <line
+            x1={padLeft}
+            y1={padTop + chartH / 2}
+            x2={width - padRight}
+            y2={padTop + chartH / 2}
+            stroke="#99f6e4"
+            strokeDasharray="2,2"
+            strokeWidth="1"
+          />
+          <line
+            x1={padLeft}
+            y1={height - padBottom}
+            x2={width - padRight}
+            y2={height - padBottom}
+            stroke="#99f6e4"
+            strokeDasharray="2,2"
+            strokeWidth="1"
+          />
+
+          <text
+            x={padLeft - 4}
+            y={padTop + 3}
+            textAnchor="end"
+            fontSize="8"
+            fill="#0f766e"
+            fontWeight="bold"
+          >
+            {maxTemp}°
+          </text>
+          <text
+            x={padLeft - 4}
+            y={height - padBottom + 3}
+            textAnchor="end"
+            fontSize="8"
+            fill="#0f766e"
+            fontWeight="bold"
+          >
+            {minTemp}°
+          </text>
+
+          <path d={areaD} fill="url(#tempGradient)" />
+          <path
+            d={pathD}
+            fill="none"
+            stroke="#0d9488"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {coords.map((c) => {
+            const isSelected = active?.date === c.point.date;
+            return (
+              <g key={c.point.date}>
+                <circle
+                  cx={c.x}
+                  cy={c.y}
+                  r={isSelected ? "4.5" : "2.5"}
+                  className="cursor-pointer transition-all"
+                  fill={isSelected ? "#0f766e" : "#0d9488"}
+                  stroke="#ffffff"
+                  strokeWidth={isSelected ? "2" : "1"}
+                  onClick={() => setSelectedPoint(c.point)}
+                  onMouseEnter={() => setSelectedPoint(c.point)}
+                />
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
 }
