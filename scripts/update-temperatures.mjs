@@ -65,6 +65,13 @@ const WRITE = process.argv.includes("--write");
 const ALL = process.argv.includes("--all");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "badligan";
 
+// Bucket a timestamp into a YYYY-MM-DD day key in Sweden's local zone, so a
+// reading is attributed to the day it happened locally (UTC would push a
+// late-evening CEST reading into the next day's bucket). Must match the
+// same helper in functions/index.js.
+const localDay = (ms) =>
+  new Date(ms).toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
+
 // Only refresh places whose stored reading is at least this old. The
 // scheduled run is daily, so yesterday's readings always qualify, while
 // places refreshed on demand earlier the same day (the refreshPlaceTemp
@@ -540,7 +547,19 @@ async function main() {
               { placeId: doc.id, ...next, checkedAt: Date.now() },
               { merge: true },
             );
-            inBatch++;
+            const dateStr = localDay(next.at);
+            batch.set(
+              db.collection("placeTempHistory").doc(doc.id),
+              {
+                placeId: doc.id,
+                days: {
+                  [dateStr]: { t: next.t, p: next.p },
+                },
+                updatedAt: Date.now(),
+              },
+              { merge: true },
+            );
+            inBatch += 2;
           }
         }
         tempStatus = changed || promote ? "updated" : "unchanged";

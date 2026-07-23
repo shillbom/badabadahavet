@@ -42,6 +42,14 @@ const DISPLAY_FRESH_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 // the upstream API for free.
 const PER_USER_PER_HOUR = 60;
 
+// Bucket a timestamp into a YYYY-MM-DD day key in Sweden's local zone.
+// Water temps are attributed to the day the swim happened *locally* — using
+// UTC (toISOString) would push a late-evening Swedish swim (CEST = UTC+2)
+// into the next day's bucket. Scoring stays on swimYear()/UTC on purpose;
+// this is only for the human-facing temperature day key.
+const localDay = (ms) =>
+  new Date(ms).toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
+
 const DETAIL_URL = (nutsCode) =>
   `https://badplatsen.havochvatten.se/badplatsen/api/detail/${encodeURIComponent(nutsCode)}`;
 
@@ -842,6 +850,16 @@ export const logSession = onCall(
     const border =
       typeof d.border === "string" && d.border.length <= 20 ? d.border : "none";
 
+    let waterTemp = null;
+    let waterTempProvider = null;
+    if (d.waterTemp !== undefined && d.waterTemp !== null) {
+      const wt = Number(d.waterTemp);
+      if (typeof wt === "number" && !Number.isNaN(wt) && wt >= -5 && wt <= 40) {
+        waterTemp = Math.round(wt * 10) / 10;
+        waterTempProvider = "user";
+      }
+    }
+
     // Authoritative moderation of user-supplied text (the client-side
     // check in src/lib/moderation.ts is just UX and can be bypassed).
     // checkTextAllowed fails open on API errors/timeouts, so an outage
@@ -864,6 +882,44 @@ export const logSession = onCall(
     }
 
     const db = getFirestore();
+    const dateStr = localDay(date);
+
+    // If user didn't report a temp, check if we have a stored temp for that date, otherwise stay null
+    if (waterTemp === null) {
+      try {
+        const historySnap = await db
+          .collection("placeTempHistory")
+          .doc(placeId)
+          .get();
+        if (historySnap.exists) {
+          const day = historySnap.data()?.days?.[dateStr];
+          if (day && typeof day.t === "number") {
+            waterTemp = day.t;
+            waterTempProvider = day.p ?? "open-meteo";
+          }
+        }
+        if (waterTemp === null) {
+          const ptSnap = await db.collection("placeTemps").doc(placeId).get();
+          if (ptSnap.exists) {
+            const pt = ptSnap.data();
+            if (typeof pt?.t === "number" && typeof pt?.at === "number") {
+              const ptDateStr = localDay(pt.at);
+              if (ptDateStr === dateStr) {
+                waterTemp = pt.t;
+                waterTempProvider = pt.p ?? "open-meteo";
+              }
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn("stored temp lookup failed", {
+          placeId,
+          dateStr,
+          error: String(e),
+        });
+      }
+    }
+
     const userRef = db.collection("users").doc(uid);
     const sessionsCol = db.collection("sessions");
     const newRef = sessionsCol.doc();
@@ -931,6 +987,10 @@ export const logSession = onCall(
       if (photoPath) session.photoPath = photoPath;
       if (photoThumb) session.photoThumb = photoThumb;
       session.border = border;
+      if (waterTemp !== null) {
+        session.waterTemp = waterTemp;
+        session.waterTempProvider = waterTempProvider;
+      }
 
       const stats = yearStats(yearSnap, { extra: session });
 
@@ -962,8 +1022,58 @@ export const logSession = onCall(
       // longer touches the place doc, so a swim never re-streams it to every
       // client on the `places`/summary listeners.
 
-      return { id: newRef.id, points, isUniqueForUser, isWinter };
+      return {
+        id: newRef.id,
+        points,
+        isUniqueForUser,
+        isWinter,
+        waterTemp,
+        waterTempProvider,
+      };
     });
+
+    if (waterTemp !== null) {
+      try {
+        await db
+          .collection("placeTempHistory")
+          .doc(placeId)
+          .set(
+            {
+              placeId,
+              days: {
+                [dateStr]: { t: waterTemp, p: waterTempProvider },
+              },
+              updatedAt: Date.now(),
+            },
+            { merge: true },
+          );
+      } catch (e) {
+        logger.warn("failed updating placeTempHistory", {
+          placeId,
+          error: String(e),
+        });
+      }
+    }
+
+    if (waterTempProvider === "user" && waterTemp !== null) {
+      try {
+        await db.collection("placeTemps").doc(placeId).set(
+          {
+            placeId,
+            t: waterTemp,
+            at: date,
+            p: "user",
+            checkedAt: Date.now(),
+          },
+          { merge: true },
+        );
+      } catch (e) {
+        logger.warn("failed updating placeTemps with user temp", {
+          placeId,
+          error: String(e),
+        });
+      }
+    }
 
     return result;
   },
@@ -1186,7 +1296,16 @@ export const updateSession = onCall(
       };
     }
 
-    if (newDate === null && !hasNote && !hasPhoto) {
+    const hasWaterTemp = d.waterTemp !== undefined;
+    let waterTemp = null;
+    if (hasWaterTemp && d.waterTemp !== null) {
+      const wt = Number(d.waterTemp);
+      if (typeof wt === "number" && !Number.isNaN(wt) && wt >= -5 && wt <= 40) {
+        waterTemp = Math.round(wt * 10) / 10;
+      }
+    }
+
+    if (newDate === null && !hasNote && !hasPhoto && !hasWaterTemp) {
       throw new HttpsError("invalid-argument", "Nothing to update.");
     }
 
@@ -1273,6 +1392,19 @@ export const updateSession = onCall(
       if (hasNote) {
         updates.note = note ?? FieldValue.delete();
       }
+      if (hasWaterTemp) {
+        if (waterTemp !== null) {
+          updates.waterTemp = waterTemp;
+          updates.waterTempProvider = "user";
+          updatedSession.waterTemp = waterTemp;
+          updatedSession.waterTempProvider = "user";
+        } else {
+          updates.waterTemp = FieldValue.delete();
+          updates.waterTempProvider = FieldValue.delete();
+          delete updatedSession.waterTemp;
+          delete updatedSession.waterTempProvider;
+        }
+      }
       let removedPhotoPath = null;
       if (hasPhoto) {
         if (photo) {
@@ -1354,6 +1486,50 @@ export const updateSession = onCall(
         await getStorage().bucket().file(result.removedPhotoPath).delete();
       } catch (e) {
         logger.warn("photo delete failed", { sessionId, error: String(e) });
+      }
+    }
+
+    if (hasWaterTemp && waterTemp !== null) {
+      try {
+        const sessionSnap = await db
+          .collection("sessions")
+          .doc(sessionId)
+          .get();
+        if (sessionSnap.exists) {
+          const placeId = sessionSnap.data()?.placeId;
+          const sDate = sessionSnap.data()?.date ?? Date.now();
+          const dateStr = localDay(sDate);
+          if (placeId) {
+            await db
+              .collection("placeTempHistory")
+              .doc(placeId)
+              .set(
+                {
+                  placeId,
+                  days: {
+                    [dateStr]: { t: waterTemp, p: "user" },
+                  },
+                  updatedAt: Date.now(),
+                },
+                { merge: true },
+              );
+            await db.collection("placeTemps").doc(placeId).set(
+              {
+                placeId,
+                t: waterTemp,
+                at: sDate,
+                p: "user",
+                checkedAt: Date.now(),
+              },
+              { merge: true },
+            );
+          }
+        }
+      } catch (e) {
+        logger.warn("failed updating place temps after session edit", {
+          sessionId,
+          error: String(e),
+        });
       }
     }
 
