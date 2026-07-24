@@ -223,8 +223,9 @@ export default function HistoryPage() {
             >
               {/* Winter/unique stay as labelled chips here (not the compact
                   inline ❄️/✨ markers) so the history page keeps its richer
-                  per-swim context, plus the coordinates chip. */}
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  per-swim context, plus the coordinates chip. The water-temp
+                  chip is appended (right-aligned) by SwimListItem's footer. */}
+              <>
                 {s.isUniqueForUser ? (
                   <span className="chip">
                     <Sparkles className="h-3 w-3" />{" "}
@@ -240,7 +241,7 @@ export default function HistoryPage() {
                   <MapPin className="h-3 w-3" />
                   {s.lat.toFixed(3)}, {s.lng.toFixed(3)}
                 </span>
-              </div>
+              </>
             </SwimListItem>
           ))}
         </ul>
