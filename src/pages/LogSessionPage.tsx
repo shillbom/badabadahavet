@@ -392,6 +392,11 @@ export default function LogSessionPage() {
   // (no pickedPlaceId) is always new; a picked existing place is new only
   // if it's not already in the user's own history.
   const isNewSpot = !pickedPlaceId || !myPlaceIds.has(pickedPlaceId);
+  // Latest measured temperature for the picked spot — seeds the thermometer
+  // picker so a reported reading defaults to what the spot currently shows.
+  const currentPlaceTemp = pickedPlaceId
+    ? places.find((p) => p.id === pickedPlaceId)?.waterTemp
+    : undefined;
   const pointsPreview = previewPoints({
     isNewSpot,
     isWinter: isWinterSwim,
@@ -497,7 +502,7 @@ export default function LogSessionPage() {
             <WaterTempField
               value={waterTemp}
               onChange={setWaterTemp}
-              presets={[12, 15, 18, 20, 22]}
+              currentTemp={currentPlaceTemp}
               hint
             />
 
