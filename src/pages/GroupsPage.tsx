@@ -875,22 +875,26 @@ function GroupSheetHeader({
         <h3 className="truncate font-display text-xl font-black text-wave-900">
           {group.name}
         </h3>
-        <p className="flex items-center gap-1.5 text-[11px] text-slate-500">
-          {group.members.length === 1
-            ? t("groups.member_one")
-            : t("groups.member_many", { n: group.members.length })}
-          {" · "}
-          <span className="font-mono tracking-wider">{group.code}</span>
-          <button
-            type="button"
-            onClick={() => shareInviteLink(group, t)}
-            className="inline-flex items-center gap-0.5 rounded-full bg-wave-50 px-2 py-0.5 text-[10px] font-medium text-wave-600 ring-1 ring-wave-200 hover:bg-wave-100"
-            title={t("groups.share_link")}
-          >
-            <Share2 className="h-2.5 w-2.5" />
-            {t("groups.share_link")}
-          </button>
-        </p>
+        <div className="flex flex-col gap-1 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:gap-1.5">
+          <span>
+            {group.members.length === 1
+              ? t("groups.member_one")
+              : t("groups.member_many", { n: group.members.length })}
+          </span>
+          <span className="hidden sm:inline">·</span>
+          <span className="flex items-center gap-1.5">
+            <span className="font-mono tracking-wider">{group.code}</span>
+            <button
+              type="button"
+              onClick={() => shareInviteLink(group, t)}
+              className="inline-flex items-center gap-0.5 rounded-full bg-wave-50 px-2 py-0.5 text-[10px] font-medium text-wave-600 ring-1 ring-wave-200 hover:bg-wave-100"
+              title={t("groups.share_link")}
+            >
+              <Share2 className="h-2.5 w-2.5" />
+              {t("groups.share_link")}
+            </button>
+          </span>
+        </div>
       </div>
       <button
         type="button"

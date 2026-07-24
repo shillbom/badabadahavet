@@ -85,15 +85,19 @@ export default function SwimListItem({
           {formatDateTime(date)}
           {winter ? <span className="ml-0.5">❄️</span> : null}
           {unique ? <span className="ml-0.5">✨</span> : null}
-          {waterTemp != null ? (
-            <span className="ml-1 inline-flex items-center gap-0.5 rounded-md bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-200">
-              <Thermometer className="h-3 w-3 text-teal-500" />
-              {waterTemp}°C
-            </span>
-          ) : null}
         </div>
         {note ? <p className="mt-0.5 text-xs text-slate-600">{note}</p> : null}
-        {children}
+        {children != null || waterTemp != null ? (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            {children}
+            {waterTemp != null ? (
+              <span className="ml-auto inline-flex items-center gap-0.5 rounded-md bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-200">
+                <Thermometer className="h-3 w-3 text-teal-500" />
+                {waterTemp}°C
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </m.li>
   );

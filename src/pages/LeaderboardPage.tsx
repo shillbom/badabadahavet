@@ -7,6 +7,7 @@ import {
   Snowflake,
   MapPin,
   CalendarRange,
+  Clock,
 } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
@@ -33,7 +34,7 @@ import {
   yearPickerBounds,
   type MemberSortBy,
 } from "@/lib/leaderboard";
-import { groupRangeMs, formatGroupRange } from "@/lib/date";
+import { groupRangeMs, formatGroupRange, DAY_MS, dayStartMs } from "@/lib/date";
 import { resolveBorder, type Border } from "@/lib/borders";
 import { useT, useLocale, localeBcp } from "@/lib/i18n";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
@@ -48,6 +49,10 @@ type Row = {
   /** Server-maintained card stats; null for users logged before the
    *  statsByYear backfill ran (renders as a placeholder). */
   stats: YearStats | null;
+  /** Group-board sortables — the year's best streak and last-swim time.
+   *  Undefined on the global board (which only sorts by points). */
+  streak?: number;
+  lastSwim?: number;
 };
 
 export default function LeaderboardPage() {
@@ -223,6 +228,7 @@ export default function LeaderboardPage() {
                 row={r}
                 rank={i}
                 isMe={user?.uid === r.uid}
+                sortBy={isGroupScope ? sortBy : undefined}
                 onSelect={() => {
                   setMemberSessions([]);
                   setMemberSelection((current) => ({
@@ -566,6 +572,8 @@ function useGroupBoardRows(
           winters: 0,
           countriesAbroad: 0,
         },
+        streak: st?.streak ?? 0,
+        lastSwim: st?.lastSwim ?? 0,
       };
     })
     .toSorted((a, b) =>
@@ -594,15 +602,33 @@ function LeaderboardGhostRow() {
   );
 }
 
+/** Short "last swim" recency label for group boards, mirroring GroupsPage. */
+function recencyLabel(
+  lastSwim: number | undefined,
+  t: ReturnType<typeof useT>,
+): string {
+  if (!lastSwim) return t("groups.last.never");
+  const days = Math.round(
+    (dayStartMs(Date.now()) - dayStartMs(lastSwim)) / DAY_MS,
+  );
+  if (days <= 0) return t("groups.last.today");
+  if (days === 1) return t("groups.last.yesterday");
+  return t("groups.last.days_ago", { n: days });
+}
+
 function BoardRow({
   row: r,
   rank,
   isMe,
+  sortBy,
   onSelect,
 }: {
   row: Row;
   rank: number;
   isMe: boolean;
+  /** Active group-board sort; when set, the row shows streak + recency and
+   *  highlights whichever one is driving the current order. */
+  sortBy?: MemberSortBy;
   /** When set, the card is tappable (group scopes); global rows pass nothing. */
   onSelect?: () => void;
 }) {
@@ -697,21 +723,54 @@ function BoardRow({
                   : t("leaderboard.spots", { n: stats.uniquePlaces })}
               </span>
             </div>
-            <div className="flex h-3.5 items-center gap-2 overflow-hidden text-[10px] leading-none whitespace-nowrap text-slate-400">
-              {stats.winters > 0 ? (
-                <span className="inline-flex items-center gap-0.5">
-                  <Snowflake className="h-2.5 w-2.5" />
-                  {stats.winters === 1
-                    ? t("leaderboard.winter")
-                    : t("leaderboard.winters", { n: stats.winters })}
+            {sortBy ? (
+              // Group boards: surface the sortables so the active order is
+              // legible. Streak and recency both show; the one driving the
+              // sort is bolded.
+              <div className="flex h-3.5 items-center gap-2 overflow-hidden text-[10px] leading-none whitespace-nowrap">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-0.5",
+                    sortBy === "streak"
+                      ? "font-bold text-orange-600"
+                      : (r.streak ?? 0) > 0
+                        ? "text-orange-500"
+                        : "text-slate-400",
+                  )}
+                >
+                  🔥 {r.streak ?? 0}
                 </span>
-              ) : null}
-              {stats.countriesAbroad > 0 ? (
-                <span className="text-teal-700">
-                  {t("leaderboard.countries", { n: stats.countriesAbroad + 1 })}
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-0.5",
+                    sortBy === "recent"
+                      ? "font-bold text-wave-700"
+                      : "text-slate-400",
+                  )}
+                >
+                  <Clock className="h-2.5 w-2.5" />
+                  {recencyLabel(r.lastSwim, t)}
                 </span>
-              ) : null}
-            </div>
+              </div>
+            ) : (
+              <div className="flex h-3.5 items-center gap-2 overflow-hidden text-[10px] leading-none whitespace-nowrap text-slate-400">
+                {stats.winters > 0 ? (
+                  <span className="inline-flex items-center gap-0.5">
+                    <Snowflake className="h-2.5 w-2.5" />
+                    {stats.winters === 1
+                      ? t("leaderboard.winter")
+                      : t("leaderboard.winters", { n: stats.winters })}
+                  </span>
+                ) : null}
+                {stats.countriesAbroad > 0 ? (
+                  <span className="text-teal-700">
+                    {t("leaderboard.countries", {
+                      n: stats.countriesAbroad + 1,
+                    })}
+                  </span>
+                ) : null}
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-[11px] leading-4">
