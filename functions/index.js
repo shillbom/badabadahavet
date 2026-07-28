@@ -15,6 +15,7 @@ import {
   yearStats,
   currentYear,
   currentYearStart,
+  latestLoggableMs,
 } from "./scoring.js";
 import { leaderboardEntry, applyToTop, removeFromTop } from "./leaderboard.js";
 import { checkTextAllowed } from "./moderation.js";
@@ -853,7 +854,7 @@ export const logSession = onCall(
       typeof date !== "number" ||
       !Number.isFinite(date) ||
       date < currentYearStart() || // no logging into past seasons
-      date > Date.now() // no logging into the future
+      date > latestLoggableMs() // no logging into the future (with slack)
     ) {
       throw new HttpsError("invalid-argument", "date looks invalid.", {
         reason: "date-range",
@@ -1282,7 +1283,7 @@ export const updateSession = onCall(
         typeof d.date !== "number" ||
         !Number.isFinite(d.date) ||
         d.date < currentYearStart() || // can't move a swim into a past season
-        d.date > Date.now() // ...or the future
+        d.date > latestLoggableMs() // ...or the future (with slack)
       ) {
         throw new HttpsError("invalid-argument", "date looks invalid.", {
           reason: "date-range",
