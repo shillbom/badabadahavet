@@ -34,6 +34,7 @@ import {
   isWinterMonth,
   previewPoints,
   currentSeasonStart,
+  latestLoggableMs,
 } from "@/lib/scoring";
 import { resolveBorder } from "@/lib/borders";
 import {
@@ -196,8 +197,9 @@ function useSubmitSwim(args: {
       return;
     }
     // Only the current season is loggable: no back-dating into a past
-    // year, no logging into the future.
-    if (ts < currentSeasonStart() || ts > Date.now()) {
+    // year, no logging into the future (bar an hour of slack for clock drift
+    // and forms left open — matches the server's bound).
+    if (ts < currentSeasonStart() || ts > latestLoggableMs()) {
       toast.error(t("log.error.date_range"));
       return;
     }
@@ -367,11 +369,24 @@ export default function LogSessionPage() {
     photoFileRef,
     countryRef,
   });
-  // Capture "now" once per mount instead of reading the clock during render —
-  // Date.now() in the render body is impure and blocks React Compiler from
-  // memoizing this component. A fixed baseline is plenty for validating that
-  // the chosen swim time isn't in the future.
-  const [nowMs] = useState(() => Date.now());
+  // Both loggable bounds live in state rather than being read from the clock
+  // during render — Date.now() in the render body is impure and blocks React
+  // Compiler from memoizing this component. They still have to stay current:
+  // the form re-stamps `date` to the real "now" whenever "now" mode runs, and a
+  // form left open can outlive a season rollover, so a baseline frozen at mount
+  // would reject a perfectly valid date. Re-read them on a slow tick (the hour
+  // of grace in latestLoggableMs() covers everything in between).
+  const [bounds, setBounds] = useState(() => ({
+    min: currentSeasonStart(),
+    max: latestLoggableMs(),
+  }));
+  useEffect(() => {
+    const id = setInterval(
+      () => setBounds({ min: currentSeasonStart(), max: latestLoggableMs() }),
+      60_000,
+    );
+    return () => clearInterval(id);
+  }, []);
   // Direction of the last mode change (+1 forward, -1 back) driving the swipe,
   // plus a flag that clips horizontal overflow only while the panels slide so a
   // scrollbar never flashes — and the calendar popover isn't clipped at rest.
@@ -386,8 +401,8 @@ export default function LogSessionPage() {
   const dateValid =
     mode === "now" ||
     (!Number.isNaN(dateObj.getTime()) &&
-      dateObj.getTime() >= currentSeasonStart() &&
-      dateObj.getTime() <= nowMs);
+      dateObj.getTime() >= bounds.min &&
+      dateObj.getTime() <= bounds.max);
   // "New spot" = a place the user hasn't logged before. A brand-new pin
   // (no pickedPlaceId) is always new; a picked existing place is new only
   // if it's not already in the user's own history.
