@@ -165,6 +165,61 @@
   }
 }
 
+/* Water-temperature thermometer: bubbles rise through warm mercury, snow
+   drifts down through cold mercury. --travel is the distance from the bulb to
+   the current level (set per particle in WaterTempField, so the motion always
+   spans the filled part of the tube). */
+@keyframes temp-bubble {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.75;
+  }
+  85% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(calc(var(--travel) * -1)) scale(1);
+    opacity: 0;
+  }
+}
+
+@keyframes temp-snow {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.9;
+  }
+  85% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translate(var(--sway), var(--travel)) rotate(160deg);
+    opacity: 0;
+  }
+}
+
+.temp-bubble {
+  animation: temp-bubble var(--dur) linear var(--delay) infinite;
+}
+
+.temp-snow {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: temp-snow var(--dur) linear var(--delay) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .temp-bubble,
+  .temp-snow {
+    animation: none;
+  }
+}
+
 @layer base {
   html,
   body,
