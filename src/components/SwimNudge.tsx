@@ -4,6 +4,7 @@ import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
 import { haversineMeters } from "@/lib/utils";
+import { formatTemp } from "@/lib/temps";
 import BottomSheet from "@/components/BottomSheet";
 import { buttonClasses } from "@/components/ui/buttonStyles";
 
@@ -103,7 +104,7 @@ export default function SwimNudge({
                 {suggestion.place.waterTemp != null ? (
                   <span className="flex items-center gap-1">
                     <Thermometer className="h-3 w-3" />
-                    {Math.round(suggestion.place.waterTemp)}°
+                    {formatTemp(suggestion.place.waterTemp)}°
                   </span>
                 ) : null}
               </div>

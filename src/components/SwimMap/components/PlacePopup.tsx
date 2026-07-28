@@ -5,6 +5,7 @@ import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useT } from "@/lib/i18n";
 import type { PlaceWithTemp, SessionDoc } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
+import { formatTemp } from "@/lib/temps";
 import { hasFreshTemp } from "../pinUtils";
 
 const POPUP_AUTO_PAN_TOP_LEFT: [number, number] = [24, 56];
@@ -48,7 +49,7 @@ export default function PlacePopup({
         </div>
         {hasFreshTemp(place) ? (
           <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-800 ring-1 ring-sky-200">
-            💧 {place.waterTemp.toFixed(1)} °C
+            💧 {formatTemp(place.waterTemp)} °C
             {place.waterTempAt ? (
               <span className="font-normal text-sky-600">
                 · {formatAge(place.waterTempAt, t)}
