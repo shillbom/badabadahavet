@@ -1,7 +1,15 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Ref,
+} from "react";
 import { Thermometer, Minus, Plus, Check } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
+import { formatTemp } from "@/lib/temps";
 import { cn } from "@/lib/utils";
 
 import BottomSheet from "./BottomSheet";
@@ -68,9 +76,6 @@ const tempColor = (deg: number) => {
   return `rgb(${mix(0)}, ${mix(1)}, ${mix(2)})`;
 };
 
-/** Trim a trailing ".0" so whole degrees read "18°C", halves read "18.5°C". */
-const fmt = (deg: number) => String(Math.round(deg * 10) / 10);
-
 type WaterTempFieldProps = {
   value: string;
   onChange: (value: string) => void;
@@ -125,7 +130,9 @@ export function WaterTempField({
         }
       >
         <Thermometer className="h-4 w-4" />
-        {shown != null ? `${fmt(shown)}°C` : t("log.field.water_temp.add")}
+        {shown != null
+          ? `${formatTemp(shown)}°C`
+          : t("log.field.water_temp.add")}
       </button>
 
       {hint && (
@@ -218,20 +225,6 @@ function TempSheet({
 
   const color = tempColor(draft);
   const level = (1 - frac(draft)) * TUBE;
-  const warm = draft >= WARM_AT;
-  const cold = draft <= COLD_AT;
-  // Particles start just outside the mercury (below the bulb / above the
-  // level) so they're already clipped away when a cycle restarts — otherwise
-  // every particle pops into existence on the same line.
-  const bubbleStart = SVG_H + 10;
-  const bubbleTravel = bubbleStart - level + 10;
-  const snowStart = level - 12;
-  const snowTravel = Math.max(40, BULB_CY + BULB_R - snowStart);
-  // useId's raw output contains characters that aren't safe inside url(#…),
-  // so strip everything but word characters.
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
-  const clipId = `therm-${uid}`;
-  const fillId = `therm-fill-${uid}`;
 
   return (
     <BottomSheet
@@ -243,7 +236,9 @@ function TempSheet({
       <div className="flex flex-col items-center px-4 pt-1 pb-2">
         {currentTemp != null && (
           <p className="mb-2 text-xs font-medium text-slate-500">
-            {t("log.field.water_temp.current", { temp: fmt(currentTemp) })}
+            {t("log.field.water_temp.current", {
+              temp: formatTemp(currentTemp),
+            })}
           </p>
         )}
 
@@ -251,7 +246,7 @@ function TempSheet({
         <div className="flex items-baseline" style={{ color }}>
           <AnimatedNumber
             value={draft}
-            format={(n) => n.toFixed(1)}
+            format={formatTemp}
             duration={0.25}
             className="font-display text-6xl leading-none font-black tabular-nums"
           />
@@ -287,7 +282,7 @@ function TempSheet({
             aria-valuemin={MIN}
             aria-valuemax={MAX}
             aria-valuenow={draft}
-            aria-valuetext={`${fmt(draft)}°C`}
+            aria-valuetext={`${formatTemp(draft)}°C`}
             onKeyDown={(e) => {
               if (e.key === "ArrowUp" || e.key === "ArrowRight") {
                 e.preventDefault();
@@ -299,121 +294,12 @@ function TempSheet({
             }}
             className="relative flex cursor-pointer touch-none flex-col items-center outline-none select-none"
           >
-            <div className="relative" style={{ width: SVG_W, height: SVG_H }}>
-              <svg
-                width={SVG_W}
-                height={SVG_H}
-                viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-                aria-hidden
-                className="block drop-shadow-sm"
-              >
-                <defs>
-                  <clipPath id={clipId}>
-                    <rect
-                      x={(SVG_W - TUBE_W) / 2}
-                      y={0}
-                      width={TUBE_W}
-                      height={BULB_CY}
-                      rx={TUBE_W / 2}
-                    />
-                    <circle cx={SVG_W / 2} cy={BULB_CY} r={BULB_R} />
-                  </clipPath>
-                  {/* Keeps the bubbles/snow inside the coloured mercury */}
-                  <clipPath id={fillId}>
-                    <rect
-                      x={0}
-                      y={level}
-                      width={SVG_W}
-                      height={SVG_H - level}
-                    />
-                  </clipPath>
-                </defs>
-                <g clipPath={`url(#${clipId})`}>
-                  {/* Empty glass */}
-                  <rect
-                    x={0}
-                    y={0}
-                    width={SVG_W}
-                    height={SVG_H}
-                    fill="rgb(241 245 249)"
-                  />
-                  {/* Mercury — runs from the level all the way into the bulb */}
-                  <rect
-                    x={0}
-                    y={level}
-                    width={SVG_W}
-                    height={SVG_H - level}
-                    fill={color}
-                  />
-                  <g clipPath={`url(#${fillId})`}>
-                    {warm &&
-                      PARTICLES.map((p) => (
-                        <circle
-                          key={`${p.dx}-${p.delay}`}
-                          className="temp-bubble"
-                          cx={SVG_W / 2 + p.dx}
-                          cy={bubbleStart}
-                          r={p.size}
-                          fill="rgba(255,255,255,0.75)"
-                          style={
-                            {
-                              "--travel": `${bubbleTravel}px`,
-                              "--dur": `${p.dur}s`,
-                              "--delay": `${p.delay}s`,
-                            } as CSSProperties
-                          }
-                        />
-                      ))}
-                    {cold &&
-                      PARTICLES.map((p) => (
-                        // The outer <g> places the flake; the inner one is
-                        // animated, because a CSS transform would otherwise
-                        // overwrite the positioning transform attribute.
-                        <g
-                          key={`${p.dx}-${p.delay}`}
-                          transform={`translate(${SVG_W / 2 + p.dx} ${snowStart})`}
-                        >
-                          <g
-                            className="temp-snow"
-                            style={
-                              {
-                                "--travel": `${snowTravel}px`,
-                                "--sway": `${p.sway}px`,
-                                "--dur": `${p.dur * 1.6}s`,
-                                "--delay": `${p.delay}s`,
-                              } as CSSProperties
-                            }
-                          >
-                            <path
-                              d="M0,-4 V4 M-3.5,-2 L3.5,2 M-3.5,2 L3.5,-2"
-                              stroke="rgba(255,255,255,0.9)"
-                              strokeWidth={1.2}
-                              strokeLinecap="round"
-                              fill="none"
-                            />
-                          </g>
-                        </g>
-                      ))}
-                  </g>
-                </g>
-                {/* Level marker */}
-                <rect
-                  x={(SVG_W - TUBE_W) / 2 - 4}
-                  y={level - 3}
-                  width={TUBE_W + 8}
-                  height={6}
-                  rx={3}
-                  fill="rgba(255,255,255,0.92)"
-                  stroke="rgba(0,0,0,0.06)"
-                />
-              </svg>
-              {/* Measures the draggable range only (the shaft above the bulb) */}
-              <div
-                ref={trackRef}
-                className="pointer-events-none absolute inset-x-0 top-0"
-                style={{ height: TUBE }}
-              />
-            </div>
+            <ThermometerGauge
+              level={level}
+              color={color}
+              draft={draft}
+              trackRef={trackRef}
+            />
           </div>
 
           {/* Stepper — centred against the tube */}
@@ -460,7 +346,7 @@ function TempSheet({
             className="flex-1"
             icon={<Check className="h-4 w-4" />}
             onClick={() => {
-              onChange(fmt(draft));
+              onChange(formatTemp(draft));
               onClose();
             }}
           >
@@ -469,5 +355,152 @@ function TempSheet({
         </div>
       </div>
     </BottomSheet>
+  );
+}
+
+/**
+ * The thermometer itself: shaft and bulb are two overlapping shapes sharing
+ * one clip path, so the mercury flows between them without a seam. Warm water
+ * bubbles, cold water snows — those particles get a second clip to the filled
+ * region so they can never escape the coloured part.
+ */
+function ThermometerGauge({
+  level,
+  color,
+  draft,
+  trackRef,
+}: {
+  level: number;
+  color: string;
+  draft: number;
+  trackRef: Ref<HTMLDivElement>;
+}) {
+  // useId's raw output contains characters that aren't safe inside url(#…),
+  // so strip everything but word characters.
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const clipId = `therm-${uid}`;
+  const fillId = `therm-fill-${uid}`;
+
+  const warm = draft >= WARM_AT;
+  const cold = draft <= COLD_AT;
+  // Particles start just outside the mercury (below the bulb / above the
+  // level) so they're already clipped away when a cycle restarts — otherwise
+  // every particle pops into existence on the same line.
+  const bubbleStart = SVG_H + 10;
+  const bubbleTravel = bubbleStart - level + 10;
+  const snowStart = level - 12;
+  const snowTravel = Math.max(40, BULB_CY + BULB_R - snowStart);
+
+  return (
+    <div className="relative" style={{ width: SVG_W, height: SVG_H }}>
+      <svg
+        width={SVG_W}
+        height={SVG_H}
+        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+        aria-hidden
+        className="block drop-shadow-sm"
+      >
+        <defs>
+          <clipPath id={clipId}>
+            <rect
+              x={(SVG_W - TUBE_W) / 2}
+              y={0}
+              width={TUBE_W}
+              height={BULB_CY}
+              rx={TUBE_W / 2}
+            />
+            <circle cx={SVG_W / 2} cy={BULB_CY} r={BULB_R} />
+          </clipPath>
+          {/* Keeps the bubbles/snow inside the coloured mercury */}
+          <clipPath id={fillId}>
+            <rect x={0} y={level} width={SVG_W} height={SVG_H - level} />
+          </clipPath>
+        </defs>
+        <g clipPath={`url(#${clipId})`}>
+          {/* Empty glass */}
+          <rect
+            x={0}
+            y={0}
+            width={SVG_W}
+            height={SVG_H}
+            fill="rgb(241 245 249)"
+          />
+          {/* Mercury — runs from the level all the way into the bulb */}
+          <rect
+            x={0}
+            y={level}
+            width={SVG_W}
+            height={SVG_H - level}
+            fill={color}
+          />
+          <g clipPath={`url(#${fillId})`}>
+            {warm &&
+              PARTICLES.map((p) => (
+                <circle
+                  key={`${p.dx}-${p.delay}`}
+                  className="temp-bubble"
+                  cx={SVG_W / 2 + p.dx}
+                  cy={bubbleStart}
+                  r={p.size}
+                  fill="rgba(255,255,255,0.75)"
+                  style={
+                    {
+                      "--travel": `${bubbleTravel}px`,
+                      "--dur": `${p.dur}s`,
+                      "--delay": `${p.delay}s`,
+                    } as CSSProperties
+                  }
+                />
+              ))}
+            {cold &&
+              PARTICLES.map((p) => (
+                // The outer <g> places the flake; the inner one is animated,
+                // because a CSS transform would otherwise overwrite the
+                // positioning transform attribute.
+                <g
+                  key={`${p.dx}-${p.delay}`}
+                  transform={`translate(${SVG_W / 2 + p.dx} ${snowStart})`}
+                >
+                  <g
+                    className="temp-snow"
+                    style={
+                      {
+                        "--travel": `${snowTravel}px`,
+                        "--sway": `${p.sway}px`,
+                        "--dur": `${p.dur * 1.6}s`,
+                        "--delay": `${p.delay}s`,
+                      } as CSSProperties
+                    }
+                  >
+                    <path
+                      d="M0,-4 V4 M-3.5,-2 L3.5,2 M-3.5,2 L3.5,-2"
+                      stroke="rgba(255,255,255,0.9)"
+                      strokeWidth={1.2}
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                  </g>
+                </g>
+              ))}
+          </g>
+        </g>
+        {/* Level marker */}
+        <rect
+          x={(SVG_W - TUBE_W) / 2 - 4}
+          y={level - 3}
+          width={TUBE_W + 8}
+          height={6}
+          rx={3}
+          fill="rgba(255,255,255,0.92)"
+          stroke="rgba(0,0,0,0.06)"
+        />
+      </svg>
+      {/* Measures the draggable range only (the shaft above the bulb) */}
+      <div
+        ref={trackRef}
+        className="pointer-events-none absolute inset-x-0 top-0"
+        style={{ height: TUBE }}
+      />
+    </div>
   );
 }

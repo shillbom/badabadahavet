@@ -10,6 +10,13 @@ import type {
 // ({ t, at, p }) lives in tempSummary/current and placeTemps/{placeId};
 // these helpers turn it back into the waterTemp* fields the UI reads.
 
+/** The one way to render a water temperature: always exactly one decimal, so
+ *  a stored 14.35 never leaks out as "14.35°C" in one place and "14°C" in
+ *  another. Callers add the unit (`°C` / `°`). */
+export function formatTemp(deg: number): string {
+  return deg.toFixed(1);
+}
+
 /** Validate a loose object (a placeTemps doc, a summary entry) into a
  *  reading, or null when the temp fields are absent/malformed. Returns the
  *  input object itself when valid, so identities stay stable. */

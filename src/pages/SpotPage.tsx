@@ -46,7 +46,7 @@ import type {
   WaterSample,
 } from "@/lib/types";
 import { formatDate, rememberReturnPath, shareOrCopy } from "@/lib/utils";
-import { fetchMarineTemps, freshestReading } from "@/lib/temps";
+import { fetchMarineTemps, formatTemp, freshestReading } from "@/lib/temps";
 import {
   algaeSeverity,
   isSampleFresh,
@@ -889,7 +889,7 @@ function WaterTempCard({
           <span
             className={`font-semibold ${isWarm ? "text-amber-900" : isCool ? "text-sky-900" : "text-teal-900"}`}
           >
-            {reading.t.toFixed(1)} °C
+            {formatTemp(reading.t)} °C
           </span>
           <span className={`text-xs ${mutedColor} truncate`}>{ageLabel}</span>
         </div>
@@ -1375,7 +1375,7 @@ function SpotTempGraph({
   const minTemp = Math.floor(Math.min(...temps) - 1);
   const maxTemp = Math.ceil(Math.max(...temps) + 1);
   const range = Math.max(1, maxTemp - minTemp);
-  const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+  const avgTemp = formatTemp(temps.reduce((a, b) => a + b, 0) / temps.length);
 
   const width = 320;
   const height = 110;
@@ -1424,7 +1424,7 @@ function SpotTempGraph({
             {formatDate(new Date(active.date).getTime())}
           </span>
           <span className="font-bold text-teal-900">
-            {active.t}°C{" "}
+            {formatTemp(active.t)}°C{" "}
             <span className="font-normal text-slate-500">
               ({t(`temp.source.${active.p}`)})
             </span>

@@ -2,6 +2,7 @@ import type { ReactNode, Ref } from "react";
 import { m } from "framer-motion";
 import { Calendar, Thermometer } from "lucide-react";
 import { cn, formatDateTime } from "@/lib/utils";
+import { formatTemp } from "@/lib/temps";
 import { waterEmojiFor } from "@/lib/waterEmoji";
 
 /**
@@ -93,7 +94,7 @@ export default function SwimListItem({
             {waterTemp != null ? (
               <span className="ml-auto inline-flex items-center gap-0.5 rounded-md bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 ring-1 ring-teal-200">
                 <Thermometer className="h-3 w-3 text-teal-500" />
-                {waterTemp}°C
+                {formatTemp(waterTemp)}°C
               </span>
             ) : null}
           </div>

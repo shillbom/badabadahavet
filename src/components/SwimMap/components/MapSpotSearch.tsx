@@ -2,6 +2,7 @@ import { MapPin, Search, X } from "lucide-react";
 import type { RefObject } from "react";
 import type { PlaceWithTemp, SessionDoc } from "@/lib/types";
 import { useT } from "@/lib/i18n";
+import { formatTemp } from "@/lib/temps";
 import { hasFreshTemp } from "../pinUtils";
 
 /**
@@ -84,7 +85,7 @@ export default function MapSpotSearch({
                           ? t("map.popup.swims_many", { n: swims })
                           : t("map.popup.no_swims_yet")}
                       {hasFreshTemp(p)
-                        ? ` · 💧 ${Math.round(p.waterTemp)}°`
+                        ? ` · 💧 ${formatTemp(p.waterTemp)}°`
                         : ""}
                     </span>
                   </button>
