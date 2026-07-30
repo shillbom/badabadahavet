@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, m } from "framer-motion";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -16,18 +16,19 @@ export default function ConfirmDialog() {
   const request = useConfirmStore((s) => s.request);
   const settle = useConfirmStore((s) => s.settle);
   const t = useT();
-  const [value, setValue] = useState("");
 
   // Keep the last request around so the exit animation still has content to
   // render after the store clears it (same trick as BottomSheet callers).
-  const last = useRef<ConfirmRequest | null>(null);
-  if (request) last.current = request;
-  const shown = request ?? last.current;
+  // Held in state and adjusted during render — React's "storing info from
+  // previous renders" pattern — rather than in a ref, which render must not
+  // mutate. The prompt input resets in the same pass.
+  const [shown, setShown] = useState<ConfirmRequest | null>(request);
+  const [value, setValue] = useState(request?.defaultValue ?? "");
+  if (request && request !== shown) {
+    setShown(request);
+    setValue(request.defaultValue ?? "");
+  }
   const isPrompt = shown?.kind === "prompt";
-
-  useEffect(() => {
-    if (request) setValue(request.defaultValue ?? "");
-  }, [request]);
 
   useEffect(() => {
     if (!request) return;
