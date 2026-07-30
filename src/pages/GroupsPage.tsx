@@ -21,6 +21,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Input";
 import { toast } from "@/components/ui/toastStore";
+import { confirm } from "@/components/ui/confirmStore";
 import {
   createGroup,
   joinGroupByCode,
@@ -409,7 +410,13 @@ export default function GroupsPage() {
 
   async function onLeave(groupId: string, name: string) {
     if (!user) return;
-    if (!window.confirm(t("groups.leave_confirm", { name }))) return;
+    const ok = await confirm({
+      title: t("groups.leave_title"),
+      message: t("groups.leave_confirm", { name }),
+      confirmLabel: t("groups.leave_title"),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await leaveGroup({ groupId, uid: user.uid });
       toast.success(t("groups.left", { name }));
@@ -1001,12 +1008,13 @@ function GroupSettingsSheet({
   }
 
   async function kick(member: UserDoc) {
-    if (
-      !window.confirm(
-        t("groups.detail.kick_confirm", { name: member.displayName }),
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: t("groups.detail.kick"),
+      message: t("groups.detail.kick_confirm", { name: member.displayName }),
+      confirmLabel: t("groups.detail.kick"),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await kickGroupMember({ groupId: group.id, memberUid: member.uid });
       toast.success(t("groups.detail.kicked", { name: member.displayName }));

@@ -6,6 +6,7 @@ import SwimMap from "@/components/SwimMap";
 import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";
+import EditSwimButton from "@/components/EditSwimButton";
 import BottomSheet from "@/components/BottomSheet";
 import SegmentedControl from "@/components/ui/SegmentedControl";
 import EmojiAvatar from "@/components/EmojiAvatar";
@@ -227,6 +228,14 @@ function MemberSwimsSheetContent({
                       </button>
                     }
                     points={s.points}
+                    aside={
+                      <EditSwimButton
+                        session={s}
+                        myUid={user?.uid}
+                        onNavigate={onClose}
+                        className="p-1"
+                      />
+                    }
                     date={s.date}
                     winter={s.isWinter}
                     unique={s.isUniqueForUser}

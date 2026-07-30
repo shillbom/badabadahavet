@@ -18,6 +18,7 @@ import LoginPage from "@/pages/LoginPage";
 import GoogleAuthPage from "@/pages/GoogleAuthPage";
 import Layout from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toast";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import UpdatePrompt from "@/components/UpdatePrompt";
 import SinceLastVisit from "@/components/SinceLastVisit";
 import ConsentBanner from "@/components/ConsentBanner";
@@ -193,6 +194,7 @@ export default function App() {
   return (
     <LazyMotion features={domMax}>
       <Toaster />
+      <ConfirmDialog />
       <UpdatePrompt
         show={updateReady}
         onReload={() => updateServiceWorker(true)}
