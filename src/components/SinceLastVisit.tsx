@@ -9,6 +9,7 @@ import BottomSheet from "@/components/BottomSheet";
 import SpotSheet from "@/components/SpotSheet";
 import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";
+import EditSwimButton from "@/components/EditSwimButton";
 import EmojiAvatar from "@/components/EmojiAvatar";
 import { useRecapTrigger } from "@/components/recapTrigger";
 
@@ -458,6 +459,14 @@ function Sheet({
                         </div>
                       }
                       points={s.points}
+                      aside={
+                        <EditSwimButton
+                          session={s}
+                          myUid={myUid}
+                          onNavigate={onClose}
+                          className="p-1"
+                        />
+                      }
                       date={s.date}
                       winter={s.isWinter}
                       unique={s.isUniqueForUser}

@@ -9,6 +9,7 @@ import BackButton from "@/components/ui/BackButton";
 import Photo from "@/components/Photo";
 import { WaterTempField } from "@/components/WaterTempField";
 import { toast } from "@/components/ui/toastStore";
+import { confirm } from "@/components/ui/confirmStore";
 import { removeSession, updateSession, type SessionEdits } from "@/lib/data";
 import { checkImageFile, ImageProcessingError } from "@/lib/image";
 import { assertTextAllowed, ModerationError } from "@/lib/moderation";
@@ -205,7 +206,13 @@ export default function EditSwimPage() {
   async function onDelete() {
     if (!session) return;
     if (locked) return;
-    if (!window.confirm(t("swim.edit.delete_confirm"))) return;
+    const ok = await confirm({
+      title: t("swim.edit.delete"),
+      message: t("swim.edit.delete_confirm"),
+      confirmLabel: t("swim.edit.delete"),
+      danger: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       await removeSession(session.id);

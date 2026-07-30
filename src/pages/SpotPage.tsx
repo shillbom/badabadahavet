@@ -59,6 +59,7 @@ import SwimMap from "@/components/SwimMap";
 import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";
+import EditSwimButton from "@/components/EditSwimButton";
 import { useAuth } from "@/auth/AuthContext";
 import { useIsAdmin } from "@/lib/adminMode";
 import { useT } from "@/lib/i18n";
@@ -67,6 +68,7 @@ import { buttonClasses } from "@/components/ui/buttonStyles";
 import { Textarea } from "@/components/ui/Input";
 import Stat from "@/components/ui/Stat";
 import { toast } from "@/components/ui/toastStore";
+import { confirm, promptText } from "@/components/ui/confirmStore";
 
 /**
  * The spot detail UI (map, stats, photos, recent dips). Extracted from the
@@ -208,10 +210,12 @@ function SpotViewContent({
 
   async function onAdminRename() {
     if (!place) return;
-    const next = window.prompt(
-      t("admin.rename.prompt", { name: place.name }),
-      place.name,
-    );
+    const next = await promptText({
+      title: t("admin.rename"),
+      message: t("admin.rename.prompt", { name: place.name }),
+      defaultValue: place.name,
+      confirmLabel: t("admin.rename"),
+    });
     if (!next || next.trim() === place.name) return;
     try {
       await adminRenamePlace(place.id, next);
@@ -224,15 +228,16 @@ function SpotViewContent({
 
   async function onAdminDeletePlace() {
     if (!place) return;
-    if (
-      !window.confirm(
-        t("admin.delete_spot.confirm", {
-          name: place.name,
-          n: sessions.length,
-        }),
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: t("admin.delete_spot"),
+      message: t("admin.delete_spot.confirm", {
+        name: place.name,
+        n: sessions.length,
+      }),
+      confirmLabel: t("admin.delete_spot"),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await adminDeletePlace(place.id);
       toast.success(t("admin.delete_spot.success"));
@@ -243,15 +248,20 @@ function SpotViewContent({
     }
   }
 
-  function onEditSession(id: string) {
+  function onEditSession() {
     // Close the sheet first when embedded — the edit page is a full route
     // and the sheet would otherwise stay open on top of it.
     if (variant === "sheet") onClose?.();
-    navigate(`/swim/${id}/edit`);
   }
 
   async function onAdminDeleteSession(id: string) {
-    if (!window.confirm(t("admin.delete_session.confirm"))) return;
+    const ok = await confirm({
+      title: t("admin.delete_session"),
+      message: t("admin.delete_session.confirm"),
+      confirmLabel: t("admin.delete_session"),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await adminDeleteSession(id);
       toast.success(t("admin.delete_session.success"));
@@ -261,7 +271,13 @@ function SpotViewContent({
   }
 
   async function onAdminRemovePhoto(id: string) {
-    if (!window.confirm(t("admin.remove_photo.confirm"))) return;
+    const ok = await confirm({
+      title: t("admin.remove_photo"),
+      message: t("admin.remove_photo.confirm"),
+      confirmLabel: t("admin.remove_photo"),
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await adminClearSessionPhoto(id);
       toast.success(t("admin.remove_photo.success"));
@@ -691,7 +707,7 @@ function SpotRecentDips({
   isGuest: boolean;
   isAdmin: boolean;
   onShareSession: (s: SessionDoc) => void;
-  onEditSession: (id: string) => void;
+  onEditSession: () => void;
   onAdminDeleteSession: (id: string) => void;
 }) {
   const t = useT();
@@ -740,17 +756,12 @@ function SpotRecentDips({
               >
                 <Share2 className="h-3 w-3" />
               </button>
-              {s.uid === myUid ? (
-                <button
-                  type="button"
-                  onClick={() => onEditSession(s.id)}
-                  className="rounded-full bg-white/80 p-1 text-wave-700 ring-1 ring-slate-200 hover:bg-white"
-                  aria-label={t("swim.edit")}
-                  title={t("swim.edit")}
-                >
-                  <Pencil className="h-3 w-3" />
-                </button>
-              ) : null}
+              <EditSwimButton
+                session={s}
+                myUid={myUid}
+                onNavigate={onEditSession}
+                className="p-1"
+              />
               {!isGuest && isAdmin && s.uid !== myUid ? (
                 <button
                   type="button"

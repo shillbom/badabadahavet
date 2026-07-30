@@ -222,6 +222,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "common.previous": "Föregående",
     "common.next": "Nästa",
     "common.cancel": "Avbryt",
+    "common.confirm": "Bekräfta",
 
     "lang.toggle": "Språk",
     "lang.sv": "Svenska",
@@ -1053,6 +1054,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "common.previous": "Previous",
     "common.next": "Next",
     "common.cancel": "Cancel",
+    "common.confirm": "Confirm",
 
     "lang.toggle": "Language",
     "lang.sv": "Svenska",
