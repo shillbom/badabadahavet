@@ -60,6 +60,10 @@
         "function": { "functionId": "banUser", "region": "europe-west1" }
       },
       {
+        "source": "/sitemap.xml",
+        "function": { "functionId": "sitemap", "region": "europe-west1" }
+      },
+      {
         "source": "/s/**",
         "function": { "functionId": "spotPreview", "region": "europe-west1" }
       },
