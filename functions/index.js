@@ -20,6 +20,7 @@ import {
 import { leaderboardEntry, applyToTop, removeFromTop } from "./leaderboard.js";
 import { checkTextAllowed } from "./moderation.js";
 import { asReading, freshestReading } from "./tempLogic.js";
+import { buildSitemapXml, entriesFromPlacesSummaryDoc } from "./sitemap.js";
 
 initializeApp();
 
@@ -1818,6 +1819,40 @@ function latestPhotoFrom(sessionDocs) {
   }
   return null;
 }
+
+// Dynamic sitemap with one public share URL per place so search engines can
+// discover spot-specific pages (served by spotPreview on /s/**).
+export const sitemap = onRequest(
+  {
+    region: PROJECT_REGION,
+    invoker: "public",
+    maxInstances: 5,
+    memory: "256MiB",
+    timeoutSeconds: 15,
+  },
+  async (_req, res) => {
+    let xml;
+    try {
+      const snap = await getFirestore().doc("placesSummary/current").get();
+      const summary = snap.exists ? snap.data() : {};
+      xml = buildSitemapXml({
+        origin: CANONICAL_ORIGIN,
+        placeEntries: entriesFromPlacesSummaryDoc(summary),
+        builtAt: summary?.builtAt,
+      });
+    } catch (error) {
+      logger.error("sitemap generation failed", { error: String(error) });
+      xml = buildSitemapXml({
+        origin: CANONICAL_ORIGIN,
+        placeEntries: {},
+      });
+    }
+
+    res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
+    res.set("Content-Type", "application/xml; charset=utf-8");
+    res.status(200).send(xml);
+  },
+);
 
 export const spotPreview = onRequest(
   {
