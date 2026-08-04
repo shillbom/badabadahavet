@@ -44,9 +44,14 @@ export default defineConfig({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2,webp}"],
         // SPA fallback so deep links work when offline.
         navigateFallback: "index.html",
-        // Never intercept Firebase auth handler or any /__/* URLs —
-        // the service worker must let those reach the network.
-        navigateFallbackDenylist: [/^\/__\//],
+        // Never intercept Firebase auth handler, any /__/* URLs, or well-known
+        // server-generated files — the service worker must let those reach the
+        // network so crawlers and fetch() callers get the real responses.
+        navigateFallbackDenylist: [
+          /^\/__\//,
+          /^\/sitemap\.xml$/,
+          /^\/robots\.txt$/,
+        ],
         // Cache map tiles and swim photos so revisits (and offline use)
         // don't re-download them. Tiles/photos load via plain <img>, so the
         // responses are opaque — status 0 must be cacheable alongside 200.
