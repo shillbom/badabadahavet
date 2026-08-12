@@ -398,9 +398,7 @@ export const useStore = create<State>((set, get) => {
             },
             locatingNow: false,
           }),
-        () => {
-          if (opts?.force) set({ locatingNow: false });
-        },
+        () => {},
         {
           enableHighAccuracy: false,
           timeout: 8000,

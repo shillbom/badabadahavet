@@ -1,10 +1,10 @@
 import { defineConfig } from "vite";
 
-import { VitePWA } from "vite-plugin-pwa";
-import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
+import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import path from "node:path";
+import { VitePWA } from "vite-plugin-pwa";
 
 // React Compiler preset. Its default filter is a fast `code` heuristic that
 // only runs Babel on files whose (already react-transformed) source *looks*
@@ -118,7 +118,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
   server: {
@@ -138,7 +138,7 @@ export default defineConfig({
         // land in `motion`/`leaflet`), which forces the entry — and therefore
         // the very first paint — to download those 100s of KB just to render.
         // Highest priority wins, so order by how badly we want each isolated.
-        advancedChunks: {
+        codeSplitting: {
           groups: [
             {
               name: "react",
