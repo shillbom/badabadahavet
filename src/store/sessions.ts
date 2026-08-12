@@ -169,8 +169,11 @@ type State = {
   // ── Bootstrap ─────────────────────────────────────────────────────────
   /** Call once at app boot. Returns the cleanup function. */
   _startListening: () => () => void;
-  /** Refresh GPS position (e.g. after user grants permission). */
-  _refreshLocation: () => void;
+  /** Refresh GPS position (e.g. after user grants permission). Pass
+   *  `{ force: true }` to bypass the 5-minute cached fix and request a
+   *  fresh reading — used when the map view opens, where the boot-time
+   *  fix can be hours stale in a long-lived PWA. */
+  _refreshLocation: (opts?: { force?: boolean }) => void;
   /** Acquire the community feed (all sessions this year). The Firestore
    *  listener runs only while at least one acquisition is held — prefer the
    *  `useAllSessionsFeed` hook over calling this directly. Returns the
@@ -378,7 +381,7 @@ export const useStore = create<State>((set, get) => {
     },
 
     // ── Location ──────────────────────────────────────────────────────────
-    _refreshLocation: () => {
+    _refreshLocation: (opts) => {
       if (typeof navigator === "undefined" || !navigator.geolocation) return;
       navigator.geolocation.getCurrentPosition(
         (pos) =>
@@ -389,7 +392,11 @@ export const useStore = create<State>((set, get) => {
             },
           }),
         () => {},
-        { enableHighAccuracy: false, timeout: 8000, maximumAge: 5 * 60 * 1000 },
+        {
+          enableHighAccuracy: false,
+          timeout: 8000,
+          maximumAge: opts?.force ? 0 : 5 * 60 * 1000,
+        },
       );
     },
 

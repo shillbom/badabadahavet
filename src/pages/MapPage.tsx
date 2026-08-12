@@ -19,6 +19,7 @@ import {
 } from "@/lib/i18n";
 import StreakCard from "@/components/StreakCard";
 import Stat from "@/components/ui/Stat";
+import { toast } from "@/components/ui/toastStore";
 import { usePosition } from "@/hooks/position";
 import { useDeviceFocus } from "@/hooks/focus";
 import { haversineMeters } from "@/lib/utils";
@@ -96,6 +97,23 @@ export default function MapPage() {
       dispatchMapView({ type: "refit" });
     }
   }, [isFocused]);
+
+  // Force a fresh GPS fix whenever the map view opens or the app regains
+  // focus. The location otherwise comes from the boot-time fetch (with a
+  // 5-min OS cache), which in a long-lived PWA can be hours stale — the map
+  // then stays centered on the old spot until the app is force-closed.
+  // Throttled so rapid tab switches don't spam the GPS (or the toast).
+  const refreshLocation = useStore((s) => s._refreshLocation);
+  const lastLocationFetch = useRef(0);
+  useEffect(() => {
+    if (!isFocused) return;
+    if (locationPermission === "denied" || locationPermission === "unsupported")
+      return;
+    if (Date.now() - lastLocationFetch.current < 60_000) return;
+    lastLocationFetch.current = Date.now();
+    toast.info(t("log.coords.reading"));
+    refreshLocation({ force: true });
+  }, [isFocused, locationPermission, refreshLocation, t]);
 
   const updateLocationAfterMove = useEffectEvent(
     (pos: { lat: number; lng: number }) => {
