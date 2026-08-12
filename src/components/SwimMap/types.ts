@@ -44,6 +44,9 @@ export type SwimMapProps = {
   className?: string;
   linkToSpot?: boolean;
   userLocation?: { lat: number; lng: number } | null;
+  /** True while a forced fresh GPS fix is in flight — the user dot pulses
+   *  to signal "locating" without any toast. */
+  locatingNow?: boolean;
   /** Caller-supplied buttons rendered above the built-in map actions
    *  (satellite toggle, etc.). Stacked vertically so the layout stays
    *  consistent regardless of which actions are present. */

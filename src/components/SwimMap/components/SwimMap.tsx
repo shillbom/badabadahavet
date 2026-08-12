@@ -14,6 +14,7 @@ import {
   pinIcon,
   recencyFactor,
   userLocationIcon,
+  userLocationIconLocating,
 } from "../pinUtils";
 import { savedViews } from "../mapState";
 import type { PopupState, SwimMapProps } from "../types";
@@ -55,6 +56,7 @@ export default function SwimMap({
   className,
   linkToSpot = true,
   userLocation,
+  locatingNow = false,
   fitToken,
   onPickExisting,
   activePlaceId,
@@ -193,7 +195,7 @@ export default function SwimMap({
         {userLocation ? (
           <Marker
             position={[userLocation.lat, userLocation.lng]}
-            icon={userLocationIcon}
+            icon={locatingNow ? userLocationIconLocating : userLocationIcon}
           />
         ) : null}
         <MarkerClusterGroup

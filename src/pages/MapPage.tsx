@@ -1,3 +1,19 @@
+import { useAuth } from "@/auth/AuthContext";
+import StreakCard from "@/components/StreakCard";
+import Stat from "@/components/ui/Stat";
+import { useDeviceFocus } from "@/hooks/focus";
+import { usePosition } from "@/hooks/position";
+import {
+  getRecentSwimMessage,
+  getTimeGreeting,
+  useLocale,
+  useT,
+} from "@/lib/i18n";
+import { sumScores } from "@/lib/scoring";
+import { haversineMeters } from "@/lib/utils";
+import { useAllSessionsFeed, useStore } from "@/store/sessions";
+import { m } from "framer-motion";
+import { MapPin, Trophy } from "lucide-react";
 import {
   lazy,
   useEffect,
@@ -6,23 +22,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { m } from "framer-motion";
-import { MapPin, Trophy } from "lucide-react";
-import { useAllSessionsFeed, useStore } from "@/store/sessions";
-import { sumScores } from "@/lib/scoring";
-import { useAuth } from "@/auth/AuthContext";
-import {
-  useT,
-  getRecentSwimMessage,
-  getTimeGreeting,
-  useLocale,
-} from "@/lib/i18n";
-import StreakCard from "@/components/StreakCard";
-import Stat from "@/components/ui/Stat";
-import { toast } from "@/components/ui/toastStore";
-import { usePosition } from "@/hooks/position";
-import { useDeviceFocus } from "@/hooks/focus";
-import { haversineMeters } from "@/lib/utils";
 const SwimMap = lazy(() => import("@/components/SwimMap"));
 
 export default function MapPage() {
@@ -102,8 +101,10 @@ export default function MapPage() {
   // focus. The location otherwise comes from the boot-time fetch (with a
   // 5-min OS cache), which in a long-lived PWA can be hours stale — the map
   // then stays centered on the old spot until the app is force-closed.
-  // Throttled so rapid tab switches don't spam the GPS (or the toast).
+  // Throttled so rapid tab switches don't spam the GPS. While a forced fix
+  // is in flight the store's `locatingNow` is true and the user dot pulses.
   const refreshLocation = useStore((s) => s._refreshLocation);
+  const locatingNow = useStore((s) => s.locatingNow);
   const lastLocationFetch = useRef(0);
   useEffect(() => {
     if (!isFocused) return;
@@ -111,9 +112,8 @@ export default function MapPage() {
       return;
     if (Date.now() - lastLocationFetch.current < 60_000) return;
     lastLocationFetch.current = Date.now();
-    toast.info(t("log.coords.reading"));
     refreshLocation({ force: true });
-  }, [isFocused, locationPermission, refreshLocation, t]);
+  }, [isFocused, locationPermission, refreshLocation]);
 
   const updateLocationAfterMove = useEffectEvent(
     (pos: { lat: number; lng: number }) => {
@@ -227,6 +227,7 @@ export default function MapPage() {
               places={shownPlaces}
               sessionsByPlace={sessionsByPlace}
               userLocation={myLocation}
+              locatingNow={locatingNow}
               fitToken={fitToken}
               fitBoundsToPlaces={!isGuest && mineMode === "only"}
               viewKey="main"

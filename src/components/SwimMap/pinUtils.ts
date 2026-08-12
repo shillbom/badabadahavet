@@ -205,6 +205,28 @@ export const userLocationIcon = L.divIcon({
   </div>`,
 });
 
+/** Same dot with an expanding pulse ring — shown while a fresh GPS fix is
+ *  in flight so the map signals "locating" without a toast. */
+export const userLocationIconLocating = L.divIcon({
+  className: "swim-me swim-me-locating",
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+  html: `<div style="
+    position: relative; width: 18px; height: 18px;
+  ">
+    <div style="
+      position: absolute; inset: -6px; border-radius: 50%;
+      border: 2px solid rgba(37,99,235,0.6);
+      animation: swim-me-pulse 1.4s ease-out infinite;
+    "></div>
+    <div style="
+      position: absolute; inset: 0; border-radius: 50%;
+      background: #2563eb; border: 3px solid white;
+      box-shadow: 0 0 0 2px rgba(37,99,235,0.35), 0 4px 10px rgba(37,99,235,0.4);
+    "></div>
+  </div>`,
+});
+
 /** Returns true only when a place has a numeric temp that is ≤ 7 days old. */
 export function hasFreshTemp(
   p: PlaceWithTemp,
