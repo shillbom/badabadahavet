@@ -1,23 +1,8 @@
-import { useEffect } from "react";
-import { create } from "zustand";
-import {
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signOut,
-  updateProfile,
-  deleteUser,
-  GoogleAuthProvider,
-  signInWithRedirect,
-  signInWithPopup,
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  updatePassword,
-  type User,
-} from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "@/firebase";
+import {
+  evaluateAchievements,
+  type AchievementContext,
+} from "@/lib/achievements";
 import {
   deleteAccountData,
   ensureUserDoc,
@@ -33,14 +18,11 @@ import {
   watchUserGroups,
   watchUserSessions,
 } from "@/lib/data";
-import {
-  evaluateAchievements,
-  type AchievementContext,
-} from "@/lib/achievements";
+import { useLocale } from "@/lib/i18n";
+import { mergeDelta } from "@/lib/places";
 import { computeMyStats, type MyStats } from "@/lib/stats";
 import { computeStreak } from "@/lib/streak";
 import { mergePlaceTemps } from "@/lib/temps";
-import { mergeDelta } from "@/lib/places";
 import type {
   GroupDoc,
   PlaceDoc,
@@ -51,7 +33,25 @@ import type {
   UserDoc,
   WaterSample,
 } from "@/lib/types";
-import { useLocale } from "@/lib/i18n";
+import {
+  createUserWithEmailAndPassword,
+  deleteUser,
+  EmailAuthProvider,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  reauthenticateWithCredential,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  updatePassword,
+  updateProfile,
+  type User,
+} from "firebase/auth";
+import { doc, onSnapshot } from "firebase/firestore";
+import { useEffect } from "react";
+import { create } from "zustand";
 
 // Resolves when the current signup write finishes, so the auth-state
 // listener can wait rather than bail out and leave loading=true forever.
@@ -90,6 +90,9 @@ type State = {
   // ── Location ──────────────────────────────────────────────────────────
   currentLocation: { lat: number; lng: number } | null;
   locationPermission: PermissionState | "unsupported" | "checking";
+  /** True while a forced (fresh, uncached) GPS fix is in flight — lets the
+   *  map show a subtle "locating" indicator without a toast. */
+  locatingNow: boolean;
 
   // ── Raw data ──────────────────────────────────────────────────────────
   myUid: string | null;
@@ -172,7 +175,8 @@ type State = {
   /** Refresh GPS position (e.g. after user grants permission). Pass
    *  `{ force: true }` to bypass the 5-minute cached fix and request a
    *  fresh reading — used when the map view opens, where the boot-time
-   *  fix can be hours stale in a long-lived PWA. */
+   *  fix can be hours stale in a long-lived PWA. Sets `locatingNow` while
+   *  the forced fix is in flight. */
   _refreshLocation: (opts?: { force?: boolean }) => void;
   /** Acquire the community feed (all sessions this year). The Firestore
    *  listener runs only while at least one acquisition is held — prefer the
@@ -241,6 +245,7 @@ export const useStore = create<State>((set, get) => {
     authError: null,
     currentLocation: null,
     locationPermission: "checking",
+    locatingNow: false,
     myUid: null,
     mySessions: [],
     allSessions: [],
@@ -383,6 +388,7 @@ export const useStore = create<State>((set, get) => {
     // ── Location ──────────────────────────────────────────────────────────
     _refreshLocation: (opts) => {
       if (typeof navigator === "undefined" || !navigator.geolocation) return;
+      if (opts?.force) set({ locatingNow: true });
       navigator.geolocation.getCurrentPosition(
         (pos) =>
           set({
@@ -390,8 +396,11 @@ export const useStore = create<State>((set, get) => {
               lat: pos.coords.latitude,
               lng: pos.coords.longitude,
             },
+            locatingNow: false,
           }),
-        () => {},
+        () => {
+          if (opts?.force) set({ locatingNow: false });
+        },
         {
           enableHighAccuracy: false,
           timeout: 8000,
