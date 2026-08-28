@@ -11,6 +11,7 @@ interface ImportMetaEnv {
   readonly VITE_USE_FIREBASE_EMULATORS?: string;
   readonly VITE_FIREBASE_EMULATOR_HOST?: string;
   readonly VITE_PERSPECTIVE_API_KEY?: string;
+  readonly VITE_CARTO_API_KEY?: string;
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv;

@@ -109,6 +109,7 @@ Both deploy/preview workflows need these **GitHub repository secrets**:
 | `VITE_FIREBASE_APP_ID`              |                                                                                                                                                              |
 | `VITE_FIREBASE_MEASUREMENT_ID`      | Optional — `G-…` ID for Firebase Analytics                                                                                                                   |
 | `VITE_PERSPECTIVE_API_KEY`          | Optional — Perspective API key for client-side text moderation (see below)                                                                                   |
+| `VITE_CARTO_API_KEY`                | CARTO basemap key — without it every map tile is watermarked (see below)                                                                                     |
 
 ## Scripts
 
@@ -143,6 +144,24 @@ curl -X PATCH \
 
 In production: Firebase Console → Firestore → `users/{uid}` → add `isAdmin: true`.
 Security rules forbid clients from toggling this themselves.
+
+### Map tiles (CARTO API key)
+
+The basemap is CARTO's raster tiles over OpenStreetMap data
+(`src/lib/mapThemes.ts`). CARTO requires an API key for the raster service:
+without one the tiles still load but are stamped with a repeated
+"API KEY REQUIRED" watermark. Keys are free — no CARTO account needed — up to a
+fair-use limit of 5M tile requests per calendar month.
+
+1. Request a key at [carto.com/basemaps/apikey](https://carto.com/basemaps/apikey/).
+2. Set it as `VITE_CARTO_API_KEY` in `.env.local` and as the GitHub secret of
+   the same name (both the deploy and preview workflows pass it through).
+
+The key is a public client key, like the Firebase one — it ends up in the
+bundle, so restrict it to your domains in the CARTO dashboard. `withCartoKey()`
+appends it as `?key=…` to every `basemaps.cartocdn.com` template; when the
+variable is empty the URLs stay keyless, so the map degrades to watermarked
+tiles instead of breaking.
 
 ### Text moderation (Perspective API)
 
