@@ -62,18 +62,6 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        // Kill-switch service worker (public/sw.js) — must never be cached,
-        // or a device stuck on the old Workbox SW never picks up the
-        // unregistering one. Retire together with the file itself.
-        source: "/sw.js",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "no-cache, max-age=0, must-revalidate",
-          },
-        ],
-      },
-      {
         // Fonts are content-hashed by name and never rewritten in place.
         source: "/fonts/:path*",
         headers: [

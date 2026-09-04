@@ -117,26 +117,17 @@ jobs:
           npx --yes firebase-tools@15 deploy --only apphosting \
             --project "$FIREBASE_PROJECT" --non-interactive
 
-      # Functions deploy needs the deploy service account to have
-      # "Service Account User" (iam.serviceAccounts.actAs) on the runtime SA
-      # <project>@appspot.gserviceaccount.com, plus Cloud Functions / Cloud
-      # Build / Artifact Registry roles. Until that's granted, deploy
-      # functions manually:
-      #   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
-      #     npx firebase-tools deploy --only functions --project badligan
-      # Once the SA has the roles, set repo variable DEPLOY_FUNCTIONS=true
-      # (Settings → Secrets and variables → Actions → Variables) to enable
-      # the two steps below — no workflow edit needed.
+      # Gated on the DEPLOY_FUNCTIONS repo variable (Settings → Secrets and
+      # variables → Actions → Variables), which is currently set — the deploy
+      # service account has the roles it needs (Service Account User on the
+      # runtime SA, plus Cloud Functions / Cloud Build / Artifact Registry).
       #
-      # ⚠ CUTOVER HAZARD, while the Next migration is mid-flight: functions/
-      # is now down to syncTempSummary alone, and `deploy --only functions
-      # --force` DELETES every function no longer in the codebase — the ten
-      # callables and spotPreview/sitemap included. That is the end state, but
-      # the plan (Phase 5 / "Cutover and rollback") deliberately keeps the old
-      # onCall functions deployed for a week so a client rollback still works.
-      # So leave DEPLOY_FUNCTIONS unset until the domain has been on App
-      # Hosting long enough that rolling back to the Vite client is off the
-      # table; deleting them earlier makes that rollback impossible.
+      # NOTE: `--force` DELETES every function no longer in the codebase.
+      # functions/ is down to syncTempSummary alone, so the run on
+      # 2026-09-04 already removed the ten retired onCall callables plus
+      # spotPreview and sitemap. Nothing calls them any more (the client uses
+      # /api/* route handlers), but it does mean reverting to the pre-Next
+      # client would need those functions redeploying from git history first.
       - name: Install functions dependencies
         if: vars.DEPLOY_FUNCTIONS == 'true'
         run: npm ci
