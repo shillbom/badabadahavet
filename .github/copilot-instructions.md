@@ -230,9 +230,13 @@ cluster group on purpose.
 ### Installable, but no service worker
 
 The app ships a manifest (`app/manifest.ts`) and is installable, but offline is
-explicitly not a goal — the Workbox service worker is gone. `public/sw.js` is a
-kill-switch that unregisters the old one and is served uncached
-(`next.config.ts` headers); retire it once devices have rotated through.
+explicitly not a goal — there is no service worker at all. A `public/sw.js`
+kill-switch existed for one release after the Next cutover, to unregister the
+old Workbox worker on devices that already had it; it has since been retired,
+along with its no-cache header in `next.config.ts`. Don't reintroduce a
+service worker without a reason: the prompt-mode update flow existed only to
+stop an SW activation reloading the page mid swim-log, and with SSR'd HTML an
+update is simply the next navigation.
 
 ### Data model and tests
 
@@ -251,10 +255,20 @@ Google sign-in uses a popup on localhost but a redirect in production (see
 "since last visit" digest reads `lastSeenBaseline` captured at login — not
 `profile.lastSeenAt`, which is immediately re-stamped to "now".
 
-### Deploy is mid-migration
+### Deploy
 
-The target is Firebase App Hosting (`apphosting.yaml`, backend in
-`europe-west1`). Until that cutover happens, `firebase.json`'s `hosting` block
-still points at `dist/` — which nothing produces any more. It is kept
-deliberately, as the rollback story for the old Hosting site; don't delete it
-before the App Hosting backend is live.
+`badligan.club` is served by Firebase App Hosting — backend `badligan` in
+`europe-west4` (co-located with Firestore's `eur3` multi-region), configured
+by `apphosting.yaml` and `firebase.json`'s `apphosting` block. CI releases it:
+`.github/workflows/deploy.yml` runs `deploy --only apphosting`, which uploads
+source for Cloud Build. The backend's own automatic rollout trigger is
+disabled on purpose so a push doesn't build twice.
+
+Two things to know. App Hosting resolves every secret declared in
+`apphosting.yaml` at rollout time regardless of its `availability`, so a
+missing Secret Manager grant is a hard _build_ failure. And the apex must stay
+DNS-only in Cloudflare — proxying makes Cloudflare terminate TLS with its own
+certificate, which breaks Google's cert validation.
+
+The old static-Hosting block is gone; `functions/` holds only
+`syncTempSummary`, since App Hosting has no Firestore triggers.
