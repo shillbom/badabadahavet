@@ -8,7 +8,7 @@
 // fine to ship in the bundle; when it is unset we keep the keyless URL so the
 // map still renders (watermarked) instead of going blank. Free tier is 5M tile
 // requests/month — request one at https://carto.com/basemaps/apikey/.
-const CARTO_API_KEY = import.meta.env.VITE_CARTO_API_KEY?.trim();
+const CARTO_API_KEY = process.env.NEXT_PUBLIC_CARTO_API_KEY?.trim();
 
 /** Appends `?key=…` to a cartocdn tile template when a key is configured. */
 export function withCartoKey(url: string): string {

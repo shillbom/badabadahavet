@@ -69,7 +69,7 @@ export function parseScores(body: unknown): Record<string, number> {
  * call times out — moderation must never block writes on an outage.
  */
 export async function checkTextAllowed(text: string): Promise<boolean> {
-  const apiKey = import.meta.env.VITE_PERSPECTIVE_API_KEY;
+  const apiKey = process.env.NEXT_PUBLIC_PERSPECTIVE_API_KEY;
   if (!apiKey || !text.trim()) return true;
   try {
     const ctrl = new AbortController();

@@ -21,20 +21,21 @@ import {
   type HttpsCallable,
 } from "firebase/functions";
 const firebaseConfig: FirebaseOptions = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? "demo-key",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "demo-key",
   authDomain:
-    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ??
+    process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ??
     "demo-badabadahavet.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? "demo-badabadahavet",
+  projectId:
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "demo-badabadahavet",
   storageBucket:
-    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ??
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
     "demo-badabadahavet.appspot.com",
   messagingSenderId:
-    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? "000000000000",
+    process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? "000000000000",
   appId:
-    import.meta.env.VITE_FIREBASE_APP_ID ??
+    process.env.NEXT_PUBLIC_FIREBASE_APP_ID ??
     "1:000000000000:web:0000000000000000000000",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
 export const app = initializeApp(firebaseConfig);
@@ -58,12 +59,12 @@ export const storage = getStorage(app);
 export const functions = getFunctions(app, "europe-west1");
 
 const useEmulators =
-  import.meta.env.VITE_USE_FIREBASE_EMULATORS === "1" ||
-  import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
+  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "1" ||
+  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true";
 
 if (useEmulators && typeof window !== "undefined") {
   const host =
-    import.meta.env.VITE_FIREBASE_EMULATOR_HOST ?? window.location.hostname;
+    process.env.NEXT_PUBLIC_FIREBASE_EMULATOR_HOST ?? window.location.hostname;
   connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
   connectFirestoreEmulator(db, host, 8080);
   connectStorageEmulator(storage, host, 9199);

@@ -42,6 +42,6 @@ export const celebrate = {
     useCelebration.getState().show({ kind: "streak", tier, days }),
 };
 
-if (import.meta.env.DEV && typeof window !== "undefined") {
+if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
   (window as unknown as { celebrate: typeof celebrate }).celebrate = celebrate;
 }

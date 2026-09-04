@@ -6,32 +6,28 @@ import {
   useNavigate,
   useParams,
 } from "react-router";
-import { Suspense, useEffect, useEffectEvent, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { domMax, LazyMotion } from "framer-motion";
 import { useStore } from "@/store/sessions";
 import { useT } from "@/lib/i18n";
 import { toast } from "@/components/ui/toastStore";
 import { ACHIEVEMENTS_BY_ID } from "@/lib/achievements";
 import { Pages, preloadAllPages } from "@/lib/pages";
-import { useRegisterSW } from "virtual:pwa-register/react";
-import LoginPage from "@/pages/LoginPage";
-import GoogleAuthPage from "@/pages/GoogleAuthPage";
+import LoginPage from "@/views/LoginPage";
+import GoogleAuthPage from "@/views/GoogleAuthPage";
 import Layout from "@/components/Layout";
 import { Toaster } from "@/components/ui/Toast";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import UpdatePrompt from "@/components/UpdatePrompt";
 import SinceLastVisit from "@/components/SinceLastVisit";
 import ConsentBanner from "@/components/ConsentBanner";
+import InstallHint from "@/components/InstallHint";
 import { CelebrationOverlay } from "@/components/fx/Celebration";
 import { celebrate } from "@/components/celebrationStore";
 import { FullSplash } from "@/components/Splash";
 import { setBootReady } from "@/lib/bootSignal";
 import { rememberReturnPath } from "@/lib/utils";
-import { useDeviceFocus } from "./hooks/focus";
 
-// How often a long-lived (kept-open) session re-checks for a new deploy.
-const UPDATE_CHECK_MS = 60 * 60 * 1000; // hourly
-const preloadMapPage = () => import("@/pages/MapPage");
+const preloadMapPage = () => import("@/views/MapPage");
 
 /** Navigate to /login while saving the current path so post-login can return. */
 function LoginRedirect() {
@@ -92,47 +88,6 @@ export default function App() {
     useStore.setState({ authError: null });
     navigate("/login", { replace: true });
   }, [authError, navigate, t]);
-
-  // Service worker updates always wait for explicit user confirmation so a
-  // reload can never interrupt an in-progress swim log.
-  const [updateReady, setUpdateReady] = useState(false);
-  const [swRegistration, setSwRegistration] =
-    useState<ServiceWorkerRegistration | null>(null);
-  const { updateServiceWorker } = useRegisterSW({
-    onRegisteredSW(_swUrl, registration) {
-      setSwRegistration(registration ?? null);
-    },
-    onNeedRefresh() {
-      setUpdateReady(true);
-    },
-  });
-
-  const checkForUpdate = useEffectEvent(async () => {
-    if (!swRegistration) return;
-    try {
-      await swRegistration.update();
-    } catch (error: unknown) {
-      console.warn("Service worker update check failed", error);
-    }
-  });
-
-  useEffect(() => {
-    if (!swRegistration) return;
-    // Keep checking for new deploys while a session stays open (e.g. an
-    // installed PWA the user never fully closes).
-    const timer = window.setInterval(() => {
-      checkForUpdate();
-    }, UPDATE_CHECK_MS);
-    return () => window.clearInterval(timer);
-  }, [swRegistration]);
-
-  const isFocused = useDeviceFocus();
-  useEffect(() => {
-    // Also check for updates when the user returns to the tab, so a long-lived
-    // session can pick up a new deploy without waiting for the next hourly tick.
-    if (!isFocused) return;
-    checkForUpdate();
-  }, [isFocused]);
 
   // Preload remaining page chunks once the user is logged in.
   useEffect(() => {
@@ -195,14 +150,10 @@ export default function App() {
     <LazyMotion features={domMax}>
       <Toaster />
       <ConfirmDialog />
-      <UpdatePrompt
-        show={updateReady}
-        onReload={() => updateServiceWorker(true)}
-        onDismiss={() => setUpdateReady(false)}
-      />
       <CelebrationOverlay />
       {!booting && !googleOnboarding ? <SinceLastVisit /> : null}
       {!booting && !googleOnboarding ? <ConsentBanner /> : null}
+      {!booting && !googleOnboarding ? <InstallHint /> : null}
       {booting ? null : googleOnboarding ? (
         <Suspense fallback={<FullSplash />}>
           <Routes>

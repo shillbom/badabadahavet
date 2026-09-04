@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import BottomSheet from "@/components/BottomSheet";
 
 const SpotView = lazy(() =>
-  import("@/pages/SpotPage").then((m) => ({ default: m.SpotView })),
+  import("@/views/SpotPage").then((m) => ({ default: m.SpotView })),
 );
 
 /**

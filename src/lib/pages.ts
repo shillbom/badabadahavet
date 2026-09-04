@@ -1,25 +1,6 @@
 import { lazy } from "react";
 
 /**
- * If a lazy chunk import fails (e.g. old hash no longer on the CDN after
- * a redeploy), reload once to pick up the new SW-cached assets.
- */
-function withStaleReload<T>(load: () => Promise<T>): () => Promise<T> {
-  return async () => {
-    try {
-      return await load();
-    } catch {
-      // Guard against infinite reload loops.
-      if (!sessionStorage.getItem("chunk-reload")) {
-        sessionStorage.setItem("chunk-reload", "1");
-        window.location.reload();
-      }
-      return load();
-    }
-  };
-}
-
-/**
  * Route-level code splitting + post-login preload config.
  *
  * Each page is registered once below. The order matters: it controls
@@ -27,44 +8,44 @@ function withStaleReload<T>(load: () => Promise<T>): () => Promise<T> {
  * it's already shown, Recap last because it's the heaviest chunk).
  */
 const PAGES = [
-  { key: "Map", load: withStaleReload(() => import("@/pages/MapPage")) },
+  { key: "Map", load: () => import("@/views/MapPage") },
   {
     key: "History",
-    load: withStaleReload(() => import("@/pages/HistoryPage")),
+    load: () => import("@/views/HistoryPage"),
   },
   {
     key: "Leaderboard",
-    load: withStaleReload(() => import("@/pages/LeaderboardPage")),
+    load: () => import("@/views/LeaderboardPage"),
   },
-  { key: "Log", load: withStaleReload(() => import("@/pages/LogSessionPage")) },
+  { key: "Log", load: () => import("@/views/LogSessionPage") },
   {
     key: "EditSwim",
-    load: withStaleReload(() => import("@/pages/EditSwimPage")),
+    load: () => import("@/views/EditSwimPage"),
   },
-  { key: "Groups", load: withStaleReload(() => import("@/pages/GroupsPage")) },
-  { key: "Spot", load: withStaleReload(() => import("@/pages/SpotPage")) },
+  { key: "Groups", load: () => import("@/views/GroupsPage") },
+  { key: "Spot", load: () => import("@/views/SpotPage") },
   {
     key: "Achievements",
-    load: withStaleReload(() => import("@/pages/AchievementsPage")),
+    load: () => import("@/views/AchievementsPage"),
   },
   {
     key: "Streak",
-    load: withStaleReload(() => import("@/pages/StreakPage")),
+    load: () => import("@/views/StreakPage"),
   },
   {
     key: "Profile",
-    load: withStaleReload(() => import("@/pages/ProfilePage")),
+    load: () => import("@/views/ProfilePage"),
   },
-  { key: "About", load: withStaleReload(() => import("@/pages/AboutPage")) },
+  { key: "About", load: () => import("@/views/AboutPage") },
   {
     key: "Privacy",
-    load: withStaleReload(() => import("@/pages/PrivacyPage")),
+    load: () => import("@/views/PrivacyPage"),
   },
-  { key: "Recap", load: withStaleReload(() => import("@/pages/RecapPage")) },
-  { key: "Toswim", load: withStaleReload(() => import("@/pages/ToswimPage")) },
+  { key: "Recap", load: () => import("@/views/RecapPage") },
+  { key: "Toswim", load: () => import("@/views/ToswimPage") },
   {
     key: "AdminUsers",
-    load: withStaleReload(() => import("@/pages/AdminUsersPage")),
+    load: () => import("@/views/AdminUsersPage"),
   },
 ] as const;
 
