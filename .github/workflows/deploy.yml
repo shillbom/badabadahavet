@@ -1,4 +1,4 @@
-name: Build & deploy
+name: Checks & rules deploy
 
 on:
   push:
@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build-deploy:
-    name: Build & deploy to Firebase Hosting
+    name: Check, deploy rules + functions
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,23 +38,39 @@ jobs:
       - name: Test
         run: npm run test
 
+      # A build CHECK, not a deploy artifact: Firebase App Hosting builds the
+      # app itself from the connected branch (see apphosting.yaml). This step
+      # exists so a build failure blocks the merge instead of surfacing later
+      # as a failed App Hosting rollout.
+      #
+      # The GitHub secret NAMES still say VITE_* — renaming them means a
+      # manual pass in repo settings and buys nothing. Only the env-var names
+      # the app reads changed. VITE_PERSPECTIVE_API_KEY is deliberately absent
+      # now: the Perspective key is server-only (a Secret Manager secret, see
+      # apphosting.yaml) and must never be inlined into the browser bundle.
       - name: Build
         env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
-          VITE_PERSPECTIVE_API_KEY: ${{ secrets.VITE_PERSPECTIVE_API_KEY }}
-          VITE_CARTO_API_KEY: ${{ secrets.VITE_CARTO_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_CARTO_API_KEY: ${{ secrets.VITE_CARTO_API_KEY }}
         run: npm run build
 
-      # Deploy the client + Firestore/Storage rules via the Firebase CLI
-      # (replaces the hosting-only action that 400'd on unchanged content).
+      # Rules only. The APP is deliberately no longer released from here:
+      # Firebase App Hosting builds and rolls it out from the connected
+      # branch (see apphosting.yaml), and `npm run build` now produces .next,
+      # not dist/ — so the old `deploy --only hosting` would have pushed an
+      # empty/stale directory over the live site. The firebase.json hosting
+      # block stays as the Phase 6 rollback path (see
+      # docs/nextjs-migration-plan.md), but nothing in CI releases it.
+      #
+      # Rules are idempotent (skip-if-unchanged), so deploy them directly.
       # Auth uses the service-account secret via GOOGLE_APPLICATION_CREDENTIALS.
-      - name: Deploy hosting + rules
+      - name: Deploy Firestore + Storage rules
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
@@ -62,25 +78,8 @@ jobs:
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
 
-          # Rules are idempotent (skip-if-unchanged), so deploy them directly.
           npx --yes firebase-tools@15 deploy --only firestore,storage \
             --project "$FIREBASE_PROJECT" --non-interactive --force
-
-          # Hosting rejects re-releasing a byte-identical version with a 400
-          # ("is the current active version"). That's a no-op, not a failure —
-          # swallow only that specific case so an unchanged build stays green.
-          set +e
-          out=$(npx --yes firebase-tools@15 deploy --only hosting \
-            --project "$FIREBASE_PROJECT" --non-interactive --force 2>&1)
-          code=$?
-          echo "$out"
-          if [ $code -ne 0 ]; then
-            if echo "$out" | grep -q "is the current active version"; then
-              echo "Hosting already up to date — nothing to release."
-            else
-              exit $code
-            fi
-          fi
 
       # Functions deploy needs the deploy service account to have
       # "Service Account User" (iam.serviceAccounts.actAs) on the runtime SA
@@ -92,6 +91,16 @@ jobs:
       # Once the SA has the roles, set repo variable DEPLOY_FUNCTIONS=true
       # (Settings → Secrets and variables → Actions → Variables) to enable
       # the two steps below — no workflow edit needed.
+      #
+      # ⚠ CUTOVER HAZARD, while the Next migration is mid-flight: functions/
+      # is now down to syncTempSummary alone, and `deploy --only functions
+      # --force` DELETES every function no longer in the codebase — the ten
+      # callables and spotPreview/sitemap included. That is the end state, but
+      # the plan (Phase 5 / "Cutover and rollback") deliberately keeps the old
+      # onCall functions deployed for a week so a client rollback still works.
+      # So leave DEPLOY_FUNCTIONS unset until the domain has been on App
+      # Hosting long enough that rolling back to the Vite client is off the
+      # table; deleting them earlier makes that rollback impossible.
       - name: Install functions dependencies
         if: vars.DEPLOY_FUNCTIONS == 'true'
         run: npm ci

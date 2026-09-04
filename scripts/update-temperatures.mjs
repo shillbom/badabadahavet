@@ -59,7 +59,7 @@ import {
   summaryChanged,
   extractWaterSample,
   qualityMapChanged,
-} from "../functions/tempLogic.js";
+} from "../src/server/tempLogic.js";
 
 const WRITE = process.argv.includes("--write");
 const ALL = process.argv.includes("--all");

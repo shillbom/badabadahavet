@@ -1,9 +1,12 @@
+"use client";
+
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { m } from "framer-motion";
 import { ListChecks, MapIcon, Trophy, UsersRound } from "lucide-react";
-import { NavLink } from "react-router";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export default function NavBar() {
   const { user } = useAuth();
@@ -58,35 +61,33 @@ function NavTab({
   label: string;
   icon: React.ReactNode;
 }) {
+  // next/link has no NavLink-style active state, so derive it from the
+  // pathname. The map tab matches exactly (react-router's `end`); the rest
+  // match their subtree so e.g. /groups?join=X still lights up.
+  const pathname = usePathname();
+  const isActive = to === "/" ? pathname === "/" : pathname.startsWith(to);
   return (
-    <NavLink
-      to={to}
-      end={to === "/"}
-      className={({ isActive }) =>
-        cn(
-          "relative flex w-12 flex-col items-center gap-0.5 rounded-2xl px-4 py-2 text-[10px] font-medium transition-colors",
-          isActive ? "text-wave-700" : "text-slate-400 hover:text-slate-600",
-        )
-      }
-    >
-      {({ isActive }) => (
-        <>
-          {isActive ? (
-            <m.span
-              layoutId="nav-active-pill"
-              className="absolute inset-0 -z-10 rounded-2xl bg-wave-100/80 ring-1 ring-wave-200"
-              transition={{ type: "spring", stiffness: 320, damping: 30 }}
-            />
-          ) : null}
-          <m.span
-            animate={isActive ? { y: -1, scale: 1.05 } : { y: 0, scale: 1 }}
-            transition={{ type: "spring", stiffness: 360, damping: 24 }}
-          >
-            {icon}
-          </m.span>
-          <span>{label}</span>
-        </>
+    <Link
+      href={to}
+      className={cn(
+        "relative flex w-12 flex-col items-center gap-0.5 rounded-2xl px-4 py-2 text-[10px] font-medium transition-colors",
+        isActive ? "text-wave-700" : "text-slate-400 hover:text-slate-600",
       )}
-    </NavLink>
+    >
+      {isActive ? (
+        <m.span
+          layoutId="nav-active-pill"
+          className="absolute inset-0 -z-10 rounded-2xl bg-wave-100/80 ring-1 ring-wave-200"
+          transition={{ type: "spring", stiffness: 320, damping: 30 }}
+        />
+      ) : null}
+      <m.span
+        animate={isActive ? { y: -1, scale: 1.05 } : { y: 0, scale: 1 }}
+        transition={{ type: "spring", stiffness: 360, damping: 24 }}
+      >
+        {icon}
+      </m.span>
+      <span>{label}</span>
+    </Link>
   );
 }

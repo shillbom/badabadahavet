@@ -1,6 +1,0 @@
-# Badligan — allow all crawlers. Place pages are exposed via /s/:placeId
-# (served by the spotPreview function), and are listed in /sitemap.xml.
-User-agent: *
-Allow: /
-
-Sitemap: https://badligan.club/sitemap.xml

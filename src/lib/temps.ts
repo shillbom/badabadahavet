@@ -6,7 +6,7 @@ import type {
   WaterSample,
 } from "./types";
 
-// Client-side twins of functions/tempLogic.js — the compact reading shape
+// Client-side twins of src/server/tempLogic.js — the compact reading shape
 // ({ t, at, p }) lives in tempSummary/current and placeTemps/{placeId};
 // these helpers turn it back into the waterTemp* fields the UI reads.
 

@@ -23,7 +23,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from "firebase/storage";
-import { cloudFn, db, storage } from "@/firebase";
+import { callApi, db, storage } from "@/firebase";
 import type {
   GroupDoc,
   PlaceDoc,
@@ -453,7 +453,7 @@ async function uploadSessionPhoto(
   return { url, path, thumb };
 }
 
-/** Surface the functions' moderation rejection as a ModerationError so
+/** Surface the server routes' moderation rejection as a ModerationError so
  *  callers show the specific "text rejected" message. */
 function rethrowModeration(err: unknown): never {
   const details = (err as { details?: { reason?: string } })?.details;
@@ -463,7 +463,7 @@ function rethrowModeration(err: unknown): never {
 
 /**
  * Log a swim. The session doc and the user's score are written server-side
- * by the `logSession` Cloud Function (clients can't write either directly),
+ * by the `/api/logSession` route (clients can't write either directly),
  * so scoring can't be forged. We only upload the photo here — the function
  * records its URL/path and computes points + uniqueness + winter.
  */
@@ -492,25 +492,24 @@ export async function createSession(opts: {
     photoThumb = uploaded.thumb;
   }
 
-  const callable = cloudFn<
-    {
-      placeId: string;
-      placeName: string;
-      lat: number;
-      lng: number;
-      date: number;
-      note?: string;
-      country?: string;
-      photoUrl?: string;
-      photoPath?: string;
-      photoThumb?: string;
-      border?: string;
-      waterTemp?: number;
-    },
-    LoggedSession
-  >("logSession");
   try {
-    const res = await callable({
+    return await callApi<
+      {
+        placeId: string;
+        placeName: string;
+        lat: number;
+        lng: number;
+        date: number;
+        note?: string;
+        country?: string;
+        photoUrl?: string;
+        photoPath?: string;
+        photoThumb?: string;
+        border?: string;
+        waterTemp?: number;
+      },
+      LoggedSession
+    >("logSession", {
       placeId: opts.place.id,
       placeName: opts.place.name,
       lat: opts.lat,
@@ -524,9 +523,8 @@ export async function createSession(opts: {
       border: opts.border,
       waterTemp: opts.waterTemp,
     });
-    return res.data;
   } catch (err) {
-    // The function's authoritative moderation check flags its rejection
+    // The route's authoritative moderation check flags its rejection
     // via details — surface it as the same error the client-side
     // pre-checks throw so callers show one specific message.
     rethrowModeration(err);
@@ -545,7 +543,7 @@ export type SessionEdits = {
 };
 
 /**
- * Edit a swim's date, note, or photo via the `updateSession` Cloud Function,
+ * Edit a swim's date, note, or photo via the `/api/updateSession` route,
  * which recomputes points/isWinter and the owner's per-year score server-side
  * (sessions stay client-unwritable). A new photo is uploaded to Storage here
  * first — the function stores its URL/path and cleans up the old object.
@@ -567,20 +565,19 @@ export async function updateSession(
     };
   }
 
-  const callable = cloudFn<
-    {
-      sessionId: string;
-      date?: number;
-      note?: string | null;
-      photo?: { url: string; path: string; thumb?: string } | null;
-      waterTemp?: number | null;
-    },
-    { ok: true; points: number; isWinter: boolean }
-  >("updateSession");
   try {
-    // Build the payload key-by-key: the Functions client encodes `undefined`
-    // as null, and null means "clear" server-side — absent means "keep".
-    await callable({
+    // Build the payload key-by-key: JSON.stringify drops `undefined` keys but
+    // an explicit null means "clear" server-side — absent means "keep".
+    await callApi<
+      {
+        sessionId: string;
+        date?: number;
+        note?: string | null;
+        photo?: { url: string; path: string; thumb?: string } | null;
+        waterTemp?: number | null;
+      },
+      { ok: true; points: number; isWinter: boolean }
+    >("updateSession", {
       sessionId: session.id,
       ...(edits.date !== undefined ? { date: edits.date } : {}),
       ...(edits.note !== undefined ? { note: edits.note } : {}),
@@ -593,15 +590,14 @@ export async function updateSession(
 }
 
 /**
- * Remove a swim via the `removeSession` Cloud Function, which deletes the
+ * Remove a swim via the `/api/removeSession` route, which deletes the
  * session, fixes the owner's score, and cleans up the photo. The owner may
  * remove their own; admins may remove anyone's.
  */
 export async function removeSession(sessionId: string): Promise<void> {
-  const callable = cloudFn<{ sessionId: string }, { ok: true }>(
-    "removeSession",
-  );
-  await callable({ sessionId });
+  await callApi<{ sessionId: string }, { ok: true }>("removeSession", {
+    sessionId,
+  });
 }
 
 export function watchUserSessions(
@@ -842,13 +838,13 @@ export async function lookupGroupByCode(code: string): Promise<{
   emoji: string | null;
   memberCount: number;
 } | null> {
-  const callable = cloudFn<
-    { code: string },
-    { id: string; name: string; emoji: string | null; memberCount: number }
-  >("lookupGroupByCode");
   try {
-    const res = await callable({ code });
-    return res.data ?? null;
+    return (
+      (await callApi<
+        { code: string },
+        { id: string; name: string; emoji: string | null; memberCount: number }
+      >("lookupGroupByCode", { code })) ?? null
+    );
   } catch (err: unknown) {
     const errCode = (err as { code?: string })?.code;
     if (errCode === "functions/not-found") return null;
@@ -864,10 +860,12 @@ export async function joinGroupByCode(opts: {
   // a Cloud Function (Admin SDK) which validates the code and atomically
   // adds the caller to the group.
   void opts.uid; // uid comes from auth context server-side; kept for callsite compat
-  const callable = cloudFn<{ code: string }, GroupDoc>("joinGroupByCode");
   try {
-    const res = await callable({ code: opts.code });
-    return res.data ?? null;
+    return (
+      (await callApi<{ code: string }, GroupDoc>("joinGroupByCode", {
+        code: opts.code,
+      })) ?? null
+    );
   } catch (err: unknown) {
     const code = (err as { code?: string })?.code;
     if (code === "functions/not-found") return null;
@@ -890,8 +888,9 @@ export async function leaveGroup(opts: {
   uid: string;
 }): Promise<void> {
   void opts.uid; // handled server-side from auth context
-  const callable = cloudFn<{ groupId: string }, void>("leaveGroup");
-  await callable({ groupId: opts.groupId });
+  await callApi<{ groupId: string }, void>("leaveGroup", {
+    groupId: opts.groupId,
+  });
 }
 
 /**
@@ -943,8 +942,8 @@ export async function getPlace(placeId: string) {
 /**
  * Minimum total points (summed across every year) before a user may
  * contribute place info or toggle the naturist flag. UX gate only — the
- * Cloud Function enforces the same bar server-side. Matches
- * MIN_INFO_POINTS in functions/index.js — keep in sync.
+ * server route enforces the same bar server-side. Matches
+ * MIN_INFO_POINTS in app/api/setPlaceInfo/route.ts — keep in sync.
  */
 export const MIN_INFO_POINTS = 20;
 
@@ -958,8 +957,8 @@ export function totalPoints(scores: Record<string, number> | undefined) {
 
 /**
  * Add, edit, or clear (info = null) a place's description, optionally
- * flagging the spot as a naturist bath. Runs through the `setPlaceInfo`
- * Cloud Function, which enforces who may write (MIN_INFO_POINTS, add
+ * flagging the spot as a naturist bath. Runs through the `/api/setPlaceInfo`
+ * route, which enforces who may write (MIN_INFO_POINTS, add
  * when empty, edit your own, admins anything), moderates the text, and
  * stamps attribution. Returns the state as stored (trimmed/capped).
  */
@@ -968,16 +967,14 @@ export async function setPlaceInfo(
   info: string | null,
   nude?: boolean,
 ) {
-  const callable = cloudFn<
+  return await callApi<
     { placeId: string; info: string | null; nude?: boolean },
     { ok: true; info: string | null; nude: boolean }
-  >("setPlaceInfo");
-  const res = await callable({
+  >("setPlaceInfo", {
     placeId,
     info,
     ...(nude !== undefined ? { nude } : {}),
   });
-  return res.data;
 }
 
 export function watchPlaceSessions(
@@ -999,14 +996,11 @@ export function watchPlaceSessions(
 /**
  * Tear down everything the caller owns: their sessions (and photos), their
  * group memberships, and the user doc itself. Runs server-side via the
- * `deleteAccount` Cloud Function — sessions can no longer be deleted by the
+ * `/api/deleteAccount` route — sessions can no longer be deleted by the
  * client (rules forbid it). Call before deleting the Firebase Auth user.
  */
 export async function deleteAccountData(): Promise<void> {
-  const callable = cloudFn<Record<string, never>, { ok: true }>(
-    "deleteAccount",
-  );
-  await callable({});
+  await callApi<Record<string, never>, { ok: true }>("deleteAccount", {});
 }
 
 // ---------- Admin / moderation ----------
@@ -1094,10 +1088,9 @@ export async function fetchBannedUsers(): Promise<BannedUser[]> {
 }
 
 /**
- * Ban a user via the admin-only `banUser` Cloud Function: wipes their app
+ * Ban a user via the admin-only `/api/banUser` route: wipes their app
  * data and disables their Firebase Auth account so they can't sign back in.
  */
 export async function banUser(uid: string): Promise<void> {
-  const callable = cloudFn<{ uid: string }, { ok: true }>("banUser");
-  await callable({ uid });
+  await callApi<{ uid: string }, { ok: true }>("banUser", { uid });
 }

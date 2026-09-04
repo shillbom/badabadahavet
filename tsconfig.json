@@ -1,4 +1,13 @@
 {
+  // Solution-style root: `tsc -b` type-checks the referenced projects. The
+  // `paths` entry is duplicated here (and in tsconfig.app.json) because
+  // Next's bundler reads aliases from THIS file and does not follow project
+  // references — keep the two in sync.
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },

@@ -1,8 +1,8 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
-// Dedicated test config (kept separate from vite.config.ts so the PWA /
-// React plugins don't load during unit tests). Pure-logic tests run in a
+// Dedicated test config (the app itself is built by Next; this keeps
+// vitest independent of the bundler). Pure-logic tests run in a
 // plain node environment for speed.
 export default defineConfig({
   resolve: {
@@ -12,6 +12,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.ts", "functions/**/*.test.js"],
+    include: ["src/**/*.test.ts", "src/**/*.test.js"],
   },
 });

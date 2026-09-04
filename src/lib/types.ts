@@ -10,7 +10,7 @@ export type YearStats = {
 
 /** One row of the global top-5 snapshot (`leaderboard/{year}`). Mirrors the
  *  fields a leaderboard row needs so guests can render the board without
- *  reading individual user docs. Built server-side by functions/leaderboard.js. */
+ *  reading individual user docs. Built server-side by src/server/leaderboard.js. */
 export type LeaderboardEntry = {
   uid: string;
   displayName: string;

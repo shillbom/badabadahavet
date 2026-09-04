@@ -1,5 +1,7 @@
+"use client";
+
 import { m } from "framer-motion";
-import { Link } from "react-router";
+import Link from "next/link";
 import { Flame } from "lucide-react";
 import { useT } from "@/lib/i18n";
 import { streakLevel, streakTier, type StreakInfo } from "@/lib/streak";
@@ -60,7 +62,7 @@ export default function StreakCard({ streak }: { streak: StreakInfo }) {
         />
       ) : null}
       <Link
-        to="/streak"
+        href="/streak"
         // The tier gradients animate via animate-disco-shift; higher levels
         // just crank the tempo (inline — a second animate-* class would
         // overwrite the animation shorthand).

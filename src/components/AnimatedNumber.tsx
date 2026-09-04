@@ -27,7 +27,7 @@ function DigitSlot({
 
   useEffect(() => {
     if (!isDigit) return;
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
+    const timeouts: number[] = [];
     const from = currentRef.current;
     const steps = Math.abs(target - from);
 

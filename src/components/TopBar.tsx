@@ -1,4 +1,6 @@
-import { Link } from "react-router";
+"use client";
+
+import Link from "next/link";
 import { m } from "framer-motion";
 import { History, Info, LogIn, WavesLadder } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
@@ -41,7 +43,7 @@ export default function TopBar({ onNudge }: { onNudge: () => void }) {
       <div className="flex items-center justify-between">
         {isGuest ? (
           <Link
-            to="/login"
+            href="/login"
             onClick={rememberReturnPath}
             className="flex items-center gap-2"
           >
@@ -63,7 +65,7 @@ export default function TopBar({ onNudge }: { onNudge: () => void }) {
             </m.div>
           </Link>
         ) : (
-          <Link to="/profile" className="flex items-center gap-2">
+          <Link href="/profile" className="flex items-center gap-2">
             <m.div
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
@@ -94,7 +96,7 @@ export default function TopBar({ onNudge }: { onNudge: () => void }) {
         )}
         {isGuest ? (
           <Link
-            to="/login"
+            href="/login"
             onClick={rememberReturnPath}
             className={buttonClasses("primary", "xs")}
           >
@@ -122,7 +124,7 @@ export default function TopBar({ onNudge }: { onNudge: () => void }) {
               <History className="h-4 w-4" />
             </button>
             <Link
-              to="/about"
+              href="/about"
               aria-label={t("about.title")}
               title={t("about.title")}
               className="rounded-full bg-white/70 p-2 text-wave-700 ring-1 ring-slate-200 transition hover:bg-white active:scale-95"

@@ -4,7 +4,7 @@ export type Locale = "sv" | "en";
 
 const STORAGE_KEY = "badligan.locale";
 
-function detectInitial(): Locale {
+function detectPreferred(): Locale {
   if (typeof window === "undefined") return "sv";
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved === "sv" || saved === "en") return saved;
@@ -24,8 +24,21 @@ type LocaleState = {
   setLocale: (l: Locale) => void;
 };
 
+/**
+ * The store always *starts* Swedish, even in the browser, and the saved /
+ * browser-preferred locale is applied by `hydrateLocale()` right after mount.
+ *
+ * That indirection exists because the app is server-rendered: the server has
+ * no localStorage and no navigator, so it can only render the Swedish default
+ * (which is the right default — Badligan is Swedish-first, `<html lang="sv">`,
+ * and the share cards are Swedish). If the store detected "en" during module
+ * init, an English user's first client render would disagree with that HTML
+ * and React would report a hydration mismatch on every translated string.
+ * Detecting *after* hydration keeps the two renders identical and costs an
+ * English user one extra render, before paint.
+ */
 export const useLocale = create<LocaleState>((set) => ({
-  locale: detectInitial(),
+  locale: "sv",
   setLocale: (l) => {
     if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, l);
     set({ locale: l });
@@ -33,8 +46,19 @@ export const useLocale = create<LocaleState>((set) => ({
   },
 }));
 
-if (typeof document !== "undefined") {
-  document.documentElement.lang = useLocale.getState().locale;
+/** Apply the saved / browser-preferred locale. Called once from AppBoot in a
+ *  layout effect (so it lands before paint, not as a visible flash) — and NOT
+ *  at module scope, see the note on `useLocale`. Idempotent. */
+export function hydrateLocale(): void {
+  const preferred = detectPreferred();
+  if (typeof document !== "undefined")
+    document.documentElement.lang = preferred;
+  if (preferred !== useLocale.getState().locale) {
+    // Deliberately not setLocale(): this is not a user choice, so it must not
+    // write the preference to localStorage (that would freeze a one-off
+    // browser-language guess in place forever).
+    useLocale.setState({ locale: preferred });
+  }
 }
 
 type Vars = Record<string, string | number>;
@@ -217,8 +241,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "common.close": "Stäng",
     "common.open": "Öppna",
     "common.view_photo": "Visa bild",
-    "update.prompt": "En ny version finns.",
-    "update.reload": "Ladda om",
+    "install.ios.title": "Lägg till Badligan på hemskärmen",
+    "install.ios.body":
+      "Tryck på Dela-ikonen i Safari och välj “Lägg till på hemskärmen”.",
+    "install.ios.dismiss": "Inte nu",
     "common.previous": "Föregående",
     "common.next": "Nästa",
     "common.cancel": "Avbryt",
@@ -1049,8 +1075,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "common.close": "Close",
     "common.open": "Open",
     "common.view_photo": "View photo",
-    "update.prompt": "A new version is available.",
-    "update.reload": "Reload",
+    "install.ios.title": "Add Badligan to your home screen",
+    "install.ios.body":
+      "Tap the Share icon in Safari and choose “Add to Home Screen”.",
+    "install.ios.dismiss": "Not now",
     "common.previous": "Previous",
     "common.next": "Next",
     "common.cancel": "Cancel",

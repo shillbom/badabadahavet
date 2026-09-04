@@ -21,3 +21,5 @@ emulator-data/
 *-firebase-adminsdk-*.json
 *.serviceaccount.json
 service-account*.json
+.next/
+next-env.d.ts.bak

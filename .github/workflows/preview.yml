@@ -6,9 +6,13 @@ on:
 
 # Forks can't read repo secrets — skip preview for them.
 #
-# Builds + type-checks + tests the PR, then deploys it to a Firebase Hosting
-# preview channel (pr-<number>, auto-expires 7d) and comments the URL on the
-# PR so changes can be tried on a real device before merge.
+# Builds + type-checks + tests the PR. The Firebase Hosting preview-channel
+# deploy below is commented out and is now also OBSOLETE: a Hosting channel
+# serves static files, and the app is a Next server (SSR spot pages, /api/*
+# route handlers) that cannot run on one. Firebase App Hosting has its own
+# per-PR previews — wire those up during the Phase 6 cutover and delete the
+# commented block, rather than reviving it. Everything below it, including
+# the IPv4/retry workaround, is Hosting-specific and does not carry over.
 #
 # Deploys via the Firebase CLI rather than action-hosting-deploy because the
 # action 409/400'd on GitHub runners: flaky IPv6 routes to googleapis cause
@@ -51,17 +55,19 @@ jobs:
       - name: Test
         run: npm run test
 
+      # The GitHub secret NAMES still say VITE_* — only the env-var names the
+      # app reads changed. VITE_PERSPECTIVE_API_KEY is deliberately gone: the
+      # Perspective key is server-only now and must not reach the bundle.
       - name: Build
         env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
-          VITE_PERSPECTIVE_API_KEY: ${{ secrets.VITE_PERSPECTIVE_API_KEY }}
-          VITE_CARTO_API_KEY: ${{ secrets.VITE_CARTO_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_CARTO_API_KEY: ${{ secrets.VITE_CARTO_API_KEY }}
         run: npm run build
 
       # - name: Deploy preview channel

@@ -1,6 +1,6 @@
 import type { PlaceDoc, PlacePin, PlaceSummaryEntry } from "./types";
 
-// Client-side twin of functions/placesLogic.js — the compact entry shape
+// Client-side twin of src/server/placesLogic.js — the compact entry shape
 // ({ n, la, lo, u?, s?, b? }) lives in placesSummary/current; these helpers
 // rehydrate it into the PlacePins the map/pickers read, and overlay the
 // recent-changes delta on top. See PlacesSummaryDoc in types.ts for the why.

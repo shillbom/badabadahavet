@@ -2,7 +2,7 @@ import { useReducer, useState } from "react";
 import { List as ListIcon, Map as MapIcon, MapPin } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useT } from "@/lib/i18n";
-import SwimMap from "@/components/SwimMap";
+import SwimMap from "@/components/SwimMapDynamic";
 import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";

@@ -87,7 +87,7 @@ export function endOfYear(year: number): number {
 export const FIRST_YEAR = 2026;
 
 // Season boundaries below are computed in UTC to match the server
-// (functions/scoring.js) exactly — otherwise, in the small local-vs-UTC window
+// (src/server/scoring.js) exactly — otherwise, in the small local-vs-UTC window
 // around New Year, the client could allow a swim the server rejects (or hide an
 // edit the server would still permit).
 
@@ -109,7 +109,7 @@ export function currentSeasonStart(): number {
 // The future bound is only there to catch mistakes (a mistyped year, a
 // half-edited date), not to police minutes — phone clocks drift and a form can
 // sit open for a while, so we allow an hour of slack past "now". Mirrors
-// FUTURE_GRACE_MS in functions/scoring.js.
+// FUTURE_GRACE_MS in src/server/scoring.js.
 export const FUTURE_GRACE_MS = 60 * 60 * 1000;
 
 /** Latest loggable timestamp (ms) — now plus the mistake-catching grace. */

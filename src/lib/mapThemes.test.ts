@@ -4,8 +4,8 @@ import { afterEach, expect, it, vi } from "vitest";
 // a stubbed env instead of mutating a captured constant.
 async function loadThemes(key?: string) {
   vi.resetModules();
-  if (key === undefined) vi.stubEnv("VITE_CARTO_API_KEY", "");
-  else vi.stubEnv("VITE_CARTO_API_KEY", key);
+  if (key === undefined) vi.stubEnv("NEXT_PUBLIC_CARTO_API_KEY", "");
+  else vi.stubEnv("NEXT_PUBLIC_CARTO_API_KEY", key);
   return import("./mapThemes");
 }
 

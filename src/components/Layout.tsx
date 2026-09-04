@@ -1,4 +1,6 @@
-import { Outlet, useLocation, useNavigate } from "react-router";
+"use client";
+
+import { usePathname, useRouter } from "next/navigation";
 import { m, AnimatePresence } from "framer-motion";
 import { Plus } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
@@ -11,10 +13,15 @@ import SwimNudge from "@/components/SwimNudge";
 import DiscoRays from "@/components/fx/DiscoRays";
 import NavBar from "./NavBar";
 
-export default function Layout() {
+/**
+ * The authed app chrome: top bar, scrolling content column, FAB and bottom
+ * nav. Mounted by `app/(app)/layout.tsx`, so `children` is the matched route's
+ * page — it used to be react-router's <Outlet />.
+ */
+export default function Layout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
+  const pathname = usePathname();
   const t = useT();
   const myStats = useStore((s) => s.myStats);
 
@@ -24,9 +31,9 @@ export default function Layout() {
   // don't fight with the slide content — and on the swim log/edit forms,
   // whose submit buttons would otherwise sit behind them.
   const hideChrome =
-    location.pathname.startsWith("/recap") ||
-    location.pathname.startsWith("/log") ||
-    location.pathname.startsWith("/swim/");
+    pathname.startsWith("/recap") ||
+    pathname.startsWith("/log") ||
+    pathname.startsWith("/swim/");
 
   const isGuest = !user;
 
@@ -47,13 +54,13 @@ export default function Layout() {
 
   // The map page is non-scrolling — the map fills available space. Remove
   // the bottom padding so it doesn't create dead scroll space below the map.
-  const isMapPage = location.pathname === "/";
+  const isMapPage = pathname === "/";
 
   // Desktop: the top bar always spans the full viewport; it's the phone
   // content column below it that relaxes per route. The map gets the whole
   // viewport (maps want space), story-style recap stays phone-shaped, and
   // everything else widens to a comfortable reading column.
-  const isRecap = location.pathname.startsWith("/recap");
+  const isRecap = pathname.startsWith("/recap");
   const contentWidth = isMapPage
     ? "max-w-md lg:max-w-none"
     : isRecap
@@ -71,10 +78,10 @@ export default function Layout() {
         )}
       >
         {/* Per-page entrance animations live in each page; we no longer
-            wrap the Outlet in AnimatePresence because under StrictMode
+            wrap the page in AnimatePresence because under StrictMode
             mid-flight exits could leave the next page at opacity 0. */}
         <m.div
-          key={location.pathname}
+          key={pathname}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
@@ -95,7 +102,7 @@ export default function Layout() {
               </div>
             }
           >
-            <Outlet />
+            {children}
           </Suspense>
         </m.div>
       </main>
@@ -123,7 +130,7 @@ export default function Layout() {
               transition={{ type: "spring", stiffness: 320, damping: 26 }}
               whileTap={{ scale: 0.92 }}
               whileHover={{ scale: 1.04 }}
-              onClick={() => navigate("/log")}
+              onClick={() => router.push("/log")}
               className={cn(
                 "pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full",
                 "bg-gradient-to-br from-wave-500 to-wave-700 text-white shadow-xl shadow-wave-800/40",

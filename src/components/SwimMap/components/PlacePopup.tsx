@@ -1,5 +1,7 @@
+"use client";
+
 import { Popup } from "react-leaflet";
-import { Link } from "react-router";
+import Link from "next/link";
 import Photo from "@/components/Photo";
 import { buttonClasses } from "@/components/ui/buttonStyles";
 import { useT } from "@/lib/i18n";
@@ -70,7 +72,7 @@ export default function PlacePopup({
             {overflow > 0 ? (
               linkToSpot ? (
                 <Link
-                  to={`/spot/${place.id}`}
+                  href={`/spot/${place.id}`}
                   aria-label={t("map.popup.view_spot")}
                   className={cn(moreTileClasses, "no-underline")}
                 >
@@ -92,7 +94,7 @@ export default function PlacePopup({
         ) : null}
         {linkToSpot ? (
           <Link
-            to={`/spot/${place.id}`}
+            href={`/spot/${place.id}`}
             className={buttonClasses(
               "primary",
               "xs",

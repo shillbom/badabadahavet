@@ -42,7 +42,7 @@ function initAdmin() {
   });
 }
 
-// Mirrors functions/leaderboard.js#leaderboardEntry — omit absent optionals
+// Mirrors src/server/leaderboard.js#leaderboardEntry — omit absent optionals
 // so Firestore never sees `undefined`.
 function leaderboardEntry(uid, user, points, stats) {
   const entry = {

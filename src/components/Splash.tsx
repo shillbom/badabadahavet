@@ -1,12 +1,12 @@
 /**
  * Boot / loading splash.
  *
- * Pure CSS (no image, no framer-motion, no Pixi) on purpose: <BootSplash> is
- * mounted eagerly in main.tsx so it can paint before the lazy <App> (and its
- * ~618 KB Firebase chunk) loads. Pulling an animation lib in here would drag
- * that chunk onto the first-paint critical path — the very thing the app's
- * lazy boundaries exist to avoid. CSS animates it for free. Styles live in
- * src/index.css (`.app-splash*`).
+ * Pure CSS (no image, no framer-motion, no Pixi) on purpose: <BootSplash>
+ * renders in the app-wide shell (app/AppBoot.tsx) and is the first thing on
+ * screen, so it also gets server-rendered into the HTML. Pulling an animation
+ * lib in here would drag it onto the first-paint critical path — the very
+ * thing the app's lazy boundaries exist to avoid. CSS animates it for free.
+ * Styles live in src/index.css (`.app-splash*`).
  */
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { getBootReady, subscribeBootReady } from "@/lib/bootSignal";
@@ -27,8 +27,8 @@ function SplashArt() {
       {/* "Liquid type" wordmark: a ghost of the word with a second copy filled
           by a travelling-wave <pattern>, so the letters read as half-full of
           water. SMIL keeps it dependency-free (see file header). Two splashes
-          can briefly coexist (BootSplash over the Suspense FullSplash); the
-          duplicated SVG ids are benign because the defs are identical. */}
+          can briefly coexist (BootSplash over a FullSplash); the duplicated
+          SVG ids are benign because the defs are identical. */}
       <div className="app-splash__word" role="img" aria-label="Badligan">
         <svg viewBox="0 0 240 68" aria-hidden="true">
           <defs>
@@ -87,7 +87,8 @@ function SplashArt() {
   );
 }
 
-/** Static resting splash — the Suspense fallback for in-app lazy route loads. */
+/** Static resting splash — used where a route has to wait on something and
+ *  a spinner would be too small a gesture (see views/GoogleAuthPage). */
 export function FullSplash() {
   return (
     <div className="app-splash">
@@ -101,12 +102,20 @@ export function FullSplash() {
 const MIN_VISIBLE_MS = 1100;
 
 /**
- * The boot splash. Mounts at first paint (main.tsx, outside the lazy <App>),
- * plays the entrance, and once App signals ready (bootSignal) it plays the
- * exit and unmounts — revealing the app underneath.
+ * The boot splash. Mounts at first paint (app/AppBoot.tsx, above the routes),
+ * plays the entrance, and once the shell signals ready (bootSignal) it plays
+ * the exit and unmounts — revealing the app underneath.
  */
 export function BootSplash() {
-  const ready = useSyncExternalStore(subscribeBootReady, getBootReady);
+  // getBootReady doubles as the server snapshot: boot is never "ready" during
+  // SSR, so the prerendered HTML always contains the resting splash — which is
+  // exactly what we want painted before hydration. Without the third argument
+  // React refuses to server-render this at all.
+  const ready = useSyncExternalStore(
+    subscribeBootReady,
+    getBootReady,
+    getBootReady,
+  );
   const [phase, setPhase] = useState<"intro" | "leaving" | "gone">("intro");
   const [startedAt] = useState(Date.now);
 

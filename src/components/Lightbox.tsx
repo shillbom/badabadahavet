@@ -82,6 +82,14 @@ export default function Lightbox({
   const hasPrev = index > 0;
   const hasNext = index < photos.length - 1;
 
+  // There is no <body> to portal into while rendering on the server, and
+  // reaching for one threw "document is not defined" and killed the whole
+  // server render of any spot page that had a photo in its list. Nothing is
+  // lost by skipping it: a portal contributes nothing to its parent's markup,
+  // and the viewer is always closed on the first render (`currentSessionId`
+  // starts null), so the server and the hydrating client agree on "nothing".
+  if (typeof document === "undefined") return null;
+
   return createPortal(
     <AnimatePresence>
       {open && s ? (

@@ -81,11 +81,12 @@ export function longestStreakInYear(dates: number[], year: number): number {
 /**
  * Dev-only escape hatch for eyeballing the streak tier effects without
  * grinding a real 50-day streak: open the app with `?fakeStreak=N` while
- * running `npm run dev`. Dead code in production builds (import.meta.env.DEV
+ * running `npm run dev`. Dead code in production builds ((process.env.NODE_ENV !== "production")
  * is compile-time false) and inert under vitest (no window).
  */
 function devFakeStreak(): number | null {
-  if (!import.meta.env.DEV || typeof window === "undefined") return null;
+  if (!(process.env.NODE_ENV !== "production") || typeof window === "undefined")
+    return null;
   const raw = new URLSearchParams(window.location.search).get("fakeStreak");
   return raw ? Number(raw) : null;
 }
