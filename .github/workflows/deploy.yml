@@ -1,4 +1,4 @@
-name: Checks & rules deploy
+name: Build & deploy
 
 on:
   push:
@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build-deploy:
-    name: Check, deploy rules + functions
+    name: Deploy App Hosting + rules
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -38,10 +38,11 @@ jobs:
       - name: Test
         run: npm run test
 
-      # A build CHECK, not a deploy artifact: Firebase App Hosting builds the
-      # app itself from the connected branch (see apphosting.yaml). This step
-      # exists so a build failure blocks the merge instead of surfacing later
-      # as a failed App Hosting rollout.
+      # A build CHECK, not the deploy artifact: the App Hosting deploy below
+      # uploads *source*, and Cloud Build runs `next build` again server-side
+      # with the env from apphosting.yaml. This step exists so a build failure
+      # fails the job here — fast and with readable logs — rather than 10
+      # minutes later inside a Cloud Build rollout.
       #
       # The GitHub secret NAMES still say VITE_* — renaming them means a
       # manual pass in repo settings and buys nothing. Only the env-var names
@@ -60,13 +61,11 @@ jobs:
           NEXT_PUBLIC_CARTO_API_KEY: ${{ secrets.VITE_CARTO_API_KEY }}
         run: npm run build
 
-      # Rules only. The APP is deliberately no longer released from here:
-      # Firebase App Hosting builds and rolls it out from the connected
-      # branch (see apphosting.yaml), and `npm run build` now produces .next,
-      # not dist/ — so the old `deploy --only hosting` would have pushed an
-      # empty/stale directory over the live site. The firebase.json hosting
-      # block stays as the Phase 6 rollback path (see
-      # docs/nextjs-migration-plan.md), but nothing in CI releases it.
+      # Legacy Firebase Hosting is NOT deployed from here. `npm run build`
+      # produces .next, not dist/, so the old `deploy --only hosting` would
+      # push an empty directory over the live site. The firebase.json hosting
+      # block stays only as the Phase 6 rollback path — see
+      # docs/nextjs-migration-plan.md.
       #
       # Rules are idempotent (skip-if-unchanged), so deploy them directly.
       # Auth uses the service-account secret via GOOGLE_APPLICATION_CREDENTIALS.
@@ -80,6 +79,43 @@ jobs:
 
           npx --yes firebase-tools@15 deploy --only firestore,storage \
             --project "$FIREBASE_PROJECT" --non-interactive --force
+
+      # Release the app. This uploads the repo as SOURCE (per the firebase.json
+      # `apphosting` block); Cloud Build then runs the Next build server-side
+      # with the env and secrets from apphosting.yaml.
+      #
+      # `alwaysDeployFromSource: true` in firebase.json is what makes this
+      # work unattended: without it, a backend that is ALSO linked to a GitHub
+      # repo triggers an "are you sure you want to deploy your local source?"
+      # prompt, which cannot be answered in CI.
+      #
+      # Deliberately NO --force here. If the backend doesn't exist yet, --force
+      # makes firebase-tools log a warning and skip the deploy silently, so a
+      # green run would mean nothing was released. Without it, the missing
+      # backend hits a prompt and --non-interactive turns that into a loud
+      # failure, which is what you want from a deploy step.
+      #
+      # ⚠ Two things to get right on the App Hosting side, or this fights with
+      # itself:
+      #   1. The backend's own automatic rollouts must be OFF (or pointed at a
+      #      branch nobody pushes). A GitHub-connected backend builds on push
+      #      to its branch, and this step uploads source too — leave both on
+      #      and every push to main produces two concurrent rollouts.
+      #   2. FIREBASE_SERVICE_ACCOUNT needs Firebase App Hosting Admin, plus
+      #      Cloud Build, Artifact Registry, Storage and Secret Manager
+      #      accessor — the same class of grant the functions deploy below
+      #      needs. Expect a permissions error on the first run until it has
+      #      them.
+      - name: Deploy App Hosting
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_PROJECT: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+
+          npx --yes firebase-tools@15 deploy --only apphosting \
+            --project "$FIREBASE_PROJECT" --non-interactive
 
       # Functions deploy needs the deploy service account to have
       # "Service Account User" (iam.serviceAccounts.actAs) on the runtime SA

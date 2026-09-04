@@ -1,16 +1,33 @@
 # Next.js + Firebase App Hosting migration plan
 
-**Status: Phases 1–5 implemented on `feat/nextjs`. Phase 6 (deploy) not
-started — nothing has been deployed and the domain has not moved.**
+**Status (2026-09-04): DONE. All six phases shipped — `badligan.club` serves
+the Next app from Firebase App Hosting.**
 
-| Phase                       | State                                                                                    |
-| --------------------------- | ---------------------------------------------------------------------------------------- |
-| 1 — Next skeleton           | Done. Next **16.3.4**, not 15 (see deviations below).                                    |
-| 2 — routing                 | Done. `react-router` uninstalled; 33 App Router entries (22 pages + 11 API).             |
-| 3 — SSR spot pages, sitemap | Done. `/spot/[placeId]` is cached SSR HTML; `app/sitemap.ts` emits 5394 URLs.            |
-| 4 — PWA, manifest only      | Done, landed with Phase 1 (`virtual:pwa-register/react` can't outlive Vite).             |
-| 5 — functions into Next     | Done. 11 route handlers; `functions/` is `syncTempSummary` alone.                        |
-| 6 — deploy                  | **Not started.** `apphosting.yaml` is written but its `NEXT_PUBLIC_*` values are `TODO`. |
+Backend `badligan` in `europe-west4`, runtime nodejs24, scale-to-zero. The
+apex A record points at App Hosting (`35.219.200.111`, DNS-only in
+Cloudflare) with a Google Trust Services cert. Verified live on
+`https://badligan.club`: Cloudflare out of the request path (`server: envoy`,
+no `cf-ray`), ISR serving `x-nextjs-cache: HIT`, every route answering,
+`/spot/[placeId]` returning the place name in the HTML **body** with
+per-place OG tags and a canonical URL, `/sitemap.xml` at 5394 URLs,
+`/robots.txt` correct, `/api/*` rejecting unauthenticated calls with 401,
+sign-in reaching auth logic, moderation working, and zero console errors.
+
+Sign-in needed no new allowlist entry — `badligan.club/*` was already on the
+browser key's referrer list from the 2026-06-30 lockdown.
+
+`europe-west4` rather than the planned `europe-west1` is fine: Firestore is
+`eur3`, which is the west1+west4 multi-region, so the backend is co-located
+with its data.
+
+| Phase                       | State                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------- |
+| 1 — Next skeleton           | Done. Next **16.3.4**, not 15 (see deviations below).                             |
+| 2 — routing                 | Done. `react-router` uninstalled; 33 App Router entries (22 pages + 11 API).      |
+| 3 — SSR spot pages, sitemap | Done. `/spot/[placeId]` is cached SSR HTML; `app/sitemap.ts` emits 5394 URLs.     |
+| 4 — PWA, manifest only      | Done, landed with Phase 1 (`virtual:pwa-register/react` can't outlive Vite).      |
+| 5 — functions into Next     | Done. 11 route handlers; `functions/` is `syncTempSummary` alone.                 |
+| 6 — deploy                  | Backend live and verified on `*.hosted.app`. Domain cutover pending TLS issuance. |
 
 Deviations from the plan as written, all deliberate:
 
@@ -29,23 +46,66 @@ Deviations from the plan as written, all deliberate:
 - **Date formatting is pinned to `Europe/Stockholm`.** A UTC server and a
   local browser otherwise disagreed about server-rendered swim dates. This is
   user-visible: someone abroad sees Swedish-time timestamps.
-- **CI no longer releases the app.** `deploy.yml` is checks + rules only; the
-  old `deploy --only hosting` would have pushed the no-longer-produced `dist/`
-  over the live site. The Hosting preview channel in `preview.yml` is obsolete
-  for the same reason — a static channel can't run a Next server.
+- **CI owns the release, not App Hosting's GitHub trigger.** The plan floated
+  letting App Hosting build from the connected branch; instead `deploy.yml`
+  runs `deploy --only apphosting`, which uploads source for Cloud Build.
+  Consequences: `firebase.json` needs `alwaysDeployFromSource: true` (a
+  GitHub-linked backend otherwise prompts, which CI can't answer), the
+  backend's own automatic rollouts must be **off** or every push to `main`
+  builds twice, and `FIREBASE_SERVICE_ACCOUNT` needs App Hosting Admin plus
+  Cloud Build / Artifact Registry / Storage / Secret Manager roles.
+  Legacy Hosting is still never deployed from CI — `deploy --only hosting`
+  would push the no-longer-produced `dist/` over the live site. The Hosting
+  preview channel in `preview.yml` is obsolete for the same reason: a static
+  channel can't run a Next server.
 
-Open items before cutover:
+Open items, in the order they bite:
 
-1. **The Perspective API key still has an HTTP-referrer restriction** from
-   when it was a browser key. Server-side calls send no referrer, so Google
-   returns `403 API_KEY_HTTP_REFERRER_BLOCKED` and — because the checks fail
-   open by design — moderation currently passes everything. Drop the referrer
-   restriction in the Cloud console, keep the Comment Analyzer API restriction.
-2. **The write route handlers' happy paths are untested at runtime.** They are
-   ports of working callables (`HttpsError` → `ApiError`, `req.data` →
-   `readJson(req)`), but nothing was written to production. Exercise
-   `logSession` / `updateSession` / `removeSession` / group join / `banUser` /
-   `deleteAccount` against the emulators.
+0. **Cloudflare must stay DNS-only (grey cloud) on the apex.** Proxying puts
+   Cloudflare's IP back (`188.114.96.0`, which App Hosting flagged
+   `requiredAction: REMOVE`) and terminates TLS with Cloudflare's own cert,
+   which stalls Google's cert validation and flips `hostState` back to
+   `HOST_NON_FAH`.
+1. **Two allowlists still lack the `*.hosted.app` origin**, so sign-in works
+   on `badligan.club` but not on the App Hosting URL — verified live:
+   `identitytoolkit` returns `PERMISSION_DENIED` for that referrer and
+   `INVALID_LOGIN_CREDENTIALS` (i.e. reaches auth) for `badligan.club`. Add it
+   to the browser key `b2f01624-…` referrer list and to Firebase Auth →
+   Authorized domains if you want to test authenticated flows before the
+   domain resolves. Same for the CARTO key's domain restrictions.
+2. **Automatic rollouts are enabled on the backend** (`ABIU: Enabled`, linked
+   to `shillbom-badabadahavet`) _and_ `deploy.yml` runs
+   `deploy --only apphosting`. Turn one off before merging to `main`, or every
+   push starts two concurrent rollouts.
+3. **App Hosting resolves every declared secret at rollout time**, regardless
+   of `availability`. The first rollout failed on
+   `secretmanager.versions.get` denied for
+   `firebase-app-hosting-compute@badligan.iam.gserviceaccount.com`;
+   `apphosting:secrets:grantaccess` fixed it. That SA already had Firestore
+   and admin-SDK access via `roles/firebase.sdkAdminServiceAgent`, so nothing
+   else was needed.
+4. **CI's `github-deployer@` SA still lacks App Hosting roles** —
+   `firebaseapphosting.admin`, `cloudbuild.builds.editor`,
+   `secretmanager.viewer`. Only matters once `main` starts deploying.
+
+Older items:
+
+1. **Moderation works in production** (verified 2026-09-04). There are two
+   Perspective keys: the client one (`d0f21fd1…`, referrer-restricted, unusable
+   server-side) and the server one (`1ed393ee…`, no restriction). The
+   Secret Manager version predates the migration and already holds the server
+   key, so nothing needed changing. Only `.env.local` carries the client key,
+   so `/api/moderate` fails open on localhost — swap it if testing locally.
+2. **Write route handlers: partly exercised.** They are ports of working
+   callables (`HttpsError` → `ApiError`, `req.data` → `readJson(req)`).
+   `logSession`, `updateSession` and `removeSession` — the three that do
+   transactional score adjustment, i.e. the risky ones — were driven through
+   the UI against the real `badligan` project on 2026-09-04 and behaved
+   correctly. Verified by observation, not by reconciling `users.scores`
+   against sessions, so a silent scoring drift is not fully ruled out.
+   Still unexercised: `lookupGroupByCode` / `joinGroupByCode` / `leaveGroup`,
+   `refreshPlaceTemp`, `setPlaceInfo`, `banUser`, `deleteAccount`. Run the
+   last two against the emulators, never production — they are destructive.
 3. **Do not deploy functions with `--force` yet** — it deletes the retired
    callables and destroys the client rollback path. See the hazard note in
    `.github/workflows/deploy.yml`.

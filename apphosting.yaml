@@ -33,44 +33,51 @@ env:
   # time, so it must be available at BUILD as well as RUNTIME. Nothing
   # secret belongs in this list (see src/env.d.ts).
   #
-  # TODO(deploy): fill these in from the badligan project's web-app config
-  # (the same values .env.local carries). They are deliberately left as
-  # placeholders rather than copied in blind — a wrong appId/measurementId
-  # fails at runtime in ways that are annoying to trace. The API key is
-  # referrer-restricted, so the new *.hosted.app origins must be added to
-  # its allowlist before cutover or the client SDK starts 403-ing.
+  # These MUST be filled in. src/firebase.ts falls back to
+  # `demo-badabadahavet` placeholders when they are blank, so an empty value
+  # here silently ships an app pointed at a project that doesn't exist.
+  #
+  # appId is the `badligan-app` web app (…8475b0b5…) — the one the app has
+  # always used. Note `apphosting:backends:create` offers to make a NEW web
+  # app for the backend; a new appId has no linked measurementId and would
+  # split Analytics, so keep this pinned to the original regardless of what
+  # the backend is associated with. App Hosting also injects
+  # FIREBASE_WEBAPP_CONFIG for its associated app, which this app ignores.
+  #
+  # The API key is referrer-restricted, so the *.hosted.app origin has to be
+  # added to its allowlist or the client SDK starts 403-ing.
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: "" # TODO(deploy)
+    value: AIzaSyAkjIYctZLIn3E28EBwF-iPdSgmU0rVkc0
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: "" # TODO(deploy)
+    value: badligan.club
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: "" # TODO(deploy)
+    value: badligan
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: "" # TODO(deploy)
+    value: badligan.firebasestorage.app
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "" # TODO(deploy)
+    value: 738800912317
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: "" # TODO(deploy)
+    value: 1:738800912317:web:8475b0b5184cf99bf034d4
     availability:
       - BUILD
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
-    value: "" # TODO(deploy)
+    value: G-JPZLPV7NBV
     availability:
       - BUILD
       - RUNTIME
@@ -80,10 +87,13 @@ env:
     availability:
       - BUILD
       - RUNTIME
-  # CARTO basemap key — without it every map tile is watermarked. Public by
-  # necessity (the browser requests the tiles) and domain-restricted at CARTO.
+  # CARTO basemap key — without it every map tile is stamped "API KEY
+  # REQUIRED". Public by necessity (the browser requests the tiles) and
+  # restricted to our domains at CARTO, so it belongs here as a plain value.
+  # Free to 5M tile requests/month; the Workbox tile cache is gone (Phase 4),
+  # so tiles now lean on the HTTP cache alone — watch the count after cutover.
   - variable: NEXT_PUBLIC_CARTO_API_KEY
-    value: ""
+    value: cb1_2fuu_1_8f68095b4dd6862aacdf32f4
     availability:
       - BUILD
       - RUNTIME
