@@ -310,6 +310,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "auth.error.weak_password": "Välj ett längre lösenord (minst 6 tecken)",
     "auth.error.generic": "Kunde inte logga in",
     "auth.error.google_cancelled": "Inloggning med Google avbröts",
+    "auth.error.google_stuck":
+      "Inloggningen tog för lång tid. Försök igen, eller använd e-post och lösenord.",
     "auth.error.session": "Något gick fel med inloggningen — försök igen",
     "auth.google": "Fortsätt med Google",
     "auth.google.divider": "eller",
@@ -1142,6 +1144,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "auth.error.weak_password": "Pick a longer password (min 6 chars)",
     "auth.error.generic": "Couldn't sign you in",
     "auth.error.google_cancelled": "Google sign-in was cancelled",
+    "auth.error.google_stuck":
+      "Sign-in took too long. Try again, or use email and password.",
     "auth.error.session":
       "Something went wrong signing you in — please try again",
     "auth.google": "Continue with Google",
