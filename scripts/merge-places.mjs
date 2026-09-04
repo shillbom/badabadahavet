@@ -32,7 +32,7 @@
 import { initializeApp, applicationDefault, cert } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
-import { swimPoints, swimYear } from "../functions/scoring.js";
+import { swimPoints, swimYear } from "../src/server/scoring.js";
 
 const WRITE = process.argv.includes("--write");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "badligan";

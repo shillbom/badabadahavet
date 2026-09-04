@@ -8,6 +8,12 @@
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
+    // The pure server-logic modules in src/server (scoring, leaderboard,
+    // moderation, placesLogic, tempLogic) stay plain ESM .js so the
+    // scripts/*.mjs jobs can import them with bare `node` and so their
+    // vitest suites carry over unchanged. checkJs stays off — they are
+    // consumed from TypeScript, which infers their types.
+    "allowJs": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "preserve",

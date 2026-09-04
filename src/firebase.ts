@@ -13,13 +13,7 @@ import {
   CACHE_SIZE_UNLIMITED,
 } from "firebase/firestore";
 import { getStorage, connectStorageEmulator } from "firebase/storage";
-import {
-  getFunctions,
-  connectFunctionsEmulator,
-  httpsCallable,
-  httpsCallableFromURL,
-  type HttpsCallable,
-} from "firebase/functions";
+
 const firebaseConfig: FirebaseOptions = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "demo-key",
   authDomain:
@@ -56,7 +50,6 @@ export const db = initializeFirestore(app, {
   }),
 });
 export const storage = getStorage(app);
-export const functions = getFunctions(app, "europe-west1");
 
 const useEmulators =
   process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "1" ||
@@ -68,7 +61,6 @@ if (useEmulators && typeof window !== "undefined") {
   connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
   connectFirestoreEmulator(db, host, 8080);
   connectStorageEmulator(storage, host, 9199);
-  connectFunctionsEmulator(functions, host, 5001);
 }
 
 setPersistence(auth, browserLocalPersistence).catch(() => {
@@ -123,29 +115,87 @@ export function applyAnalyticsConsent(granted: boolean): void {
   }
 }
 
+/** The shape a failed /api/* call returns: see `route()`/`ApiError` in
+ *  src/server/api.ts. */
+type ApiErrorBody = {
+  error?: {
+    code?: string;
+    message?: string;
+    details?: Record<string, unknown>;
+  };
+};
+
 /**
- * Create a callable for a Cloud Function.
- *
- *  - Emulator: the SDK talks to the local Functions emulator.
- *  - Local dev (Vite, not Firebase Hosting): there's no `/api/*` rewrite, so
- *    call the deployed function directly (its CORS is enabled). Without this,
- *    `${origin}/api/<name>` just hits the dev server and every callable —
- *    logging a swim, joining a group, refreshing temps — silently fails.
- *  - Production (served by Firebase Hosting): route through the same-origin
- *    `/api/*` rewrite to avoid CORS and keep it first-party.
+ * Error thrown by `callApi`. Deliberately mirrors what the Firebase
+ * callable SDK used to throw, because UI code branches on it: `code` keeps
+ * the `functions/` prefix (`src/lib/data.ts` tests for
+ * `functions/not-found`) and `details` carries the server's `{ reason }`
+ * (`moderation`, `date-range`, `season-locked`). Keeping the shape is what
+ * made the callable → Route Handler swap invisible to call sites.
  */
-export function cloudFn<Req, Res>(name: string): HttpsCallable<Req, Res> {
-  if (useEmulators) {
-    return httpsCallable<Req, Res>(functions, name);
+export class ApiCallError extends Error {
+  readonly code: string;
+  readonly status: number;
+  readonly details?: Record<string, unknown>;
+
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    details?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "ApiCallError";
+    this.status = status;
+    this.code = `functions/${code}`;
+    this.details = details;
   }
-  const host = typeof window !== "undefined" ? window.location.hostname : "";
-  const isLocalhost =
-    host === "localhost" || host === "127.0.0.1" || host === "[::1]";
-  if (isLocalhost) {
-    return httpsCallable<Req, Res>(functions, name);
+}
+
+/**
+ * Call one of the server Route Handlers in `app/api/*`.
+ *
+ * These used to be `onCall` Cloud Functions reached through the callable
+ * SDK, which needed a three-way emulator / localhost / Hosting-rewrite
+ * branch to find them. Now the server *is* the app (Next on App Hosting),
+ * so every call is same-origin `POST /api/<name>` — no CORS, no rewrite
+ * list, nothing to configure per environment.
+ *
+ * Auth is an `Authorization: Bearer <idToken>` header (Phase 0 of the
+ * migration plan: no session cookies). The header is omitted when nobody is
+ * signed in, and the route then answers 401 `unauthenticated` — the same
+ * error the callables' `if (!req.auth)` guard produced.
+ */
+export async function callApi<Req, Res>(
+  name: string,
+  payload?: Req,
+): Promise<Res> {
+  const user = auth.currentUser;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (user) headers.Authorization = `Bearer ${await user.getIdToken()}`;
+
+  const res = await fetch(`/api/${name}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload ?? {}),
+  });
+
+  if (!res.ok) {
+    let body: ApiErrorBody = {};
+    try {
+      body = (await res.json()) as ApiErrorBody;
+    } catch {
+      /* non-JSON error page (a proxy, a crash) — fall back to the status */
+    }
+    throw new ApiCallError(
+      res.status,
+      body.error?.code ?? "internal",
+      body.error?.message ?? `Request failed (${res.status})`,
+      body.error?.details,
+    );
   }
-  return httpsCallableFromURL<Req, Res>(
-    functions,
-    `${window.location.origin}/api/${name}`,
-  );
+
+  return (await res.json()) as Res;
 }

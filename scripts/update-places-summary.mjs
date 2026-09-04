@@ -38,7 +38,7 @@ import { readFileSync } from "node:fs";
 import {
   buildPlacesSummaryEntries,
   placesSummaryChanged,
-} from "../functions/placesLogic.js";
+} from "../src/server/placesLogic.js";
 
 const WRITE = process.argv.includes("--write");
 const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT ?? "badligan";

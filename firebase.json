@@ -11,63 +11,9 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
-        "source": "/api/lookupGroupByCode",
-        "function": {
-          "functionId": "lookupGroupByCode",
-          "region": "europe-west1"
-        }
-      },
-      {
-        "source": "/api/joinGroupByCode",
-        "function": {
-          "functionId": "joinGroupByCode",
-          "region": "europe-west1"
-        }
-      },
-      {
-        "source": "/api/leaveGroup",
-        "function": { "functionId": "leaveGroup", "region": "europe-west1" }
-      },
-      {
-        "source": "/api/refreshPlaceTemp",
-        "function": {
-          "functionId": "refreshPlaceTemp",
-          "region": "europe-west1"
-        }
-      },
-      {
-        "source": "/api/setPlaceInfo",
-        "function": { "functionId": "setPlaceInfo", "region": "europe-west1" }
-      },
-      {
-        "source": "/api/logSession",
-        "function": { "functionId": "logSession", "region": "europe-west1" }
-      },
-      {
-        "source": "/api/removeSession",
-        "function": { "functionId": "removeSession", "region": "europe-west1" }
-      },
-      {
-        "source": "/api/updateSession",
-        "function": { "functionId": "updateSession", "region": "europe-west1" }
-      },
-      {
-        "source": "/api/deleteAccount",
-        "function": { "functionId": "deleteAccount", "region": "europe-west1" }
-      },
-      {
-        "source": "/api/banUser",
-        "function": { "functionId": "banUser", "region": "europe-west1" }
-      },
-      {
-        "source": "/sitemap.xml",
-        "function": { "functionId": "sitemap", "region": "europe-west1" }
-      },
-      {
-        "source": "/s/**",
-        "function": { "functionId": "spotPreview", "region": "europe-west1" }
-      },
-      { "source": "**", "destination": "/index.html" }
+        "source": "**",
+        "destination": "/index.html"
+      }
     ],
     "headers": [
       {
@@ -123,15 +69,6 @@
             "value": "public, max-age=3600"
           }
         ]
-      },
-      {
-        "source": "/sitemap.xml",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=3600"
-          }
-        ]
       }
     ]
   },
@@ -144,11 +81,22 @@
     }
   ],
   "emulators": {
-    "auth": { "port": 9099 },
-    "firestore": { "port": 8080 },
-    "storage": { "port": 9199 },
-    "functions": { "port": 5001 },
-    "ui": { "enabled": true, "port": 4000 },
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "storage": {
+      "port": 9199
+    },
+    "functions": {
+      "port": 5001
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
     "singleProjectMode": true
   }
 }

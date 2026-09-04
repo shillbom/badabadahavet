@@ -1,6 +1,6 @@
 // Presentational helpers for the official Hav och Vatten water sample stored
 // per place in tempSummary/current (see WaterSample in lib/types.ts). Parsing
-// lives server-side (functions/tempLogic.js extractWaterSample); the client
+// lives server-side (src/server/tempLogic.js extractWaterSample); the client
 // only maps the numeric codes to a severity level and decides whether the
 // sample is fresh enough to show.
 

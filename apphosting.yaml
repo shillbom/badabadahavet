@@ -1,0 +1,100 @@
+# Firebase App Hosting backend config (Phase 6 of docs/nextjs-migration-plan.md).
+#
+# This file only describes the backend; it does not create or deploy one.
+# The backend has to be created once (`firebase apphosting:backends:create`,
+# region europe-west1) and PERSPECTIVE_API_KEY has to exist in Secret Manager
+# with the backend's service account granted access
+# (`firebase apphosting:secrets:set PERSPECTIVE_API_KEY` does both).
+
+# Match Firestore and the remaining Cloud Function (syncTempSummary) so
+# server-side reads don't cross a region.
+# NOTE: region is set on the backend at creation time, not here; kept as a
+# comment so the intended value lives with the rest of the config.
+# region: europe-west1
+
+runConfig:
+  # Scale to zero: the app is a small hobby league and static Hosting cost
+  # ~nothing. The trade-off is a Node cold start on the first crawler hit —
+  # measure Search Console latency before paying for minInstances: 1.
+  minInstances: 0
+  # A cap, not a target. Well above normal traffic but low enough that a
+  # crawl storm or a loop in a client can't run up an unbounded bill.
+  maxInstances: 5
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+  # The longest route is /api/deleteAccount and /api/banUser, which walk every
+  # session/group/leaderboard doc a user appears in (the callables allowed 120 s).
+  timeoutSeconds: 120
+
+env:
+  # ── Public client config ──────────────────────────────────────────────
+  # Everything NEXT_PUBLIC_* is inlined into the browser bundle at build
+  # time, so it must be available at BUILD as well as RUNTIME. Nothing
+  # secret belongs in this list (see src/env.d.ts).
+  #
+  # TODO(deploy): fill these in from the badligan project's web-app config
+  # (the same values .env.local carries). They are deliberately left as
+  # placeholders rather than copied in blind — a wrong appId/measurementId
+  # fails at runtime in ways that are annoying to trace. The API key is
+  # referrer-restricted, so the new *.hosted.app origins must be added to
+  # its allowlist before cutover or the client SDK starts 403-ing.
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "" # TODO(deploy)
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "" # TODO(deploy)
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "" # TODO(deploy)
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "" # TODO(deploy)
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "" # TODO(deploy)
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "" # TODO(deploy)
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+    value: "" # TODO(deploy)
+    availability:
+      - BUILD
+      - RUNTIME
+  # Production talks to the real project, never the emulators.
+  - variable: NEXT_PUBLIC_USE_FIREBASE_EMULATORS
+    value: "0"
+    availability:
+      - BUILD
+      - RUNTIME
+  # CARTO basemap key — without it every map tile is watermarked. Public by
+  # necessity (the browser requests the tiles) and domain-restricted at CARTO.
+  - variable: NEXT_PUBLIC_CARTO_API_KEY
+    value: ""
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # ── Server-only secrets ───────────────────────────────────────────────
+  # Perspective API key for text moderation. RUNTIME only: it is read in
+  # Route Handlers (src/server/moderate.ts) and must never reach the client
+  # bundle. When it is missing, moderation is skipped — the checks fail open
+  # on purpose, so a missing secret degrades quietly instead of blocking
+  # swims.
+  - variable: PERSPECTIVE_API_KEY
+    secret: PERSPECTIVE_API_KEY
+    availability:
+      - RUNTIME

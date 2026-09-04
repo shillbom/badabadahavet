@@ -1,4 +1,4 @@
-import { auth, cloudFn } from "@/firebase";
+import { auth, callApi } from "@/firebase";
 
 const STALE_AFTER_MS = 60 * 60 * 1000; // 1 hour
 const LOCAL_THROTTLE_MS = 5 * 60 * 1000; // don't ask for the same place more than once per 5 min
@@ -6,8 +6,6 @@ const LOCAL_THROTTLE_MS = 5 * 60 * 1000; // don't ask for the same place more th
 // In-memory record of the last refresh we triggered for each place,
 // so React re-renders or rapid re-opens don't spam the function call.
 const lastRequested = new Map<string, number>();
-
-const callable = cloudFn<{ placeId: string }, unknown>("refreshPlaceTemp");
 
 /**
  * Trigger a server-side temperature refresh for a place if the known
@@ -38,9 +36,11 @@ export function maybeRefreshPlaceTemp(
 
   // Fire-and-forget: the placeTemps snapshot subscription will pick up
   // any update automatically.
-  callable({ placeId }).catch(() => {
-    // Throttle / network failures are non-fatal; the user just sees the
-    // old reading. Clear our local cache so a retry on next open is OK.
-    lastRequested.delete(placeId);
-  });
+  callApi<{ placeId: string }, unknown>("refreshPlaceTemp", { placeId }).catch(
+    () => {
+      // Throttle / network failures are non-fatal; the user just sees the
+      // old reading. Clear our local cache so a retry on next open is OK.
+      lastRequested.delete(placeId);
+    },
+  );
 }
