@@ -22,4 +22,6 @@ emulator-data/
 *.serviceaccount.json
 service-account*.json
 .next/
-next-env.d.ts.bak
+# next-env.d.ts IS tracked (per Next's docs), but note it churns between
+# `.next/types/` and `.next/dev/types/` depending on whether `next build` or
+# `next dev` ran last. A `npm run build` normalizes it back.

@@ -80,6 +80,20 @@
       "ignore": ["node_modules", ".git", "*.log", "*.test.js"]
     }
   ],
+  "apphosting": {
+    "backendId": "badligan",
+    "rootDir": "/",
+    "alwaysDeployFromSource": true,
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "functions",
+      "docs",
+      "dist"
+    ]
+  },
   "emulators": {
     "auth": {
       "port": 9099
