@@ -1,6 +1,58 @@
 # Next.js + Firebase App Hosting migration plan
 
-Status: proposal. Nothing implemented yet.
+**Status: Phases 1–5 implemented on `feat/nextjs`. Phase 6 (deploy) not
+started — nothing has been deployed and the domain has not moved.**
+
+| Phase                       | State                                                                                    |
+| --------------------------- | ---------------------------------------------------------------------------------------- |
+| 1 — Next skeleton           | Done. Next **16.3.4**, not 15 (see deviations below).                                    |
+| 2 — routing                 | Done. `react-router` uninstalled; 33 App Router entries (22 pages + 11 API).             |
+| 3 — SSR spot pages, sitemap | Done. `/spot/[placeId]` is cached SSR HTML; `app/sitemap.ts` emits 5394 URLs.            |
+| 4 — PWA, manifest only      | Done, landed with Phase 1 (`virtual:pwa-register/react` can't outlive Vite).             |
+| 5 — functions into Next     | Done. 11 route handlers; `functions/` is `syncTempSummary` alone.                        |
+| 6 — deploy                  | **Not started.** `apphosting.yaml` is written but its `NEXT_PUBLIC_*` values are `TODO`. |
+
+Deviations from the plan as written, all deliberate:
+
+- **Next 16, not 15.** 16 was current stable; `reactCompiler` is top-level there.
+- **`compilationMode: "all"` is not the equivalent of Vite's widened Babel
+  filter** and must not be used: it compiles every function as a component,
+  which broke the zustand `create()` factories at runtime. Plain
+  `reactCompiler: true` (default `infer`) is correct — Next applies its own
+  per-file heuristics before Babel.
+- **`src/pages` had to become `src/views`** — Next claims `src/pages` for the
+  Pages Router and refuses to build alongside `app/`.
+- **Phase 3 needed a boot-gate fix first.** `AppBoot` rendered
+  `{booting ? null : children}`, so the server always emitted an empty shell
+  and SSR was a no-op. `booting` now gates only the splash overlay and the
+  after-boot popovers.
+- **Date formatting is pinned to `Europe/Stockholm`.** A UTC server and a
+  local browser otherwise disagreed about server-rendered swim dates. This is
+  user-visible: someone abroad sees Swedish-time timestamps.
+- **CI no longer releases the app.** `deploy.yml` is checks + rules only; the
+  old `deploy --only hosting` would have pushed the no-longer-produced `dist/`
+  over the live site. The Hosting preview channel in `preview.yml` is obsolete
+  for the same reason — a static channel can't run a Next server.
+
+Open items before cutover:
+
+1. **The Perspective API key still has an HTTP-referrer restriction** from
+   when it was a browser key. Server-side calls send no referrer, so Google
+   returns `403 API_KEY_HTTP_REFERRER_BLOCKED` and — because the checks fail
+   open by design — moderation currently passes everything. Drop the referrer
+   restriction in the Cloud console, keep the Comment Analyzer API restriction.
+2. **The write route handlers' happy paths are untested at runtime.** They are
+   ports of working callables (`HttpsError` → `ApiError`, `req.data` →
+   `readJson(req)`), but nothing was written to production. Exercise
+   `logSession` / `updateSession` / `removeSession` / group join / `banUser` /
+   `deleteAccount` against the emulators.
+3. **Do not deploy functions with `--force` yet** — it deletes the retired
+   callables and destroys the client rollback path. See the hazard note in
+   `.github/workflows/deploy.yml`.
+4. **`public/sw.js` is a kill-switch**, not a real worker. Remove it (and its
+   `next.config.ts` no-cache header) one release after cutover.
+5. An unknown spot id answers **200, not 404** — `Layout`'s Suspense boundary
+   streams the shell before the async page resolves. Documented in the page.
 
 ## Goal
 
@@ -15,9 +67,9 @@ Assumption (say so if wrong): the **whole** app moves to Next and Firebase App
 Hosting becomes the only serving surface. The smaller alternative — keep the
 Vite SPA and add Next only for public/SEO routes — is discussed at the end.
 
-## Where we are today
+## Where we started (historical — this is the pre-migration state)
 
-| Piece           | Today                                                                                                         |
+| Piece           | Before                                                                                                        |
 | --------------- | ------------------------------------------------------------------------------------------------------------- |
 | App             | Vite 8 + React 19 SPA, react-router v8, ~132 files, one Zustand store                                         |
 | Routing surface | 25 files import `react-router`; 33 hook call sites; 31 `<Link>`                                               |
