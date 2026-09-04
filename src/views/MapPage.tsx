@@ -1,3 +1,5 @@
+"use client";
+
 import { useAuth } from "@/auth/AuthContext";
 import StreakCard from "@/components/StreakCard";
 import Stat from "@/components/ui/Stat";
@@ -14,15 +16,9 @@ import { haversineMeters } from "@/lib/utils";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { m } from "framer-motion";
 import { MapPin, Trophy } from "lucide-react";
-import {
-  lazy,
-  useEffect,
-  useEffectEvent,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
-const SwimMap = lazy(() => import("@/components/SwimMap"));
+import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
+// Client-only + lazily loaded; see components/SwimMapDynamic.ts.
+import SwimMap from "@/components/SwimMapDynamic";
 
 export default function MapPage() {
   const { user, profile } = useAuth();

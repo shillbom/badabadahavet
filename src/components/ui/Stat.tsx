@@ -1,6 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 import { m } from "framer-motion";
-import { Link } from "react-router";
+import Link from "next/link";
 import { AnimatedNumber } from "@/components/AnimatedNumber";
 import { cn } from "@/lib/utils";
 
@@ -64,7 +66,7 @@ export default function Stat({
       className="h-full"
     >
       {to != null ? (
-        <Link to={to} className={cardClass}>
+        <Link href={to} className={cardClass}>
           {inner}
         </Link>
       ) : onClick != null ? (

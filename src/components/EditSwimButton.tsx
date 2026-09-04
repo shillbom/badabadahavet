@@ -1,4 +1,6 @@
-import { Link } from "react-router";
+"use client";
+
+import Link from "next/link";
 import { Pencil } from "lucide-react";
 import type { SessionDoc } from "@/lib/types";
 import { currentYear, swimYear } from "@/lib/scoring";
@@ -28,7 +30,7 @@ export default function EditSwimButton({
   if (swimYear(session.date) < currentYear()) return null;
   return (
     <Link
-      to={`/swim/${session.id}/edit`}
+      href={`/swim/${session.id}/edit`}
       onClick={onNavigate}
       className={cn(
         "rounded-full bg-white/80 p-1.5 text-wave-700 ring-1 ring-slate-200 hover:bg-white",

@@ -1,4 +1,6 @@
-import { Link } from "react-router";
+"use client";
+
+import Link from "next/link";
 import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { consentRelevant, useConsent } from "@/lib/consent";
@@ -174,7 +176,7 @@ export default function PrivacyPage() {
       </Section>
 
       <div className="mt-8 text-center text-xs text-slate-500">
-        <Link to="/about" className="hover:underline">
+        <Link href="/about" className="hover:underline">
           ← {t("privacy.back")}
         </Link>
       </div>

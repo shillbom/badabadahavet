@@ -1,5 +1,7 @@
+"use client";
+
 import { AnimatePresence, m } from "framer-motion";
-import { Link } from "react-router";
+import Link from "next/link";
 import { Cookie } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useT } from "@/lib/i18n";
@@ -40,7 +42,7 @@ export default function ConsentBanner() {
                 <p className="mt-1 text-[13px] leading-relaxed text-slate-600">
                   {t("consent.body")}{" "}
                   <Link
-                    to="/privacy"
+                    href="/privacy"
                     className="font-semibold text-wave-700 underline hover:text-wave-800"
                   >
                     {t("consent.learn")}

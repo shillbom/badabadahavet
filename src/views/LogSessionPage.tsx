@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useReducer, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useRouter, useSearchParams } from "next/navigation";
 import { m, AnimatePresence } from "framer-motion";
 import {
   MapPin,
@@ -159,7 +161,7 @@ function useSubmitSwim(args: {
   photoFileRef: React.RefObject<File | null>;
   countryRef: React.RefObject<string | null>;
 }) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const t = useT();
   const [busy, setBusy] = useState(false);
   const {
@@ -274,7 +276,7 @@ function useSubmitSwim(args: {
       ) {
         toast.success(t("log.buoy_earned"));
       }
-      navigate("/history");
+      router.push("/history");
     } catch (err) {
       // A too-large / unreadable photo gets a specific message, a name or
       // note rejected by moderation gets another; everything else falls
@@ -305,7 +307,7 @@ function useSubmitSwim(args: {
 
 export default function LogSessionPage() {
   const { user, profile } = useAuth();
-  const [searchParams] = useSearchParams();
+  const searchParams = useSearchParams();
   const t = useT();
   // The native datetime-local picker formats date + 12h/24h time from
   // the input's own `lang`, not from <html lang>. en-GB → 24h with sane

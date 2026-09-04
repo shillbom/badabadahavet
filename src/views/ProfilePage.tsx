@@ -1,5 +1,8 @@
+"use client";
+
 import { useState, useTransition } from "react";
-import { Link, useNavigate } from "react-router";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { m, AnimatePresence } from "framer-motion";
 import {
   Award,
@@ -162,7 +165,7 @@ export default function ProfilePage() {
       {myStats.totalSwims > 0 ? (
         <div className="mb-4 grid grid-cols-2 gap-2">
           <Link
-            to="/recap"
+            href="/recap"
             className="glass flex items-center gap-2 bg-gradient-to-br from-amber-50 via-white to-wave-50 p-3"
           >
             <Sparkles className="h-5 w-5 text-amber-500" />
@@ -176,7 +179,7 @@ export default function ProfilePage() {
             </div>
           </Link>
           <Link
-            to="/achievements"
+            href="/achievements"
             className="glass flex items-center gap-2 p-3"
           >
             <Award className="h-5 w-5 text-amber-500" />
@@ -197,7 +200,7 @@ export default function ProfilePage() {
 
       {/* History shortcut — History isn't in the bottom nav anymore, so
           make sure it stays discoverable from the profile. */}
-      <Link to="/history" className="glass mb-4 flex items-center gap-2 p-3">
+      <Link href="/history" className="glass mb-4 flex items-center gap-2 p-3">
         <HistoryIcon className="h-5 w-5 text-wave-700" />
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
@@ -249,7 +252,7 @@ export default function ProfilePage() {
  */
 function useProfileActions(uid: string | undefined) {
   const { deleteAccount } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const t = useT();
   const [nameBusy, startBusy] = useTransition();
   const [deleting, deleteTransition] = useTransition();
@@ -268,7 +271,7 @@ function useProfileActions(uid: string | undefined) {
       try {
         await deleteAccount();
         // Auth state listener will tear down to the login screen.
-        navigate("/", { replace: true });
+        router.replace("/");
       } catch (e) {
         const msg = (e as Error).message ?? "";
         if (msg.includes("requires-recent-login")) {
@@ -464,7 +467,7 @@ function ProfileHeader({
       )}
 
       <Link
-        to="/achievements"
+        href="/achievements"
         className={cn(
           "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ring-1",
           border.id === "none"
@@ -749,7 +752,7 @@ function ProfileFooter({
       ) : null}
       {isAdmin ? (
         <Link
-          to="/admin/users"
+          href="/admin/users"
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-sm font-semibold text-amber-700 transition hover:bg-amber-50"
         >
           <ShieldCheck className="h-4 w-4" />
@@ -757,7 +760,7 @@ function ProfileFooter({
         </Link>
       ) : null}
       <Link
-        to="/about"
+        href="/about"
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-white"
       >
         <Info className="h-4 w-4" />
@@ -968,7 +971,7 @@ function Vibes({ stats }: { stats: MyStats }) {
 
       {stats.favouriteSpot ? (
         <Link
-          to={`/spot/${stats.favouriteSpot.placeId}`}
+          href={`/spot/${stats.favouriteSpot.placeId}`}
           className="glass flex items-center gap-3 p-3"
         >
           <Star className="h-5 w-5 text-amber-500" />
@@ -1019,7 +1022,7 @@ function Vibes({ stats }: { stats: MyStats }) {
 
       {stats.onThisDay ? (
         <Link
-          to={`/spot/${stats.onThisDay.placeId}`}
+          href={`/spot/${stats.onThisDay.placeId}`}
           className="glass flex items-start gap-3 bg-gradient-to-br from-wave-50 to-white p-3"
         >
           <span className="text-2xl">🗓️</span>

@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router";
+import Redirect from "@/components/Redirect";
 import { m } from "framer-motion";
 import { Ban, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
@@ -37,7 +39,7 @@ export default function AdminUsersPage() {
 
   // Only admins with admin mode on may see this page; everyone else (including
   // admins browsing as normal users) is bounced home once the profile loads.
-  if (profile && !isAdmin) return <Navigate to="/" replace />;
+  if (profile && !isAdmin) return <Redirect to="/" />;
 
   async function onBan(target: UserDoc) {
     setBusyUid(target.uid);

@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useRouter, useSearchParams } from "next/navigation";
 import { m, AnimatePresence } from "framer-motion";
 import { DayPicker, type DateRange } from "react-day-picker";
 import { sv as svLocale, enGB } from "react-day-picker/locale";
@@ -115,7 +117,8 @@ function useGroupActions(user: ReturnType<typeof useAuth>["user"]) {
   const [busy, setBusy] = useState(false);
   // Optional competition timespan. `undefined` means "no window set".
   const [timespan, setTimespan] = useState<DateRange | undefined>(undefined);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Pending join confirmation: the group preview returned by lookupGroupByCode.
   const [pendingJoin, setPendingJoin] = useState<JoinPreview | null>(null);
@@ -173,7 +176,9 @@ function useGroupActions(user: ReturnType<typeof useAuth>["user"]) {
   useEffect(() => {
     const code = searchParams.get("join");
     if (!code) return;
-    setSearchParams({}, { replace: true });
+    // Strip ?join= so a reload (or a back-nav) doesn't re-trigger the
+    // dialog. `scroll: false` keeps the list where it is.
+    router.replace("/groups", { scroll: false });
     // Small delay so the page is fully rendered before the dialog appears.
     // Cleared on unmount so navigating away before it fires can't run a
     // stale callback (setState/toast on an unmounted page).

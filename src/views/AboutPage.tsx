@@ -1,4 +1,6 @@
-import { Link } from "react-router";
+"use client";
+
+import Link from "next/link";
 import { m } from "framer-motion";
 import { useT } from "@/lib/i18n";
 import BackButton from "@/components/ui/BackButton";
@@ -156,7 +158,7 @@ export default function AboutPage() {
       <Section title={t("about.privacy.title")}>
         <p>{t("about.privacy.body")}</p>
         <Link
-          to="/privacy"
+          href="/privacy"
           className="mt-2 inline-block font-semibold text-wave-700 underline hover:text-wave-800"
         >
           {t("about.privacy.link")} →
@@ -206,7 +208,7 @@ export default function AboutPage() {
         </p>
       </div>
       <div className="mt-3 text-center text-xs text-slate-500">
-        <Link to="/profile" className="hover:underline">
+        <Link href="/profile" className="hover:underline">
           ← {t("profile.title")}
         </Link>
       </div>

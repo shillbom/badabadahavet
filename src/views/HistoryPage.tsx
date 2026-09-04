@@ -1,6 +1,9 @@
+"use client";
+
 import { m } from "framer-motion";
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ChevronRight, MapPin, Snowflake, Sparkles } from "lucide-react";
 import { useStore } from "@/store/sessions";
 import { useT } from "@/lib/i18n";
@@ -22,7 +25,7 @@ function streakSessions(sessions: SessionDoc[]): SessionDoc[] {
 export default function HistoryPage() {
   const sessions = useStore((s) => s.mySessions);
   const t = useT();
-  const [params] = useSearchParams();
+  const params = useSearchParams();
   const view = params.get("view");
   const [showOlder, setShowOlder] = useState(false);
 
@@ -141,7 +144,7 @@ export default function HistoryPage() {
         </h2>
         {view ? (
           <Link
-            to="/history"
+            href="/history"
             className="text-xs font-semibold text-wave-700 hover:underline"
           >
             {t("history.back")}
@@ -192,7 +195,7 @@ export default function HistoryPage() {
               }
               title={
                 <Link
-                  to={`/spot/${s.placeId}`}
+                  href={`/spot/${s.placeId}`}
                   className="flex items-center gap-1 font-display text-base font-bold text-wave-900"
                 >
                   <span className="truncate">{s.placeName}</span>
@@ -273,7 +276,7 @@ function HistoryRow({
       transition={{ delay: Math.min(index, 8) * 0.03 }}
       className="glass overflow-hidden p-0"
     >
-      <Link to={to} className="flex">
+      <Link href={to} className="flex">
         {photoUrl ? (
           <Photo
             src={photoUrl}

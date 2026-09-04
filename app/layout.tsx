@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import "@/index.css";
+import AppBoot from "./AppBoot";
 
 const SITE = "https://badligan.club";
 const TITLE = "Badligan – logga bad, samla badplatser och tävla med vänner";
@@ -151,7 +152,7 @@ export default function RootLayout({
             beforeInteractive (not the client bundle) because hydration
             happens far too late — see src/lib/appHeight.ts for the full
             story; the resize/orientation/pageshow listeners it installs are
-            attached from ClientShell once the app mounts. */}
+            attached from app/AppBoot.tsx once the app mounts. */}
         <Script id="app-height" strategy="beforeInteractive">
           {`(function(){var h=Math.round(window.innerHeight);if(h>0)document.documentElement.style.setProperty("--app-height",h+"px")})()`}
         </Script>
@@ -163,7 +164,11 @@ export default function RootLayout({
           {JSON.stringify(JSON_LD)}
         </Script>
       </head>
-      <body className="bg-sky-50">{children}</body>
+      <body className="bg-sky-50">
+        {/* One client shell for every route: store boot, boot/splash gate and
+            the global overlays. See app/AppBoot.tsx. */}
+        <AppBoot>{children}</AppBoot>
+      </body>
     </html>
   );
 }

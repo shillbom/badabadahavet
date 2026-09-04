@@ -1,68 +1,45 @@
-import { lazy } from "react";
-
 /**
- * Route-level code splitting + post-login preload config.
+ * Post-login route warm-up.
  *
- * Each page is registered once below. The order matters: it controls
- * the priority in which preload happens after login (Map first since
- * it's already shown, Recap last because it's the heaviest chunk).
+ * Route-level code splitting itself is Next's job now (one client bundle per
+ * `app/**\/page.tsx`), so the lazy-import table this file used to hold is
+ * gone — and with it `withStaleReload`, whose chunk-404 guard existed for
+ * Vite's content-hashed chunks plus the retired service worker.
+ *
+ * What survives is the *ordering intent*: warm the routes a signed-in user is
+ * most likely to hit next, cheapest-and-soonest first. Map leads (it's the
+ * page already on screen, so its bundle is free) and Recap trails (heaviest
+ * bundle, rarest visit). `router.prefetch` pulls each route's RSC payload and
+ * client bundle into Next's cache; it's idempotent and a no-op once cached.
  */
-const PAGES = [
-  { key: "Map", load: () => import("@/views/MapPage") },
-  {
-    key: "History",
-    load: () => import("@/views/HistoryPage"),
-  },
-  {
-    key: "Leaderboard",
-    load: () => import("@/views/LeaderboardPage"),
-  },
-  { key: "Log", load: () => import("@/views/LogSessionPage") },
-  {
-    key: "EditSwim",
-    load: () => import("@/views/EditSwimPage"),
-  },
-  { key: "Groups", load: () => import("@/views/GroupsPage") },
-  { key: "Spot", load: () => import("@/views/SpotPage") },
-  {
-    key: "Achievements",
-    load: () => import("@/views/AchievementsPage"),
-  },
-  {
-    key: "Streak",
-    load: () => import("@/views/StreakPage"),
-  },
-  {
-    key: "Profile",
-    load: () => import("@/views/ProfilePage"),
-  },
-  { key: "About", load: () => import("@/views/AboutPage") },
-  {
-    key: "Privacy",
-    load: () => import("@/views/PrivacyPage"),
-  },
-  { key: "Recap", load: () => import("@/views/RecapPage") },
-  { key: "Toswim", load: () => import("@/views/ToswimPage") },
-  {
-    key: "AdminUsers",
-    load: () => import("@/views/AdminUsersPage"),
-  },
+
+/** Routes to warm after login, in priority order. */
+const PREFETCH_ROUTES = [
+  "/",
+  "/history",
+  "/leaderboard",
+  "/log",
+  "/groups",
+  "/achievements",
+  "/streak",
+  "/profile",
+  "/about",
+  "/privacy",
+  "/toswim",
+  "/recap",
 ] as const;
 
-type PageKey = (typeof PAGES)[number]["key"];
-
-const lazyByKey = Object.fromEntries(
-  PAGES.map((p) => [p.key, lazy(p.load)]),
-) as unknown as Record<PageKey, ReturnType<typeof lazy>>;
-
-export const Pages = lazyByKey;
+type Prefetcher = { prefetch: (href: string) => void };
 
 /**
- * Warm up every page chunk in the browser's module cache. Idempotent:
- * once a chunk is loaded it stays loaded; subsequent calls are no-ops.
- * Runs in idle time so it doesn't fight with the initial render.
+ * Prefetch every warm-up route in order. Runs in idle time so it doesn't
+ * fight the initial render. Returns a cancel function for effect cleanup.
+ *
+ * Note: `/spot/[placeId]`, `/swim/[sessionId]/edit` and `/admin/users` are
+ * deliberately absent — the first two are per-id (nothing to warm without
+ * knowing which), and admin is a route almost nobody opens.
  */
-export function preloadAllPages(): () => void {
+export function prefetchAllPages(router: Prefetcher): () => void {
   const ric: (cb: () => void) => number =
     (
       window as unknown as {
@@ -70,8 +47,12 @@ export function preloadAllPages(): () => void {
       }
     ).requestIdleCallback ?? ((cb) => window.setTimeout(cb, 600));
   const handle = ric(() => {
-    for (const { load } of PAGES) {
-      void load().catch(() => {});
+    for (const route of PREFETCH_ROUTES) {
+      try {
+        router.prefetch(route);
+      } catch {
+        /* prefetch is best-effort */
+      }
     }
   });
   return () => {

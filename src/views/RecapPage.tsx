@@ -1,5 +1,8 @@
+"use client";
+
 import { useReducer, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { m, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -59,7 +62,7 @@ function recapNavigationReducer(
 }
 
 export default function RecapPage() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { user } = useAuth();
   const mySessions = useStore((s) => s.mySessions);
   const allSessions = useStore((s) => s.allSessions);
@@ -118,7 +121,7 @@ export default function RecapPage() {
         year={year}
         canGoPrev={canGoPrev}
         canGoNext={canGoNext}
-        onBack={() => navigate(-1)}
+        onBack={() => router.back()}
         onChangeYear={(delta) => navigateRecap({ type: "changeYear", delta })}
       />
 
@@ -263,7 +266,7 @@ function RecapFooter({
           </Button>
           <m.div whileTap={{ scale: 0.96 }}>
             <Link
-              to="/"
+              href="/"
               className={buttonClasses("secondary", "lg", "text-sm")}
             >
               {t("recap.back_to_map")}
@@ -549,7 +552,7 @@ function SlideCard({ slide }: { slide: Slide }) {
   );
 
   if (slide.kind !== "achievements" && slide.link) {
-    return <Link to={slide.link}>{inner}</Link>;
+    return <Link href={slide.link}>{inner}</Link>;
   }
   return inner;
 }
@@ -595,7 +598,7 @@ function AchievementsSlide({
         </div>
       ) : null}
       <Link
-        to="/achievements"
+        href="/achievements"
         className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-wave-700"
       >
         {t("recap.achievements.see_all")} <Award className="h-3 w-3" />

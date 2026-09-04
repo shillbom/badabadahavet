@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useReducer, useRef, useState } from "react";
 import { m, AnimatePresence } from "framer-motion";
 import {
@@ -12,7 +14,7 @@ import {
   WavesArrowDown,
   X,
 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/auth/AuthContext";
 import { Button } from "@/components/ui/Button";
 import SegmentedControl from "@/components/ui/SegmentedControl";
@@ -46,7 +48,7 @@ function useAuthForm() {
     user,
     resetPassword,
   } = useAuth();
-  const navigate = useNavigate();
+  const router = useRouter();
   const t = useT();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -137,7 +139,7 @@ function useAuthForm() {
         toast.success(t("auth.hello_again"));
       }
       // Return the user to wherever they came from (e.g. /spot/abc).
-      navigate(consumeReturnPath(), { replace: true });
+      router.replace(consumeReturnPath());
     } catch (err) {
       if (err instanceof ModerationError) {
         toast.error(t("moderation.name_rejected"));
@@ -181,7 +183,7 @@ function useAuthForm() {
           name: onboardingDisplayName.trim(),
         }),
       );
-      navigate(consumeReturnPath(), { replace: true });
+      router.replace(consumeReturnPath());
     } catch (err) {
       if (err instanceof ModerationError) {
         toast.error(t("moderation.name_rejected"));
@@ -211,7 +213,7 @@ function useAuthForm() {
 
   return {
     t,
-    navigate,
+    router,
     mode,
     setMode,
     email,
@@ -278,13 +280,13 @@ function AuthHeader({ subtitle }: { subtitle: string }) {
 
 // Top-right controls (About link + language switcher), shared by both views.
 function TopBar() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const t = useT();
   return (
     <div className="absolute top-[max(env(safe-area-inset-top),0.75rem)] right-3 z-10 flex items-center gap-2">
       <button
         type="button"
-        onClick={() => navigate("/about")}
+        onClick={() => router.push("/about")}
         className="flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-wave-700 ring-1 ring-wave-200 backdrop-blur-sm hover:bg-white"
         aria-label={t("nav.about")}
       >
@@ -634,7 +636,7 @@ function LoginView({ form }: { form: FormState }) {
             } catch {
               /* ignore */
             }
-            form.navigate("/");
+            form.router.push("/");
           }}
           className="block w-full text-center text-[12px] font-semibold text-wave-700 hover:underline"
         >

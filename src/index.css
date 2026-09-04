@@ -53,8 +53,10 @@
     U+2215, U+FEFF, U+FFFD;
 }
 
-/* Tell Tailwind v4 where to look for class usage. */
-@source "../index.html";
+/* Tell Tailwind v4 where to look for class usage. `app/` holds the App Router
+   layouts/pages (the old index.html is gone — its markup lives in
+   app/layout.tsx). */
+@source "../app/**/*.{ts,tsx}";
 @source "./**/*.{ts,tsx}";
 
 /* Theme — Tailwind v4 reads custom tokens from CSS instead of a JS config. */

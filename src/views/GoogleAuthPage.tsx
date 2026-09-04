@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router";
+import Redirect from "@/components/Redirect";
 import { getRedirectResult } from "firebase/auth";
 import { auth } from "@/firebase";
 import { FullSplash } from "@/components/Splash";
@@ -40,7 +42,14 @@ export default function GoogleAuthPage() {
   }, [t]);
 
   if (target) {
-    return <Navigate replace to={target} />;
+    // Keep the splash up while the (effect-driven) replace lands, so the
+    // hand-off from the Google redirect to the app never flashes blank.
+    return (
+      <>
+        <Redirect to={target} />
+        <FullSplash />
+      </>
+    );
   }
 
   return <FullSplash />;

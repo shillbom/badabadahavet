@@ -1,4 +1,6 @@
-import { Link } from "react-router";
+"use client";
+
+import Link from "next/link";
 import { MapPin, Thermometer } from "lucide-react";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { useAuth } from "@/auth/AuthContext";
@@ -118,7 +120,7 @@ export default function SwimNudge({
           ) : null}
 
           <Link
-            to={`/spot/${suggestion.place.id}`}
+            href={`/spot/${suggestion.place.id}`}
             onClick={onClose}
             className={buttonClasses("primary", "md", "w-full")}
           >

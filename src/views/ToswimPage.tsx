@@ -1,5 +1,7 @@
+"use client";
+
 import { useState } from "react";
-import { Link } from "react-router";
+import Link from "next/link";
 import { m } from "framer-motion";
 import {
   Check,
@@ -187,7 +189,7 @@ export default function ToswimPage() {
               <div className="flex items-stretch">
                 {e.place ? (
                   <Link
-                    to={`/spot/${e.place.id}`}
+                    href={`/spot/${e.place.id}`}
                     className="flex flex-1 items-center gap-3 p-3"
                   >
                     <div

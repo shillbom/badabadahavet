@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useParams, useRouter } from "next/navigation";
 import { Camera, MapPin, Trash2, X } from "lucide-react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
@@ -36,8 +38,11 @@ type PhotoEdit =
  * the swim lives here too, instead of a bare delete button in the lists.
  */
 export default function EditSwimPage() {
-  const { sessionId } = useParams<{ sessionId: string }>();
-  const navigate = useNavigate();
+  // Next's useParams types every value as string | string[] (catch-all
+  // segments); [sessionId] is a single segment, so anything else is a bug.
+  const rawSessionId = useParams().sessionId;
+  const sessionId = typeof rawSessionId === "string" ? rawSessionId : undefined;
+  const router = useRouter();
   const { user } = useAuth();
   const t = useT();
   // Same reason as LogSessionPage: the native datetime-local picker formats
@@ -170,7 +175,7 @@ export default function EditSwimPage() {
     else if (photoEdit.kind === "replace") edits.photoFile = photoEdit.file;
 
     if (Object.keys(edits).length === 0) {
-      navigate(-1);
+      router.back();
       return;
     }
 
@@ -181,7 +186,7 @@ export default function EditSwimPage() {
       if (edits.note) await assertTextAllowed(edits.note);
       await updateSession(session, edits);
       toast.success(t("swim.edit.saved"));
-      navigate(-1);
+      router.back();
     } catch (err) {
       if (err instanceof ImageProcessingError) {
         toast.error(
@@ -217,7 +222,7 @@ export default function EditSwimPage() {
     try {
       await removeSession(session.id);
       toast.success(t("swim.edit.deleted"));
-      navigate(-1);
+      router.back();
     } catch {
       toast.error(t("swim.edit.delete_error"));
     }

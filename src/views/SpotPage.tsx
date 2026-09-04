@@ -1,5 +1,8 @@
+"use client";
+
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import Link from "next/link";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Info,
@@ -55,7 +58,7 @@ import {
 } from "@/lib/waterQuality";
 import { maybeRefreshPlaceTemp } from "@/lib/refreshTemp";
 import { useStore } from "@/store/sessions";
-import SwimMap from "@/components/SwimMap";
+import SwimMap from "@/components/SwimMapDynamic";
 import SwimPhoto from "@/components/SwimPhoto";
 import ReactionBar from "@/components/ReactionBar";
 import SwimListItem from "@/components/SwimListItem";
@@ -109,14 +112,14 @@ function SpotViewContent({
   variant?: "page" | "sheet";
   onClose?: () => void;
 }) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { user, profile } = useAuth();
   const isAdmin = useIsAdmin();
   const t = useT();
   const { place, loading, setPlace, sessions, reading, waterSample } =
     useSpotData(placeId);
   const [showTempHistory, setShowTempHistory] = useState(false);
-  const [searchParams] = useSearchParams();
+  const searchParams = useSearchParams();
   const focusedSessionId = searchParams.get("session");
   // Track which sessions have been highlighted once so we don't replay
   // the effect every time the sessions list re-streams from Firestore.
@@ -162,9 +165,10 @@ function SpotViewContent({
 
   async function onShareSpot() {
     if (!place) return;
-    // `/s/...` is the share entrypoint that serves per-place OG tags to link
-    // scrapers and 302s real browsers into `/spot/...` (see functions/index.js
-    // spotPreview + the SPA fallback route in App.tsx).
+    // `/s/...` is the share entrypoint, kept as a permanent redirect to
+    // `/spot/...` (app/s/[placeId]/route.ts) so links shared from older
+    // versions keep resolving. Phase 3 moves the per-place OG tags the old
+    // spotPreview function served onto the spot page's generateMetadata.
     const url = `${window.location.origin}/s/${place.id}`;
     const result = await shareOrCopy({
       url,
@@ -242,7 +246,7 @@ function SpotViewContent({
       await adminDeletePlace(place.id);
       toast.success(t("admin.delete_spot.success"));
       if (variant === "sheet") onClose?.();
-      else navigate("/", { replace: true });
+      else router.replace("/");
     } catch {
       toast.error(t("admin.delete_spot.error"));
     }
@@ -484,13 +488,13 @@ function SpotHeader({
   onClose?: () => void;
   onShareSpot: () => void;
 }) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const t = useT();
   return (
     <div className="mb-3 flex items-center gap-2">
       <button
         type="button"
-        onClick={() => (variant === "sheet" ? onClose?.() : navigate(-1))}
+        onClick={() => (variant === "sheet" ? onClose?.() : router.back())}
         className="rounded-full bg-white/70 p-2 ring-1 ring-slate-200"
         aria-label={variant === "sheet" ? t("common.close") : t("common.back")}
       >
@@ -806,7 +810,7 @@ function SpotFooterCta({
     <div className="mt-6 text-center">
       {isGuest ? (
         <Link
-          to="/login"
+          href="/login"
           onClick={rememberReturnPath}
           className={buttonClasses("primary", "md")}
         >
@@ -815,7 +819,7 @@ function SpotFooterCta({
         </Link>
       ) : (
         <Link
-          to={`/log?placeId=${placeId}`}
+          href={`/log?placeId=${placeId}`}
           className={buttonClasses("primary", "md")}
         >
           {t("spot.log_here")}
@@ -826,7 +830,10 @@ function SpotFooterCta({
 }
 
 export default function SpotPage() {
-  const { placeId } = useParams<{ placeId: string }>();
+  // Next's useParams types every value as string | string[] (catch-all
+  // segments); [placeId] is a single segment, so anything else is a bug.
+  const raw = useParams().placeId;
+  const placeId = typeof raw === "string" ? raw : undefined;
   const t = useT();
   if (!placeId) {
     return (
