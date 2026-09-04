@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Info,
@@ -74,6 +74,26 @@ import { toast } from "@/components/ui/toastStore";
 import { confirm, promptText } from "@/components/ui/confirmStore";
 
 /**
+ * What the server already knows about a spot when it renders the page (see
+ * src/server/spotData.ts). Seeding the view with it is what makes
+ * `/spot/[placeId]` real HTML for crawlers and first paint: this component
+ * renders the same markup from the same props on the server and on its first
+ * client render, so hydration matches exactly and nothing has to be
+ * duplicated into a separate server-only presentation.
+ *
+ * Omitted by the sheet variant, which always starts empty and streams in.
+ */
+export type SpotInitialData = {
+  place: PlaceDoc;
+  /** The newest swims, newest first — a bounded window, not the history. */
+  sessions: SessionDoc[];
+  /** Total swims ever logged here. Read as an aggregate count, so it is the
+   *  real figure even though `sessions` is only the newest slice. */
+  swimCount: number;
+  reading: TempReading | null;
+};
+
+/**
  * The spot detail UI (map, stats, photos, recent dips). Extracted from the
  * routed page so it can also be rendered inside a {@link BottomSheet} (e.g.
  * tapping a place in the recap) without a full navigation.
@@ -85,10 +105,12 @@ export function SpotView({
   placeId,
   variant = "page",
   onClose,
+  initial,
 }: {
   placeId: string;
   variant?: "page" | "sheet";
   onClose?: () => void;
+  initial?: SpotInitialData;
 }) {
   // Changing spots is a full data-context change. A keyed remount resets the
   // subscriptions and live-reading state before the new spot can render,
@@ -99,6 +121,7 @@ export function SpotView({
       placeId={placeId}
       variant={variant}
       onClose={onClose}
+      initial={initial}
     />
   );
 }
@@ -107,20 +130,38 @@ function SpotViewContent({
   placeId,
   variant = "page",
   onClose,
+  initial,
 }: {
   placeId: string;
   variant?: "page" | "sheet";
   onClose?: () => void;
+  initial?: SpotInitialData;
 }) {
   const router = useRouter();
   const { user, profile } = useAuth();
   const isAdmin = useIsAdmin();
   const t = useT();
-  const { place, loading, setPlace, sessions, reading, waterSample } =
-    useSpotData(placeId);
+  const {
+    place,
+    loading,
+    setPlace,
+    sessions,
+    reading,
+    waterSample,
+    swimCountHint,
+  } = useSpotData(placeId, initial);
   const [showTempHistory, setShowTempHistory] = useState(false);
-  const searchParams = useSearchParams();
-  const focusedSessionId = searchParams.get("session");
+  // The `?session=<id>` deep link is read from the URL *after* mount rather
+  // than with useSearchParams(): that hook opts the whole client subtree up to
+  // the nearest Suspense boundary out of server rendering, which would leave
+  // the spot page's HTML empty — the one thing Phase 3 exists to fix. The
+  // highlight is a scroll-and-flash effect anyway, so it has nothing to
+  // contribute to the first render.
+  const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("session");
+    if (id) setFocusedSessionId(id);
+  }, []);
   // Track which sessions have been highlighted once so we don't replay
   // the effect every time the sessions list re-streams from Firestore.
   const highlightedRef = useRef<Set<string>>(new Set());
@@ -167,8 +208,8 @@ function SpotViewContent({
     if (!place) return;
     // `/s/...` is the share entrypoint, kept as a permanent redirect to
     // `/spot/...` (app/s/[placeId]/route.ts) so links shared from older
-    // versions keep resolving. Phase 3 moves the per-place OG tags the old
-    // spotPreview function served onto the spot page's generateMetadata.
+    // versions keep resolving. The per-place OG tags a scraper follows it to
+    // come from the spot page's own generateMetadata.
     const url = `${window.location.origin}/s/${place.id}`;
     const result = await shareOrCopy({
       url,
@@ -344,7 +385,10 @@ function SpotViewContent({
       />
 
       <div className="mt-3 grid grid-cols-3 gap-2">
-        <Stat label={t("spot.stat.swims")} value={stats.total} />
+        <Stat
+          label={t("spot.stat.swims")}
+          value={swimCountHint ?? stats.total}
+        />
         <Stat
           label={t("spot.stat.people")}
           value={stats.swimmerCount}
@@ -418,15 +462,24 @@ function SpotViewContent({
  * reading and the latest official water sample. Kept in a hook so the view
  * component stays focused on layout.
  */
-function useSpotData(placeId: string) {
+function useSpotData(placeId: string, initial?: SpotInitialData) {
+  // `initial` (the server's read) seeds the very first render, so the page
+  // ships as real HTML and hydrates without a spinner. Everything below is
+  // still replaced by the live listeners the moment they deliver.
   const [{ place, loading }, setPlaceState] = useState<{
     place: PlaceDoc | null;
     loading: boolean;
-  }>({ place: null, loading: true });
+  }>(
+    initial
+      ? { place: initial.place, loading: false }
+      : { place: null, loading: true },
+  );
   const setPlace = (next: PlaceDoc) => {
     setPlaceState((current) => ({ ...current, place: next }));
   };
-  const [sessions, setSessions] = useState<SessionDoc[]>([]);
+  const [sessions, setSessions] = useState<SessionDoc[]>(
+    initial?.sessions ?? [],
+  );
   // The live per-place reading (placeTemps/{id}) — fresher than the daily
   // summary once an on-demand refresh has landed. undefined = the snapshot
   // hasn't delivered yet (so we don't fire a refresh against a reading we
@@ -454,12 +507,26 @@ function useSpotData(placeId: string) {
 
   // Freshest known reading: the live per-place doc wins over the daily
   // summary entry when both exist (freshestReading validates each side).
+  // The server's tempSummary entry stands in until the client's own
+  // tempSummary listener has delivered — same doc, so they agree.
   const summaryTemp = useStore((s) => s.tempsByPlace.get(placeId));
-  const reading = freshestReading(liveTemp, summaryTemp ?? null);
+  const reading = freshestReading(
+    liveTemp,
+    summaryTemp ?? initial?.reading ?? null,
+  );
   const readingAt = reading?.at;
   // Latest official water sample (verdict + algae), from the same summary doc
   // as the temps. Only Hav och Vatten baths with a recent sample have one.
   const waterSample = useStore((s) => s.qualityByPlace.get(placeId));
+
+  // Total swims. While the list is still the server's slice (reference
+  // equality: watchPlaceSessions always hands over a fresh array), the
+  // aggregate count that came with it is the truth — a busy spot would
+  // otherwise be server-rendered as "25 bad" and jump to its real total on
+  // hydration, and 25 is what a crawler would index. Once the live listener
+  // delivers the whole history, its length is authoritative.
+  const swimCountHint =
+    initial && sessions === initial.sessions ? initial.swimCount : null;
 
   // Ask the server for a fresher reading once we know what we already have
   // (both the placeTemps snapshot and the place doc have resolved). The
@@ -471,7 +538,15 @@ function useSpotData(placeId: string) {
     maybeRefreshPlaceTemp(place.id, readingAt);
   }, [place, liveTemp, readingAt]);
 
-  return { place, loading, setPlace, sessions, reading, waterSample };
+  return {
+    place,
+    loading,
+    setPlace,
+    sessions,
+    reading,
+    waterSample,
+    swimCountHint,
+  };
 }
 
 /** Top row: back/close affordance, spot name + coords/first-dip, share. */
@@ -829,22 +904,6 @@ function SpotFooterCta({
   );
 }
 
-export default function SpotPage() {
-  // Next's useParams types every value as string | string[] (catch-all
-  // segments); [placeId] is a single segment, so anything else is a bug.
-  const raw = useParams().placeId;
-  const placeId = typeof raw === "string" ? raw : undefined;
-  const t = useT();
-  if (!placeId) {
-    return (
-      <div className="px-4 pt-6 text-center text-sm text-slate-500">
-        {t("spot.not_found")}
-      </div>
-    );
-  }
-  return <SpotView placeId={placeId} variant="page" />;
-}
-
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function WaterTempCard({
@@ -858,27 +917,36 @@ function WaterTempCard({
   showHistory?: boolean;
   onToggleHistory?: () => void;
 }) {
-  const [now, setNow] = useState(() => Date.now());
+  // `null` until mounted, on purpose: this card is server-rendered on the
+  // spot page and that HTML is cached for an hour (`revalidate`), so the
+  // server's Date.now() is not the reader's — baking an age into it would
+  // hydrate as a mismatched text node and could hide a reading the reader
+  // should still see. The clock (and with it the age label and the
+  // week-old cut-off) starts on the client, where "now" really is now.
+  const [now, setNow] = useState<number | null>(null);
 
   // The displayed age changes while the card stays open. Keep the clock in an
   // effect rather than reading it during render, which keeps renders pure.
   useEffect(() => {
+    setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
 
   if (!reading) return null;
-  if (now - reading.at > WEEK_MS) return null;
+  if (now !== null && now - reading.at > WEEK_MS) return null;
 
-  const ageMs = now - reading.at;
-  const ageHrs = Math.floor(ageMs / (60 * 60 * 1000));
-  const ageMins = Math.floor(ageMs / 60_000);
+  const ageMs = now === null ? null : now - reading.at;
+  const ageHrs = ageMs === null ? 0 : Math.floor(ageMs / (60 * 60 * 1000));
+  const ageMins = ageMs === null ? 0 : Math.floor(ageMs / 60_000);
   const ageLabel =
-    ageMins < 60
-      ? t("map.popup.age.mins", { n: ageMins })
-      : ageHrs < 24
-        ? t("map.popup.age.hrs", { n: ageHrs })
-        : t("map.popup.age.days", { n: Math.floor(ageHrs / 24) });
+    ageMs === null
+      ? null
+      : ageMins < 60
+        ? t("map.popup.age.mins", { n: ageMins })
+        : ageHrs < 24
+          ? t("map.popup.age.hrs", { n: ageHrs })
+          : t("map.popup.age.days", { n: Math.floor(ageHrs / 24) });
 
   const isWarm = reading.t >= 17;
   const isCool = reading.t < 10;

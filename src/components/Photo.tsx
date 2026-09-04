@@ -45,14 +45,22 @@ export default function Photo({
 }: PhotoProps) {
   const [loaded, setLoaded] = useState(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
-  const [nearView, setNearView] = useState(
-    () => typeof IntersectionObserver === "undefined",
-  );
+  // Starts false everywhere, including on the server. It used to start as
+  // `typeof IntersectionObserver === "undefined"` — true on the server, false
+  // in the browser — which put the full <img> in the server-rendered HTML and
+  // then removed it on hydration: a real mismatch that made React throw away
+  // and re-render the whole spot-page tree. The no-observer fallback moved
+  // into the effect below instead, where a server/client difference is fine.
+  const [nearView, setNearView] = useState(false);
   useEffect(() => {
     if (fit === "contain") return; // lightbox: always eager
+    if (typeof IntersectionObserver === "undefined") {
+      // No observer (old browser, jsdom): load eagerly rather than never.
+      setNearView(true);
+      return;
+    }
     const el = boxRef.current;
     if (!el) return;
-    if (typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {

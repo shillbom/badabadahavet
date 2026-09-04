@@ -13,11 +13,20 @@ import { rememberReturnPath } from "@/lib/utils";
  * authenticated pages is explicitly out of scope — so middleware or a server
  * component could not tell a guest from a member anyway.
  *
- * Reading `user` alone is enough: `AppBoot` renders nothing until boot
- * finishes (`loading` false, profile hydrated) and takes over the whole tree
- * during Google onboarding, so by the time this mounts a missing `user` really
- * does mean "guest". `rememberReturnPath()` runs before the redirect so
- * `consumeReturnPath()` on LoginPage can send them back where they were.
+ * It has to wait for `loading`, not just look at `user`. AppBoot keeps the
+ * routes mounted from the very first render now (so the public pages are real
+ * server-rendered HTML), and on that first render nobody is signed in yet —
+ * without the `loading` guard a member refreshing /profile would be bounced
+ * to /login before Firebase Auth had a chance to restore their session. Once
+ * `loading` clears, a missing `user` really does mean "guest".
+ *
+ * This is also what keeps the authed pages out of the server-rendered HTML:
+ * `loading` is true on the server, so their content never renders there —
+ * which is the intent (see the plan: SSR of authed pages buys nothing and
+ * costs reads and cold starts).
+ *
+ * `rememberReturnPath()` runs before the redirect so `consumeReturnPath()` on
+ * LoginPage can send them back where they were.
  */
 export default function RequireAuth({
   children,
@@ -25,13 +34,14 @@ export default function RequireAuth({
   children: React.ReactNode;
 }) {
   const user = useStore((s) => s.user);
+  const loading = useStore((s) => s.loading);
   const router = useRouter();
 
   useEffect(() => {
-    if (user) return;
+    if (loading || user) return;
     rememberReturnPath();
     router.replace("/login");
-  }, [user, router]);
+  }, [loading, user, router]);
 
   if (!user) return null;
   return children;

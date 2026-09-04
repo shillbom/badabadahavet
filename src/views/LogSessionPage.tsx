@@ -16,7 +16,11 @@ import { useAuth } from "@/auth/AuthContext";
 import { useAllSessionsFeed, useStore } from "@/store/sessions";
 import { Button } from "@/components/ui/Button";
 import { Input, Label, Textarea } from "@/components/ui/Input";
-import SwimMap from "@/components/SwimMap";
+// Client-only + lazily loaded; see components/SwimMapDynamic.ts. Importing
+// @/components/SwimMap directly pulls Leaflet into the server bundle, and it
+// reads `window` as it initialises — which throws the moment this route is
+// server-rendered at all.
+import SwimMap from "@/components/SwimMapDynamic";
 import { WaterTempField } from "@/components/WaterTempField";
 import { WhenField } from "@/components/SwimDatePicker";
 import { toast } from "@/components/ui/toastStore";

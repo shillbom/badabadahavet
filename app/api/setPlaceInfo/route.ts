@@ -22,6 +22,7 @@
  * client-side pre-check is just UX.
  */
 
+import { revalidatePath } from "next/cache";
 import { ApiError, logger, readJson, requireUser, route } from "@/server/api";
 import { FieldValue, getDb } from "@/server/firebaseAdmin";
 import { textAllowed } from "@/server/moderate";
@@ -139,6 +140,10 @@ export const POST = route(async (req) => {
     // placesSummary build. See PlacesSummaryDoc in src/lib/types.ts.
     updates.updatedAt = Date.now();
     await placeRef.update(updates);
+    // The spot page server-renders this text (and puts it in the share
+    // description), cached for an hour — drop that cache so an edit or a
+    // moderation removal is visible at once.
+    revalidatePath(`/spot/${placeId}`);
   }
   return {
     ok: true as const,

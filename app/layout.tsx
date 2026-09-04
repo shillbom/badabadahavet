@@ -121,7 +121,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="sv">
+    /* suppressHydrationWarning applies to THIS element's own attributes only
+       (never to any child, so a real mismatch inside the app is still
+       reported). It's here because the beforeInteractive script below stamps
+       --app-height into this element's `style` before React hydrates — on
+       purpose, and impossible to know while rendering on the server — which
+       React would otherwise report as "attributes didn't match" on every
+       page load. */
+    <html lang="sv" suppressHydrationWarning>
       <head>
         {/* Warm up the connections the app needs the instant it boots.
             preconnect opens DNS/TLS early so the first auth/Firestore request

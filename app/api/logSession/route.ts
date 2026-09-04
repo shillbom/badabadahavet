@@ -17,6 +17,7 @@
  * if a previous write was lost.
  */
 
+import { revalidatePath } from "next/cache";
 import { ApiError, logger, readJson, requireUser, route } from "@/server/api";
 import { FieldValue, getDb } from "@/server/firebaseAdmin";
 import { localDay } from "@/server/dayKey";
@@ -326,6 +327,12 @@ export const POST = route(async (req) => {
       });
     }
   }
+
+  // The spot page is a cached server render (see
+  // app/(app)/spot/[placeId]/page.tsx) holding this place's swim count, photo
+  // strip and recent-dips list. Drop that cache so the new swim is on the
+  // page — and in its share card — immediately instead of after `revalidate`.
+  revalidatePath(`/spot/${placeId}`);
 
   return result;
 });

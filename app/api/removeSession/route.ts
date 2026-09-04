@@ -7,6 +7,7 @@
  *   returns: { ok: true }
  */
 
+import { revalidatePath } from "next/cache";
 import { ApiError, logger, readJson, requireUser, route } from "@/server/api";
 import { getBucket, getDb } from "@/server/firebaseAdmin";
 import {
@@ -31,7 +32,7 @@ export const POST = route(async (req) => {
   const db = getDb();
   const sessionRef = db.collection("sessions").doc(sessionId);
 
-  const photoPath = await db.runTransaction(async (tx) => {
+  const { photoPath, placeId } = await db.runTransaction(async (tx) => {
     // ── reads ──
     const sessionSnap = await tx.get(sessionRef);
     if (!sessionSnap.exists) {
@@ -106,7 +107,10 @@ export const POST = route(async (req) => {
     }
     // The place's "last swim" frame is derived from sessions by the daily
     // placesSummary build, so removeSession never restamps the place doc.
-    return (session.photoPath ?? null) as string | null;
+    return {
+      photoPath: (session.photoPath ?? null) as string | null,
+      placeId: (session.placeId ?? null) as string | null,
+    };
   });
 
   // Best-effort photo cleanup, outside the transaction.
@@ -117,6 +121,11 @@ export const POST = route(async (req) => {
       logger.warn("photo delete failed", { sessionId, error: String(e) });
     }
   }
+
+  // The spot page renders the swim count, the photo strip and the recent-dips
+  // list from a cached server render (see app/(app)/spot/[placeId]/page.tsx),
+  // so drop that cache — otherwise a removed swim lingers there for an hour.
+  if (placeId) revalidatePath(`/spot/${placeId}`);
 
   return { ok: true as const };
 });

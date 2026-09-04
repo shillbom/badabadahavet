@@ -11,12 +11,30 @@ export function cn(...inputs: ClassValue[]) {
 // locale instead (two entries in practice: sv + en).
 const formatterCache = new Map<string, Intl.DateTimeFormat>();
 
+/**
+ * Swim timestamps are formatted in Sweden's zone, not the reader's device
+ * zone. Two reasons, one of which is now load-bearing:
+ *
+ *  - A swim is a Swedish bathing-day fact. The temperature day keys already
+ *    bucket by Sweden's local day for exactly this reason (see
+ *    src/server/dayKey.ts), and the device zone made the *same* swim render
+ *    as a different date depending on where you opened the app.
+ *  - The spot page is server-rendered (app/(app)/spot/[placeId]/page.tsx) and
+ *    the server runs in UTC. With the runtime's default zone, a swim logged
+ *    late in the evening would format as one date in the prerendered HTML and
+ *    another in the browser — a hydration mismatch on every such row.
+ */
+const DISPLAY_TIME_ZONE = "Europe/Stockholm";
+
 function cachedFormatter(kind: string, opts: Intl.DateTimeFormatOptions) {
   const locale = localeBcp();
   const key = `${kind}:${locale}`;
   let fmt = formatterCache.get(key);
   if (!fmt) {
-    fmt = new Intl.DateTimeFormat(locale, opts);
+    fmt = new Intl.DateTimeFormat(locale, {
+      timeZone: DISPLAY_TIME_ZONE,
+      ...opts,
+    });
     formatterCache.set(key, fmt);
   }
   return fmt;

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { domMax, LazyMotion } from "framer-motion";
 import { useStore } from "@/store/sessions";
-import { useT } from "@/lib/i18n";
+import { hydrateLocale, useT } from "@/lib/i18n";
 import { toast } from "@/components/ui/toastStore";
 import { ACHIEVEMENTS_BY_ID } from "@/lib/achievements";
 import LoginPage from "@/views/LoginPage";
@@ -19,6 +19,12 @@ import { BootSplash } from "@/components/Splash";
 import { setBootReady } from "@/lib/bootSignal";
 import { installAppHeight } from "@/lib/appHeight";
 import { prefetchAllPages } from "@/lib/pages";
+
+// useLayoutEffect warns (and does nothing) when React renders on the server,
+// so pick the hook once, at module scope — picking it inside the component
+// would break the rules of hooks.
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /**
  * The app-wide client shell — everything that used to live in src/App.tsx
@@ -39,6 +45,16 @@ export default function AppBoot({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const t = useT();
+
+  // Switch to the saved / browser-preferred language. The server can only
+  // render the Swedish default (no localStorage, no navigator), so the swap
+  // happens here instead of at module scope — see the note on `useLocale` in
+  // src/lib/i18n.ts. A LAYOUT effect so it commits before the browser paints:
+  // an English user never sees a frame of Swedish. `useEffect` on the server,
+  // where useLayoutEffect warns and does nothing anyway.
+  useIsomorphicLayoutEffect(() => {
+    hydrateLocale();
+  }, []);
 
   // Boot auth listener + data subscriptions once for the lifetime of the app.
   useEffect(() => useStore.getState()._startListening(), []);
@@ -101,12 +117,23 @@ export default function AppBoot({ children }: { children: React.ReactNode }) {
     seenAchievements.current = persisted;
   }, [profile]);
 
-  // While the user doc is still hydrating after login we'd otherwise render
-  // the chrome with an empty profile. Wait until both Firebase Auth and the
-  // Firestore user doc are ready before mounting the authed UI. Rather than
-  // early-returning the splash (which would unmount instantly, with no way to
-  // animate out), keep the app content gated on `booting` and lay the boot
-  // overlay on top — it lifts away on its own once `booting` clears.
+  // Boot is "in progress" until both Firebase Auth and the Firestore user doc
+  // have resolved — while the user doc is still hydrating after login, the
+  // chrome would otherwise show an empty profile.
+  //
+  // What `booting` gates is the boot overlay and the after-boot popovers, NOT
+  // `children`. It used to gate the routes too (`booting ? null : children`),
+  // and that made server rendering pointless: `loading` is true on the very
+  // first render, so the server always emitted an empty shell and a crawler
+  // got a page with no content in it. The route now stays mounted throughout
+  // and the splash — position:fixed, opaque, z-3000 (see .app-splash in
+  // src/index.css) — covers it until it lifts away, so nothing about the
+  // boot experience changes while the HTML becomes complete.
+  //
+  // The two things that gate on a hydrated profile do it themselves:
+  // `RequireAuth` renders nothing (and doesn't redirect) until auth has
+  // resolved, and the public routes never needed a profile — they are
+  // viewable by guests as they are.
   const booting = Boolean((loading || (user && !profile)) && !googleOnboarding);
 
   // Tell the boot splash it can leave as soon as boot finishes.
@@ -140,7 +167,7 @@ export default function AppBoot({ children }: { children: React.ReactNode }) {
       {!booting && !googleOnboarding ? <SinceLastVisit /> : null}
       {!booting && !googleOnboarding ? <ConsentBanner /> : null}
       {!booting && !googleOnboarding ? <InstallHint /> : null}
-      {booting ? null : onboardingTakeover ? <LoginPage /> : children}
+      {onboardingTakeover ? <LoginPage /> : children}
       {/* BootSplash is pure CSS + a tiny signal, so it stays off the
           critical path, and it animates itself out once boot is ready. */}
       <BootSplash />
