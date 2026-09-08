@@ -106,12 +106,15 @@ Older items:
    Still unexercised: `lookupGroupByCode` / `joinGroupByCode` / `leaveGroup`,
    `refreshPlaceTemp`, `setPlaceInfo`, `banUser`, `deleteAccount`. Run the
    last two against the emulators, never production — they are destructive.
-3. **Do not deploy functions with `--force` yet** — it deletes the retired
-   callables and destroys the client rollback path. See the hazard note in
-   `.github/workflows/deploy.yml`.
-4. **`public/sw.js` is a kill-switch**, not a real worker. Remove it (and its
-   `next.config.ts` no-cache header) one release after cutover.
-5. An unknown spot id answers **200, not 404** — `Layout`'s Suspense boundary
+3. **The retired Cloud Functions are already gone.** `DEPLOY_FUNCTIONS` was
+   already set when the first post-merge CI run went out on 2026-09-04, so
+   `deploy --only functions --force` pruned the ten onCall callables plus
+   spotPreview and sitemap on that run — earlier than this plan intended.
+   Nothing calls them (the client uses `/api/*`), but reverting to the
+   pre-Next client would now need them redeployed from git history first.
+   With them gone, `firebase.json`'s `hosting` block and the kill-switch
+   `public/sw.js` stopped being a rollback path and are removed here.
+4. An unknown spot id answers **200, not 404** — `Layout`'s Suspense boundary
    streams the shell before the async page resolves. Documented in the page.
 
 ## Goal
