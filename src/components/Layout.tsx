@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { m, AnimatePresence } from "framer-motion";
 import { Plus } from "lucide-react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { useT } from "@/lib/i18n";
 import TopBar from "@/components/TopBar";
 import SwimNudge from "@/components/SwimNudge";
 import DiscoRays from "@/components/fx/DiscoRays";
+import { getBootReady, subscribeBootReady } from "@/lib/bootSignal";
 import NavBar from "./NavBar";
 
 /**
@@ -26,6 +27,24 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const myStats = useStore((s) => s.myStats);
 
   const [nudgeOpen, setNudgeOpen] = useState(false);
+
+  // The top and bottom bars depend on who is signed in, which isn't known
+  // until boot finishes (and never on the server). Normally the boot splash
+  // covers that; on a landing that skips it (a /spot/* page, see AppBoot)
+  // showing them early would flash the guest variant first. So they wait for
+  // the boot signal — the top bar keeps its space meanwhile, so the content
+  // doesn't jump when it fades in.
+  const chromeReady = useSyncExternalStore(
+    subscribeBootReady,
+    getBootReady,
+    getBootReady,
+  );
+
+  // Skip the page entrance on the very first render: the server HTML would
+  // otherwise ship the content at opacity 0 and keep it invisible until JS
+  // runs. Route changes after that still animate.
+  const [animateEntrance, setAnimateEntrance] = useState(false);
+  useEffect(() => setAnimateEntrance(true), []);
 
   // Hide the bottom nav + FAB on full-screen story-style routes so they
   // don't fight with the slide content — and on the swim log/edit forms,
@@ -69,7 +88,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="relative mx-auto flex h-[var(--app-height,100dvh)] w-full flex-col overflow-hidden">
-      <TopBar onNudge={() => setNudgeOpen(true)} />
+      <div
+        className={cn(
+          "sticky top-0 z-[1000] flex-none transition-opacity duration-200",
+          chromeReady ? "opacity-100" : "invisible opacity-0",
+        )}
+      >
+        <TopBar onNudge={() => setNudgeOpen(true)} />
+      </div>
 
       <main
         className={cn(
@@ -82,7 +108,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             mid-flight exits could leave the next page at opacity 0. */}
         <m.div
           key={pathname}
-          initial={{ opacity: 0, y: 6 }}
+          initial={animateEntrance ? { opacity: 0, y: 6 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           className={cn(
@@ -118,7 +144,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ) : null}
 
       <AnimatePresence>
-        {!hideChrome && !isGuest ? (
+        {chromeReady && !hideChrome && !isGuest ? (
           <div
             key="fab-shell"
             className="pointer-events-none fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center md:bottom-10"
@@ -144,7 +170,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         ) : null}
       </AnimatePresence>
 
-      <AnimatePresence>{!hideChrome && <NavBar />}</AnimatePresence>
+      <AnimatePresence>
+        {chromeReady && !hideChrome && <NavBar />}
+      </AnimatePresence>
 
       <SwimNudge
         open={nudgeOpen}
