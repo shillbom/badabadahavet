@@ -44,6 +44,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return buildSitemapEntries({
     origin: SITE_ORIGIN,
     placeEntries: entriesFromPlacesSummaryDoc(summary),
-    builtAt: summary?.builtAt,
   });
 }
