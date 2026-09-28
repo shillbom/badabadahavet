@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SpotView } from "@/views/SpotPage";
 import { SHARE_LOGO_URL, SITE_ORIGIN } from "@/lib/site";
 import { loadSpotSnapshot } from "@/server/spotData";
+import { buildSpotJsonLd, serializeJsonLd } from "@/server/spotJsonLd";
 import {
   buildSpotShare,
   SITE_SHARE_DESCRIPTION,
@@ -128,20 +129,37 @@ export default async function Page({ params }: PageProps) {
   // one already bailed, because metadata and the page are separate calls).
   if (!snapshot.place && !snapshot.failed) notFound();
 
+  // Per-spot structured data (see src/server/spotJsonLd.ts). Rendered in the
+  // body, which search engines read the same as <head>.
+  const jsonLd = snapshot.place
+    ? buildSpotJsonLd(
+        snapshot.place,
+        `${SITE_ORIGIN}/spot/${encodeURIComponent(placeId)}`,
+      )
+    : null;
+
   return (
-    <SpotView
-      placeId={placeId}
-      variant="page"
-      initial={
-        snapshot.place
-          ? {
-              place: snapshot.place,
-              sessions: snapshot.sessions,
-              swimCount: snapshot.swimCount,
-              reading: snapshot.reading,
-            }
-          : undefined
-      }
-    />
+    <>
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
+        />
+      ) : null}
+      <SpotView
+        placeId={placeId}
+        variant="page"
+        initial={
+          snapshot.place
+            ? {
+                place: snapshot.place,
+                sessions: snapshot.sessions,
+                swimCount: snapshot.swimCount,
+                reading: snapshot.reading,
+              }
+            : undefined
+        }
+      />
+    </>
   );
 }
