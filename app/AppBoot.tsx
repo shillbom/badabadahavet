@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { domMax, LazyMotion } from "framer-motion";
 import { useStore } from "@/store/sessions";
@@ -159,6 +159,14 @@ export default function AppBoot({ children }: { children: React.ReactNode }) {
   // branch of the route table.
   const onboardingTakeover = googleOnboarding && pathname !== "/auth/google";
 
+  // A spot page is where search and shared links land, and its content is
+  // already in the server HTML — covering it with the splash throws away the
+  // whole point of rendering it. So a visit that STARTS on /spot/* never shows
+  // the splash; Layout holds back its auth-dependent chrome until boot instead
+  // (see `chromeReady` there). Decided once, from the landing path: the splash
+  // only ever plays at boot, so a later navigation must not re-evaluate it.
+  const [skipSplash] = useState(() => pathname.startsWith("/spot/"));
+
   return (
     <LazyMotion features={domMax}>
       <Toaster />
@@ -170,7 +178,7 @@ export default function AppBoot({ children }: { children: React.ReactNode }) {
       {onboardingTakeover ? <LoginPage /> : children}
       {/* BootSplash is pure CSS + a tiny signal, so it stays off the
           critical path, and it animates itself out once boot is ready. */}
-      <BootSplash />
+      {skipSplash ? null : <BootSplash />}
     </LazyMotion>
   );
 }
