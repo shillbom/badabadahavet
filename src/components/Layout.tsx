@@ -12,7 +12,12 @@ import TopBar from "@/components/TopBar";
 import SwimNudge from "@/components/SwimNudge";
 import DiscoRays from "@/components/fx/DiscoRays";
 import { getBootReady, subscribeBootReady } from "@/lib/bootSignal";
+import { routeChrome } from "@/lib/routeChrome";
 import NavBar from "./NavBar";
+
+// useSyncExternalStore subscribe for a value that never changes after
+// hydration (see `animateEntrance`).
+const subscribeNever = () => () => {};
 
 /**
  * The authed app chrome: top bar, scrolling content column, FAB and bottom
@@ -42,24 +47,19 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   // Skip the page entrance on the very first render: the server HTML would
   // otherwise ship the content at opacity 0 and keep it invisible until JS
-  // runs. Route changes after that still animate.
-  const [animateEntrance, setAnimateEntrance] = useState(false);
-  useEffect(() => setAnimateEntrance(true), []);
-
-  // Hide the bottom nav + FAB on full-screen story-style routes so they
-  // don't fight with the slide content — and on the swim log/edit forms,
-  // whose submit buttons would otherwise sit behind them.
-  const hideChrome =
-    pathname.startsWith("/recap") ||
-    pathname.startsWith("/log") ||
-    pathname.startsWith("/swim/");
+  // runs. `false` on the server and during hydration, `true` from then on,
+  // so route changes after that still animate.
+  const animateEntrance = useSyncExternalStore(
+    subscribeNever,
+    () => true,
+    () => false,
+  );
 
   const isGuest = !user;
-
-  // A guest on a spot page (typically arriving from search or a shared link)
-  // gets the page without the bottom nav: its tabs lead to screens that are
-  // empty or sign-in walls for them, and the top bar already offers sign-in.
-  const hideNav = hideChrome || (isGuest && pathname.startsWith("/spot/"));
+  const { isMapPage, hideChrome, hideNav, contentWidth } = routeChrome(
+    pathname,
+    isGuest,
+  );
 
   // Last-chance nudge: when the streak dies unless the user swims today,
   // suggest the nearest new spot — once per calendar day, and only after
@@ -75,21 +75,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }, 2500);
     return () => clearTimeout(timer);
   }, [user, atRisk]);
-
-  // The map page is non-scrolling — the map fills available space. Remove
-  // the bottom padding so it doesn't create dead scroll space below the map.
-  const isMapPage = pathname === "/";
-
-  // Desktop: the top bar always spans the full viewport; it's the phone
-  // content column below it that relaxes per route. The map gets the whole
-  // viewport (maps want space), story-style recap stays phone-shaped, and
-  // everything else widens to a comfortable reading column.
-  const isRecap = pathname.startsWith("/recap");
-  const contentWidth = isMapPage
-    ? "max-w-md lg:max-w-none"
-    : isRecap
-      ? "max-w-md"
-      : "max-w-md lg:max-w-2xl";
 
   return (
     <div className="relative mx-auto flex h-[var(--app-height,100dvh)] w-full flex-col overflow-hidden">
