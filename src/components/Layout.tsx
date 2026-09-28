@@ -56,6 +56,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const isGuest = !user;
 
+  // A guest on a spot page (typically arriving from search or a shared link)
+  // gets the page without the bottom nav: its tabs lead to screens that are
+  // empty or sign-in walls for them, and the top bar already offers sign-in.
+  const hideNav = hideChrome || (isGuest && pathname.startsWith("/spot/"));
+
   // Last-chance nudge: when the streak dies unless the user swims today,
   // suggest the nearest new spot — once per calendar day, and only after
   // the page has settled so it doesn't fight the since-last-visit digest.
@@ -116,7 +121,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             contentWidth,
             isMapPage
               ? "flex min-h-0 flex-1 flex-col"
-              : hideChrome
+              : hideNav
                 ? "min-h-full shrink-0 pb-4"
                 : "min-h-full shrink-0",
           )}
@@ -133,7 +138,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </m.div>
       </main>
 
-      {!isMapPage && !hideChrome ? (
+      {!isMapPage && !hideNav ? (
         // Keep the scroll viewport above the fixed nav and its protruding FAB.
         // As a flex row this combines with TopBar's real rendered height,
         // rather than guessing both chrome heights inside every page.
@@ -170,9 +175,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         ) : null}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {chromeReady && !hideChrome && <NavBar />}
-      </AnimatePresence>
+      <AnimatePresence>{chromeReady && !hideNav && <NavBar />}</AnimatePresence>
 
       <SwimNudge
         open={nudgeOpen}
