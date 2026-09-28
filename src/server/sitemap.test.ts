@@ -40,56 +40,59 @@ describe("entriesFromPlacesSummaryDoc", () => {
 });
 
 describe("sitemapDate", () => {
-  const fallback = new Date(1_700_000_000_000);
   it("uses the timestamp when it is usable", () => {
-    expect(sitemapDate(1_600_000_000_000, fallback).getTime()).toBe(
-      1_600_000_000_000,
-    );
+    expect(sitemapDate(1_600_000_000_000)?.getTime()).toBe(1_600_000_000_000);
   });
-  it("falls back for anything that isn't a finite number", () => {
-    expect(sitemapDate(undefined, fallback)).toBe(fallback);
-    expect(sitemapDate("2026-01-01", fallback)).toBe(fallback);
-    expect(sitemapDate(Number.NaN, fallback)).toBe(fallback);
+  it("returns undefined for anything that isn't a positive finite number", () => {
+    expect(sitemapDate(undefined)).toBeUndefined();
+    expect(sitemapDate("2026-01-01")).toBeUndefined();
+    expect(sitemapDate(Number.NaN)).toBeUndefined();
+    expect(sitemapDate(0)).toBeUndefined();
+    expect(sitemapDate(8.64e15 + 1)).toBeUndefined();
   });
 });
 
 describe("buildSitemapEntries", () => {
   const origin = "https://badligan.club";
-  const now = 1_700_000_000_000;
-  const builtAt = 1_690_000_000_000;
+  const lastSwim = 1_690_000_000_000;
 
   it("lists the static routes first, then the places", () => {
     const entries = buildSitemapEntries({
       origin,
       placeEntries: { b: place("Beta"), a: place("Alpha") },
-      builtAt,
-      now,
     });
     expect(entries.map((e) => e.url)).toEqual([
-      ...STATIC_ROUTES.map(({ path }) => `${origin}${path}`),
+      ...STATIC_ROUTES.map((path) => `${origin}${path}`),
       `${origin}/spot/a`,
       `${origin}/spot/b`,
     ]);
   });
 
-  it("stamps places with the summary build time and routes with now", () => {
+  it("dates a spot by its last swim and nothing else", () => {
     const entries = buildSitemapEntries({
       origin,
-      placeEntries: { a: place("Alpha") },
-      builtAt,
-      now,
+      placeEntries: {
+        a: { ...place("Alpha"), s: lastSwim },
+        b: place("Beta"),
+      },
     });
-    expect(entries[0].lastModified.getTime()).toBe(now);
-    expect(entries.at(-1)!.lastModified.getTime()).toBe(builtAt);
+    const byUrl = Object.fromEntries(entries.map((e) => [e.url, e]));
+    expect(byUrl[`${origin}/spot/a`].lastModified?.getTime()).toBe(lastSwim);
+    expect(byUrl[`${origin}/spot/b`]).not.toHaveProperty("lastModified");
   });
 
-  it("falls back to now when builtAt is missing", () => {
+  it("emits only url (+ honest lastmod) — no changefreq, priority or fake dates", () => {
     const entries = buildSitemapEntries({
       origin,
-      placeEntries: { a: place("Alpha") },
-      now,
+      placeEntries: { a: { ...place("Alpha"), s: lastSwim } },
     });
-    expect(entries.at(-1)!.lastModified.getTime()).toBe(now);
+    for (const e of entries.slice(0, STATIC_ROUTES.length)) {
+      expect(Object.keys(e)).toEqual(["url"]);
+    }
+    expect(Object.keys(entries.at(-1)!).toSorted()).toEqual([
+      "lastModified",
+      "url",
+    ]);
   });
 
   it("skips nameless entries — they cannot render a spot page", () => {
@@ -100,7 +103,6 @@ describe("buildSitemapEntries", () => {
         b: { la: 1, lo: 2 } as PlaceSummaryEntry,
         c: { n: "", la: 1, lo: 2 },
       },
-      now,
     });
     expect(entries.filter((e) => e.url.includes("/spot/"))).toHaveLength(1);
   });
@@ -109,14 +111,14 @@ describe("buildSitemapEntries", () => {
     const entries = buildSitemapEntries({
       origin: "https://badligan.club/",
       placeEntries: { "a b": place("Alpha") },
-      now,
     });
+    expect(entries[0].url).toBe("https://badligan.club/");
     expect(entries.at(-1)!.url).toBe("https://badligan.club/spot/a%20b");
   });
 
   it("rejects a non-absolute origin", () => {
     expect(() =>
-      buildSitemapEntries({ origin: "/badligan", placeEntries: {}, now }),
+      buildSitemapEntries({ origin: "/badligan", placeEntries: {} }),
     ).toThrow(/absolute/);
   });
 });
