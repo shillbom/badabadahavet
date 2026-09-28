@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { m, AnimatePresence } from "framer-motion";
 import { Plus } from "lucide-react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/auth/AuthContext";
 import { useStore } from "@/store/sessions";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,13 @@ import { useT } from "@/lib/i18n";
 import TopBar from "@/components/TopBar";
 import SwimNudge from "@/components/SwimNudge";
 import DiscoRays from "@/components/fx/DiscoRays";
+import { getBootReady, subscribeBootReady } from "@/lib/bootSignal";
+import { routeChrome } from "@/lib/routeChrome";
 import NavBar from "./NavBar";
+
+// useSyncExternalStore subscribe for a value that never changes after
+// hydration (see `animateEntrance`).
+const subscribeNever = () => () => {};
 
 /**
  * The authed app chrome: top bar, scrolling content column, FAB and bottom
@@ -27,15 +33,33 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const [nudgeOpen, setNudgeOpen] = useState(false);
 
-  // Hide the bottom nav + FAB on full-screen story-style routes so they
-  // don't fight with the slide content — and on the swim log/edit forms,
-  // whose submit buttons would otherwise sit behind them.
-  const hideChrome =
-    pathname.startsWith("/recap") ||
-    pathname.startsWith("/log") ||
-    pathname.startsWith("/swim/");
+  // The top and bottom bars depend on who is signed in, which isn't known
+  // until boot finishes (and never on the server). Normally the boot splash
+  // covers that; on a landing that skips it (a /spot/* page, see AppBoot)
+  // showing them early would flash the guest variant first. So they wait for
+  // the boot signal — the top bar keeps its space meanwhile, so the content
+  // doesn't jump when it fades in.
+  const chromeReady = useSyncExternalStore(
+    subscribeBootReady,
+    getBootReady,
+    getBootReady,
+  );
+
+  // Skip the page entrance on the very first render: the server HTML would
+  // otherwise ship the content at opacity 0 and keep it invisible until JS
+  // runs. `false` on the server and during hydration, `true` from then on,
+  // so route changes after that still animate.
+  const animateEntrance = useSyncExternalStore(
+    subscribeNever,
+    () => true,
+    () => false,
+  );
 
   const isGuest = !user;
+  const { isMapPage, hideChrome, hideNav, contentWidth } = routeChrome(
+    pathname,
+    isGuest,
+  );
 
   // Last-chance nudge: when the streak dies unless the user swims today,
   // suggest the nearest new spot — once per calendar day, and only after
@@ -52,24 +76,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, [user, atRisk]);
 
-  // The map page is non-scrolling — the map fills available space. Remove
-  // the bottom padding so it doesn't create dead scroll space below the map.
-  const isMapPage = pathname === "/";
-
-  // Desktop: the top bar always spans the full viewport; it's the phone
-  // content column below it that relaxes per route. The map gets the whole
-  // viewport (maps want space), story-style recap stays phone-shaped, and
-  // everything else widens to a comfortable reading column.
-  const isRecap = pathname.startsWith("/recap");
-  const contentWidth = isMapPage
-    ? "max-w-md lg:max-w-none"
-    : isRecap
-      ? "max-w-md"
-      : "max-w-md lg:max-w-2xl";
-
   return (
     <div className="relative mx-auto flex h-[var(--app-height,100dvh)] w-full flex-col overflow-hidden">
-      <TopBar onNudge={() => setNudgeOpen(true)} />
+      <div
+        className={cn(
+          "sticky top-0 z-[1000] flex-none transition-opacity duration-200",
+          chromeReady ? "opacity-100" : "invisible opacity-0",
+        )}
+      >
+        <TopBar onNudge={() => setNudgeOpen(true)} />
+      </div>
 
       <main
         className={cn(
@@ -82,7 +98,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             mid-flight exits could leave the next page at opacity 0. */}
         <m.div
           key={pathname}
-          initial={{ opacity: 0, y: 6 }}
+          initial={animateEntrance ? { opacity: 0, y: 6 } : false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           className={cn(
@@ -90,7 +106,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             contentWidth,
             isMapPage
               ? "flex min-h-0 flex-1 flex-col"
-              : hideChrome
+              : hideNav
                 ? "min-h-full shrink-0 pb-4"
                 : "min-h-full shrink-0",
           )}
@@ -107,7 +123,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </m.div>
       </main>
 
-      {!isMapPage && !hideChrome ? (
+      {!isMapPage && !hideNav ? (
         // Keep the scroll viewport above the fixed nav and its protruding FAB.
         // As a flex row this combines with TopBar's real rendered height,
         // rather than guessing both chrome heights inside every page.
@@ -118,7 +134,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       ) : null}
 
       <AnimatePresence>
-        {!hideChrome && !isGuest ? (
+        {chromeReady && !hideChrome && !isGuest ? (
           <div
             key="fab-shell"
             className="pointer-events-none fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),1.5rem)] z-[1010] mx-auto flex max-w-md justify-center md:bottom-10"
@@ -144,7 +160,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         ) : null}
       </AnimatePresence>
 
-      <AnimatePresence>{!hideChrome && <NavBar />}</AnimatePresence>
+      <AnimatePresence>{chromeReady && !hideNav && <NavBar />}</AnimatePresence>
 
       <SwimNudge
         open={nudgeOpen}
